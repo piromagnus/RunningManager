@@ -1,0 +1,4 @@
+thresholdId,athleteId,name,hrMin,hrMax,paceFlatKmhMin,paceFlatKmhMax,ascentRateMPerHMin,ascentRateMPerHMax
+a5e4374f-fdac-46bc-ab31-bd281dabc487,8c83ae21-a810-466d-a5c5-95ef9a470c8a,Fundamental,0,140,8.0,12.0,0,600
+feab41ed-27f8-4ca2-b236-f595ff9c5f64,8c83ae21-a810-466d-a5c5-95ef9a470c8a,Threshold 60,160,170,14.0,15.0,1100,1250
+2e1b2d14-c89e-448c-92fd-5139f75ea9ad,8c83ae21-a810-466d-a5c5-95ef9a470c8a,Threshold 30,180,190,15.0,16.0,23,26
