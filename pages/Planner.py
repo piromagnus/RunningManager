@@ -6,9 +6,10 @@ from pathlib import Path
 import math
 
 import streamlit as st
+from typing import Any, Dict, List
 
 from utils.config import load_config
-from utils.formatting import set_locale
+from utils.formatting import set_locale, fmt_decimal, fmt_m
 from utils.time import iso_week_start, iso_week_end
 from persistence.csv_storage import CsvStorage
 from persistence.repositories import PlannedSessionsRepo, AthletesRepo, ThresholdsRepo
@@ -28,6 +29,13 @@ ath_repo = AthletesRepo(storage)
 thr_repo = ThresholdsRepo(storage)
 tmpl = TemplatesService(storage)
 planner = PlannerService(storage)
+
+
+def _format_week_duration(seconds: int) -> str:
+    total = max(0, int(seconds))
+    hours, remainder = divmod(total, 3600)
+    minutes = remainder // 60
+    return f"{hours}h{minutes:02d}"
 
 # Caching helpers
 @st.cache_data(ttl=5)
@@ -302,66 +310,63 @@ with st.expander("Create/Edit session", expanded=bool(edit_ctx)):
 
 st.divider()
 st.subheader("Week view")
+week_records: List[Dict[str, Any]] = []
+df_in_week = None
+
 if athlete_id:
     df = sessions_repo.list(athleteId=athlete_id)
-    df_in_week = df[(df["date"] >= str(week_start.date())) & (df["date"] <= str(week_end.date()))] if not df.empty else df
-    cols = st.columns([1,1,1,1,1,1,1])
-    total_time = 0
-    total_dist = 0.0
-    total_ascent = 0
+    df_in_week = (
+        df[(df["date"] >= str(week_start.date())) & (df["date"] <= str(week_end.date()))]
+        if not df.empty
+        else df
+    )
+    week_records = df_in_week.to_dict(orient="records") if not df_in_week.empty else []
+    records_by_day: Dict[str, List[Dict[str, Any]]] = {}
+    for rec in week_records:
+        date_key = str(rec.get("date"))
+        records_by_day.setdefault(date_key, []).append(rec)
+
+    cols = st.columns([1, 1, 1, 1, 1, 1, 1])
     for i in range(7):
         day = week_start.date() + dt.timedelta(days=i)
+        day_key = str(day)
         with cols[i]:
             st.markdown(f"**{day.strftime('%a')}**\n\n{day}")
-            day_rows = df_in_week[df_in_week["date"] == str(day)] if not df_in_week.empty else df_in_week
-            if day_rows is not None and not day_rows.empty:
-                for _, r in day_rows.iterrows():
-                    sid = r.get("plannedSessionId")
-                    typ = r.get("type")
-                    raw_dur = r.get("plannedDurationSec")
+            day_items = records_by_day.get(day_key, [])
+            if day_items:
+                for record in day_items:
+                    sid = record.get("plannedSessionId")
+                    session_type = record.get("type")
+                    duration = record.get("plannedDurationSec")
+                    if isinstance(duration, float) and math.isnan(duration):
+                        duration = 0
                     try:
-                        dur = int(raw_dur) if raw_dur not in (None, "", float("nan")) else 0
+                        duration = int(float(duration)) if duration not in (None, "") else 0
                     except Exception:
-                        dur = 0
-                    dist = r.get("plannedDistanceKm")
-                    raw_ascent = r.get("plannedAscentM")
-                    tgt_t = r.get("targetType")
-                    tgt_l = r.get("targetLabel")
-                    step_mode = r.get("stepEndMode")
-                    # totals
-                    total_time += int(dur or 0)
-                    if dist not in (None, ""):
-                        try:
-                            total_dist += float(dist)
-                        except Exception:
-                            pass
-                    try:
-                        asc_f = float(raw_ascent)
-                        if math.isnan(asc_f):
-                            asc_v = 0
-                        else:
-                            asc_v = int(asc_f)
-                    except Exception:
-                        asc_v = 0
-                    total_ascent += asc_v
-                    # estimate for fundamentals if no distance
-                    est = None
-                    if typ == "FUNDAMENTAL_ENDURANCE" and dur and (dist in (None, "")):
-                        est = planner.estimate_km(athlete_id, int(dur))
-                    tt = tgt_t if isinstance(tgt_t, str) else ""
-                    tl = tgt_l if isinstance(tgt_l, str) else ""
-                    sm = step_mode if isinstance(step_mode, str) and step_mode else ""
+                        duration = 0
+                    distance = record.get("plannedDistanceKm")
+                    if isinstance(distance, float) and math.isnan(distance):
+                        distance = None
+                    ascent = record.get("plannedAscentM")
+                    if isinstance(ascent, float) and math.isnan(ascent):
+                        ascent = None
+                    target_type = record.get("targetType") if isinstance(record.get("targetType"), str) else None
+                    target_label = record.get("targetLabel") if isinstance(record.get("targetLabel"), str) else None
+                    step_mode = record.get("stepEndMode") if isinstance(record.get("stepEndMode"), str) else None
+
+                    estimated_distance = planner.estimate_session_distance_km(athlete_id, record)
+
                     model = build_card_view_model(
                         {
                             "plannedSessionId": sid,
-                            "type": typ,
-                            "plannedDurationSec": dur,
-                            "plannedDistanceKm": dist,
-                            "targetType": tt,
-                            "targetLabel": tl,
-                            "stepEndMode": sm,
+                            "type": session_type,
+                            "plannedDurationSec": duration,
+                            "plannedDistanceKm": distance,
+                            "targetType": target_type,
+                            "targetLabel": target_label,
+                            "stepEndMode": step_mode,
                         },
-                        estimated_distance_km=est,
+                        estimated_distance_km=estimated_distance,
                     )
                     st.markdown("<div class='rm-card'>", unsafe_allow_html=True)
                     badges = " | ".join(model["badges"])
@@ -390,6 +395,13 @@ if athlete_id:
                 st.caption(f"{placeholder['message']} {placeholder['cta']}")
             if st.button("＋", key=f"add-{day}", help="Add session"):
                 st.session_state["planner_edit"] = {"mode": "create", "date": str(day)}
+                st.rerun()
+
+    totals = planner.compute_weekly_totals(athlete_id, week_records)
+    totals_caption = (
+        f"Totals — {_format_week_duration(totals['timeSec'])} • {fmt_decimal(totals['distanceKm'], 1)} km • {fmt_m(totals['ascentM'])}"
+    )
+    st.caption(totals_caption)
 else:
     st.info("Select an athlete to view sessions.")
 
@@ -400,20 +412,31 @@ if athlete_id:
     with col1:
         tmpl_name = st.text_input("Template name", value=f"Week {week_start.date()}")
         if st.button("Save current week as template"):
-            df = sessions_repo.list(athleteId=athlete_id)
-            df_in_week = df[(df["date"] >= str(week_start.date())) & (df["date"] <= str(week_end.date()))]
-            items = df_in_week.to_dict(orient="records") if not df_in_week.empty else []
-            tid = tmpl.save_week_template(athlete_id, items, week_start.date(), tmpl_name)
-            st.success(f"Saved template: {tid}")
+            if not week_records:
+                st.warning("No sessions in the selected week to save.")
+            else:
+                tid = tmpl.save_week_template(athlete_id, week_records, week_start.date(), tmpl_name)
+                st.success(f"Saved template: {tid}")
+                st.rerun()
     with col2:
-        templates = tmpl.list()
+        templates = tmpl.list(athlete_id=athlete_id)
         options = {
             f"{t.get('name')} ({t.get('templateId')})": t.get('templateId')
             for t in templates
         }
-        sel = (
-            st.selectbox("Available templates", list(options.keys())) if options else None
-        )
-        if sel and st.button("Apply to this week"):
-            tmpl.apply_week_template(athlete_id, options[sel], week_start.date(), sessions_repo)
-            st.success("Template applied")
+        if options:
+            sel = st.selectbox("Available templates", list(options.keys()))
+            clear_before_apply = st.checkbox(
+                "Clear current week before applying",
+                value=False,
+                key="planner-clear-week",
+            )
+            if sel and st.button("Apply to this week"):
+                if clear_before_apply and df_in_week is not None and hasattr(df_in_week, "empty") and not df_in_week.empty:
+                    for _, row in df_in_week.iterrows():
+                        sessions_repo.delete(str(row.get("plannedSessionId")))
+                tmpl.apply_week_template(athlete_id, options[sel], week_start.date(), sessions_repo)
+                st.success("Template applied")
+                st.rerun()
+        else:
+            st.caption("No templates saved yet.")

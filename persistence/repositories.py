@@ -209,6 +209,21 @@ class GoalsRepo(BaseRepo):
         )
 
 
+class TemplatesRepo(BaseRepo):
+    def __init__(self, storage: CsvStorage):
+        super().__init__(
+            storage,
+            "templates.csv",
+            [
+                "templateId",
+                "athleteId",
+                "name",
+                "stepsJson",
+            ],
+            id_column="templateId",
+        )
+
+
 class AthletesRepo(BaseRepo):
     def __init__(self, storage: CsvStorage):
         super().__init__(
@@ -253,4 +268,3 @@ class TokensRepo(BaseRepo):
             ],
             id_column="athleteId",  # together with provider acts as composite; use upsert with both
         )
-

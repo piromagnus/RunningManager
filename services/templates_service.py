@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from persistence.csv_storage import CsvStorage
+from persistence.repositories import TemplatesRepo
 from utils.ids import new_id
 
 
@@ -16,30 +17,32 @@ from utils.ids import new_id
 class TemplatesService:
     storage: CsvStorage
 
+    def __post_init__(self) -> None:
+        self.repo = TemplatesRepo(self.storage)
+
     @property
     def _path(self) -> Path:
         return self.storage.base_dir / "templates.csv"
 
-    def list(self) -> List[Dict[str, Any]]:
-        df = self.storage.read_csv("templates.csv")
+    def list(self, athlete_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        df = self.repo.list(athleteId=athlete_id) if athlete_id else self.repo.list()
         return df.to_dict(orient="records") if not df.empty else []
 
     def save_template(self, name: str, steps: List[Dict[str, Any]]) -> str:
         """Save a week template where steps is a list of session dicts."""
         tid = new_id()
-        row = {"templateId": tid, "name": name, "stepsJson": json.dumps(steps)}
-        columns = ["templateId", "name", "stepsJson"]
-        self.storage.append_row("templates.csv", row, columns)
+        payload = {
+            "templateId": tid,
+            "name": name,
+            "stepsJson": json.dumps(steps, ensure_ascii=False, separators=(",", ":")),
+        }
+        self.repo.create(payload)
         return tid
 
     def get(self, template_id: str) -> Optional[Dict[str, Any]]:
-        df = self.storage.read_csv("templates.csv")
-        if df.empty:
+        row = self.repo.get(template_id)
+        if not row:
             return None
-        hit = df[df["templateId"] == template_id]
-        if hit.empty:
-            return None
-        row = hit.iloc[0].to_dict()
         try:
             row["steps"] = json.loads(row.get("stepsJson") or "[]")
         except Exception:
@@ -68,9 +71,13 @@ class TemplatesService:
                 "stepsJson": s.get("stepsJson"),
             })
         tid = new_id()
-        row = {"templateId": tid, "athleteId": athlete_id, "name": name, "stepsJson": json.dumps(items, ensure_ascii=False)}
-        columns = ["templateId", "athleteId", "name", "stepsJson"]
-        self.storage.append_row("templates.csv", row, columns)
+        payload = {
+            "templateId": tid,
+            "athleteId": athlete_id,
+            "name": name,
+            "stepsJson": json.dumps(items, ensure_ascii=False, separators=(",", ":")),
+        }
+        self.repo.create(payload)
         return tid
 
     def apply_week_template(self, athlete_id: str, template_id: str, target_week_start: dt.date, sessions_repo) -> None:

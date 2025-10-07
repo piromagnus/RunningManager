@@ -3,7 +3,7 @@ from __future__ import annotations
 import statistics
 from dataclasses import dataclass
 import json
-from pathlib import Path
+import math
 from typing import Any, Dict, List, Optional
 
 from persistence.csv_storage import CsvStorage
@@ -207,7 +207,10 @@ class PlannerService:
         dist = session.get("plannedDistanceKm")
         if dist not in (None, ""):
             try:
-                return float(dist)
+                dist_value = float(dist)
+                if math.isnan(dist_value):
+                    raise ValueError
+                return dist_value
             except Exception:
                 pass
         session_type = (session.get("type") or "").upper()
@@ -215,7 +218,7 @@ class PlannerService:
             duration = session.get("plannedDurationSec")
             if duration not in (None, ""):
                 try:
-                    return self.estimate_km(athlete_id, int(duration))
+                    return self.estimate_km(athlete_id, int(float(duration)))
                 except Exception:
                     return None
         if session_type == "INTERVAL_SIMPLE":
@@ -228,7 +231,10 @@ class PlannerService:
         ascent = session.get("plannedAscentM")
         if ascent not in (None, ""):
             try:
-                return int(float(ascent))
+                ascent_value = float(ascent)
+                if math.isnan(ascent_value):
+                    raise ValueError
+                return int(ascent_value)
             except Exception:
                 pass
         session_type = (session.get("type") or "").upper()
@@ -258,4 +264,3 @@ class PlannerService:
             "distanceKm": float(total_dist),
             "ascentM": int(total_ascent),
         }
-

@@ -34,7 +34,25 @@ def fmt_decimal(value: Optional[float], digits: Optional[int] = None) -> str:
     fmt = None
     if digits is not None:
         fmt = "#" if digits == 0 else "#." + ("0" * digits)
-    return numbers.format_decimal(value, format=fmt, locale=LOCALE)
+    formatted = numbers.format_decimal(value, format=fmt, locale=LOCALE)
+    if abs(value) >= 1000:
+        separators = {" ", "\u00A0", "\u202F"}
+        if not any(sep in formatted for sep in separators):
+            integer, sep, fractional = formatted.partition(",")
+            try:
+                clean_integer = integer.replace(" ", "").replace("\u00A0", "").replace("\u202F", "")
+                grouped = f"{int(clean_integer):,}".replace(",", " ")
+                formatted = grouped + (sep + fractional if sep else "")
+            except ValueError:
+                pass
+    if digits is None and "," in formatted:
+        head, sep, tail = formatted.partition(",")
+        trimmed = tail.rstrip("0")
+        if trimmed == "":
+            formatted = head
+        elif trimmed != tail:
+            formatted = head + sep + trimmed
+    return formatted
 
 
 def fmt_km(km: Optional[float]) -> str:
@@ -62,4 +80,3 @@ def to_str_storage(value: Optional[float], ndigits: Optional[int] = None) -> str
     if ndigits is None:
         return f"{value}"
     return f"{value:.{ndigits}f}"
-
