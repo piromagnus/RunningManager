@@ -1,0 +1,115 @@
+<context>
+# Overview
+Running Manager is a Streamlit-based coaching platform for trail running, inspired by Football Manager. MVP targets a single coach managing a single athlete. It enables: (1) weekly planning via extensible session types; (2) importing real data from Strava (and manual FIT/TCX); (3) linking planned sessions with completed activities while capturing RPE (1–10); (4) tracking progress toward race goals; and (5) visualizing planned vs actual volume and effort using a distance-equivalent metric that accounts for vertical gain.
+
+Key trail nuance: distance-equivalent is critical because of elevation gain; default is 100 m ascent = 1.0 km equivalent, configurable per coach.
+
+# Core Features
+- Planning & Templates (single athlete in MVP): general, extensible session model with initial types:
+  - Fundamental endurance: time-based under a threshold HR cap (if available); show estimated km; no hard target if HR missing; optional pace guidance.
+  - Long run: distance, minimal ascent, time; optional HR threshold if available.
+  - Simple intervals: warm-up + repeated work/recovery steps with time per step; each work step can target HR, pace, or sensation (categorical, e.g., "Threshold 60", "Threshold 30", "MVA", "Max speed").
+  Plan several weeks ahead; save week templates. Multi-week blocks come in Phase 2.
+- Strava Import: OAuth-based connection to fetch activities with HR, distance, moving/elapsed time, elevation gain, laps/splits, route. MVP uses manual sync (last 14 days) and shows only activities not yet linked to a planned session.
+- Manual Import: Import manual to fill the session made when you are not able to import from Strava.
+- Garmin Import: Use Garminconnect to import the session made with Garmin watch and get the same data as Strava. use this package : https://github.com/cyberjunky/python-garminconnect
+- Session Linking + RPE: Suggest likely matches; allow manual override; record RPE on 1–10 scale and comments.
+- Goals & Races: Race definition per athlete (date, distance, ascent, terrain, priority A/B/C, manual target time in MVP). Races count as intense in analytics.
+- Analytics & Visuals: Weekly planned vs actual (time, distance, distance-equivalent) plus a pie chart of intense vs easy time (intense = interval work steps and races only; see Appendix).
+- Garmin Export (MVP): Export only interval trainings to TCX with option per step to end automatically or require Lap button. FIT export arrives in Phase 2.
+
+# User Experience
+- Persona: Coach (primary) — plans, reviews, links, exports.
+- Key Flow (MVP): 1) Connect Strava/Garmin → 2) Add athlete + thresholds → 3) Plan upcoming weeks → 4) Sync activities (14 days) → 5) Link to planned sessions with RPE → 6) Review dashboards and goals.
+- UI/UX (Streamlit pages):
+  - Dashboard: Alerts (unlinked activities, missed sessions), weekly snapshot, upcoming key sessions.
+  - Athlete: Profile, thresholds, zones, connected accounts, units/locale.
+  - Planner: Calendar/week view, session editor, week templates, copy/apply.
+  - Activities: Sync/import, Export to Garmin, linking workflow, details (laps/splits/elevation), RPE entry.
+  - Goals: Race calendar, details, progress-to-goal.
+  - Analytics: Planned vs actual (weekly), intense vs easy pie; trail-specific distance-equivalent.
+  - Settings: Units (km/m), speed display (km/h), decimal style (fr-FR comma), distance-equivalent factor, integrations.
+</context>
+
+<PRD>
+# Technical Architecture
+- App: Python 3.11+ Streamlit multi-page app. Charts with Altair/Plotly. Display formatting uses fr-FR locale: kilometers/meters; speed in km/h; decimal comma for UI.
+- Data Storage (MVP): CSV files with pandas under `data/` (no SQL DB). Design adapters to enable easy future migration to a relational DB.
+- Integrations:
+  - Strava: OAuth 2.0; scopes `activity:read`/`activity:read_all`. Endpoints `/athlete/activities` (paginated) and `/activities/{id}`. Manual sync, default window last 14 days, only show unlinked.
+  - Garmin: No general-purpose public workout upload API. MVP exports interval workouts to TCX (per-step auto or lap end). Optional manual FIT/TCX activity upload wizard for ingest. Use this package : https://github.com/cyberjunky/python-garminconnect to import the session made with Garmin watch.
+- Security/Secrets: `.env` for client IDs/secrets and `DATA_DIR`. Store tokens encrypted at rest.
+- Packaging/Run: `requirements.txt`, `.env.example`, `streamlit run app.py`. Optional Dockerfile later.
+
+## System Components
+- UI Pages: Dashboard, Athlete, Planner, Activities, Goals, Analytics, Settings.
+- Services: `strava_service`, `garmin_export_service`, `linking_service` (matching/suggestions), `analytics_service` (rollups/charts), `templates_service`, `timeseries_service`.
+- Persistence: `csv_storage.py` (read/write CSVs), `repositories.py` (CRUD abstractions). Timeseries saved as per-activity CSVs under `data/timeseries/`.
+
+## Data Files (CSV)
+- `data/activities.csv`: all imported activities (Strava/manual); columns include: `activityId, athleteId, source, startTime, distanceKm, elapsedSec, movingSec, ascentM, avgHr, maxHr, hasTimeseries, polyline, rawJsonPath`.
+- `data/planned_sessions.csv`: all planned sessions; columns include: `plannedSessionId, athleteId, date, type, plannedDistanceKm, plannedDurationSec, plannedAscentM, targetType(hr|pace|sensation), targetLabel, notes, stepEndMode(auto|lap) for intervals`.
+- `data/links.csv`: links between planned sessions and activities; columns include: `linkId, plannedSessionId, activityId, matchScore, rpe(1-10), comments`.
+- `data/metrics.csv`: precomputed aggregates (daily/weekly); columns include: `periodStart, periodEnd, distanceKm, timeSec, ascentM, distanceEqKm, intenseTimeSec, easyTimeSec, numSessions, adherencePct`.
+- `data/thresholds.csv`: per-athlete threshold entries; columns include: `thresholdId, athleteId, name(Threshold 60|Threshold 30|MVA|Fundamental|...), hrMin, hrMax, paceFlatKmhMin, paceFlatKmhMax, ascentRateMPerHMin, ascentRateMPerHMax` (MVA provides HR and flat pace ranges; ascent rate optional).
+- Timeseries per activity: `data/timeseries/{activityId}.csv` with columns: `timestamp, hr, paceKmh, elevationM, cadence, lat, lon` (optional GPS columns when available).
+- Optional: `data/goals.csv`, `data/athlete.csv`, `data/settings.csv`.
+
+## Data Models (logical)
+- Coach: id, name, settings { units, distanceEqFactor }.
+- Athlete: id, coachId, name, thresholdsProfileId, units.
+- ThresholdProfile/Entry: name; hrRange; paceFlatRangeKmh; ascentRateRangeMPerH (optional). Fundamental uses HR cap (hrMax only) and optional pace.
+- Goal: id, athleteId, date, distanceKm, ascentM, terrain, priority, targetTimeSec (manual in MVP), isRace=true.
+- SessionTemplate: id, name, type (FUNDAMENTAL_ENDURANCE | LONG_RUN | INTERVAL_SIMPLE | ...), structure (JSON steps), default targets (hr/pace/sensation), notes.
+- PlannedSession: id, athleteId, date, type, plannedDistanceKm, plannedDurationSec, plannedAscentM, targetType, targetLabel, structured JSON steps, stepEndMode (auto|lap for interval steps), notes.
+- Activity: id, athleteId, source (strava|manual), metrics as above, timeseriesPath.
+- Link: id, plannedSessionId, activityId, matchScore, rpe (1–10), comments.
+- MetricAggregate: period (week), sums and derived KPIs.
+
+## Analytics & Classification
+- Distance-Equivalent: `distanceEqKm = distanceKm + (ascendM * distanceEqFactor)`, default factor 0.01 (100 m ascent = 1.0 km). Coach-configurable.
+- Intense vs Easy: Intense time counts only interval work steps and races. Recovery steps, fundamental runs, and long runs are treated as easy even if instantaneous metrics spike. If HR/pace missing, classify by session type/step type.
+- Estimated km for Fundamental: derive from athlete’s fundamental pace (thresholds). Fallback to recent easy-run pace if missing.
+
+## APIs & Integrations
+- Strava Ingest: OAuth tokens per athlete; pagination; incremental sync with `after` timestamp for last 14 days. Activities view filters to unlinked. Store full JSON to disk and extract key metrics to CSV.
+- Garmin Ingest: Use this package : https://github.com/cyberjunky/python-garminconnect to import the session made with Garmin watch.
+- Garmin Export (MVP TCX): Export only interval workouts. For each step, choose `auto` (time-based end) or `lap` (manual button) in Planner. If target is categorical (sensation), encode step as free-run with notes.
+
+## Infrastructure Requirements
+- Local dev: Python + Streamlit. Optional Docker.
+- Future hosting: lightweight container; public HTTPS needed for webhooks (if enabled later).
+
+# Development Roadmap
+## MVP
+- CSV persistence; single coach & athlete; thresholds entry UI.
+- Planner with Fundamental, Long run, Simple intervals; week templates; plan weeks ahead.
+- Strava OAuth;Garmin connect python package; manual sync (14 days); Activities view shows unlinked; activity details.
+- Manual linking with RPE (1–10).
+- Dashboards: planned vs actual (weekly): time, distance, distance-equivalent; pie of intense vs easy time.
+- TCX export for interval workouts (per-step auto/lap end).
+
+## Phase 2
+- Training blocks; richer templates.
+- Suggested targets from thresholds; improved zones.
+- Matching suggestions; bulk linking.
+- More analytics: hill exposure, adherence, PR tracking.
+- FIT export; optional Strava webhooks.
+
+# Logical Dependency Chain
+1) CSV data layer + Streamlit scaffold → 2) Strava OAuth + import (14 days) → 3) Planner UI + session CRUD → 4) Activity detail + manual linking + RPE → 5) Dashboards (planned vs actual + pie) → 6) TCX export (intervals only) → 7) Templates/blocks → 8) Matching suggestions → 9) Advanced analytics → 10) FIT export/webhooks.
+
+# Risks and Mitigations
+- Garmin API limitations: ship TCX (interval-only) with auto/lap; abstract exporter for future API.
+- Strava rate limits: incremental window and backoff; store raw JSON; paginate.
+- FR locale & CSV: store numeric with `.` in CSV for compatibility; render with fr-FR formatting (decimal comma) in UI.
+- Trail distance-equivalent: make factor configurable; verify units.
+- Timeseries size: keep per-activity CSVs to avoid bloating main tables.
+
+# Appendix
+- Units & Locale: km/m; speed in km/h; UI renders decimals with comma; CSV keeps `.` to simplify pandas reads/writes.
+- Threshold Entries: provide HR range (min/max), flat pace range (km/h min/max), optional ascent rate (m/h min/max). Fundamental uses HR cap (max) and optional pace. "Threshold 60" and "Threshold 30" provide HR and flat pace ranges; MVA provides HR and flat pace ranges.
+- Intense Definition: interval work steps and races only.
+- Required CSVs: `activities.csv`, `planned_sessions.csv`, `links.csv`, `metrics.csv`, `thresholds.csv`, plus per-activity timeseries files in `data/timeseries/`.
+</PRD>
+

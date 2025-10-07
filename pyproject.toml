@@ -1,0 +1,35 @@
+[project]
+name = "running-manager"
+version = "0.1.0"
+description = "Streamlit trail running coach app"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "AGPL-3.0" }
+authors = [{ name = "Pierre Marrec", email = "botve.pmarre@gmail.com" }]
+
+dependencies = [
+  "streamlit>=1.37",
+  "pandas>=2.2",
+  "numpy>=2",
+  "altair>=5",
+  "plotly>=5",
+  "requests>=2.32",
+  "python-dotenv>=1.0",
+  "cryptography>=43",
+  "garminconnect>=0.2.15",
+  "fitparse>=1.2.0",
+  "lxml>=5.2",
+  "portalocker>=2.10",
+  "babel>=2.15",
+  "pytest>=8.4.2",
+]
+
+[tool.uv]
+# uses pyproject dependencies; uv will resolve into a venv; freeze to lock
+
+[tool.ruff]
+line-length = 100
+select = ["E","F","I"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

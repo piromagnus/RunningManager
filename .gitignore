@@ -1,0 +1,15 @@
+.env
+.env.*
+__pycache__/
+.pytest_cache/
+.streamlit/
+.vscode/
+.DS_Store
+.idea/
+data/tokens*
+data/raw/
+data/timeseries/
+.python-version
+.venv/
+uv.lock
+requirements.lock.txt
