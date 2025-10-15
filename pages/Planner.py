@@ -16,6 +16,7 @@ from persistence.repositories import PlannedSessionsRepo, AthletesRepo, Threshol
 from services.templates_service import TemplatesService
 from services.planner_service import PlannerService
 from services.planner_presenter import build_card_view_model, build_empty_state_placeholder
+from services.session_templates_service import SessionTemplatesService
 
 
 st.set_page_config(page_title="Running Manager - Planner", layout="wide")
@@ -29,6 +30,7 @@ ath_repo = AthletesRepo(storage)
 thr_repo = ThresholdsRepo(storage)
 tmpl = TemplatesService(storage)
 planner = PlannerService(storage)
+session_templates = SessionTemplatesService(storage)
 
 
 def _format_week_duration(seconds: int) -> str:
@@ -36,6 +38,40 @@ def _format_week_duration(seconds: int) -> str:
     hours, remainder = divmod(total, 3600)
     minutes = remainder // 60
     return f"{hours}h{minutes:02d}"
+
+
+def _format_session_duration(seconds: int) -> str:
+    total = max(0, int(seconds))
+    hours, remainder = divmod(total, 3600)
+    minutes = remainder // 60
+    if hours:
+        return f"{hours}h{minutes:02d}"
+    return f"{minutes} min"
+
+
+def _coerce_float(value: Any, default: float = 0.0) -> float:
+    try:
+        if value in (None, ""):
+            return default
+        return float(value)
+    except Exception:
+        return default
+
+
+def _coerce_int(value: Any, default: int = 0) -> int:
+    try:
+        if value in (None, ""):
+            return default
+        return int(float(value))
+    except Exception:
+        return default
+
+
+def _default_template_title(session: Dict[str, Any]) -> str:
+    raw_type = str(session.get("type") or "Session").replace("_", " ")
+    title_part = raw_type.title()
+    date_part = str(session.get("date") or "")
+    return f"{title_part} {date_part}".strip()
 
 # Caching helpers
 @st.cache_data(ttl=5)
@@ -45,6 +81,14 @@ def get_sessions_df_cached(athlete_id: str):
 @st.cache_data(ttl=60)
 def get_threshold_names_cached(athlete_id: str):
     return planner.list_threshold_names(athlete_id)
+
+
+@st.cache_data(ttl=5)
+def get_session_templates_cached(athlete_id: str):
+    return session_templates.list(athlete_id=athlete_id)
+
+if st.session_state.pop("planner_templates_refresh", False):
+    get_session_templates_cached.clear()
 
 # Simple CSS widening and card styling
 st.markdown(
@@ -78,9 +122,40 @@ ath_label = st.selectbox("Athlete", list(athlete_options.keys())) if athlete_opt
 athlete_id = athlete_options.get(ath_label) if ath_label else None
 
 today = dt.date.today()
-week_monday = st.date_input("Week (pick any day)", value=today)
-week_start = iso_week_start(week_monday)
-week_end = iso_week_end(week_monday)
+if "planner_week_date" not in st.session_state:
+    st.session_state["planner_week_date"] = today
+if "planner_week_picker" not in st.session_state:
+    st.session_state["planner_week_picker"] = st.session_state["planner_week_date"]
+
+
+def _update_week_from_picker() -> None:
+    st.session_state["planner_week_date"] = st.session_state.get("planner_week_picker", today)
+
+
+nav_prev, nav_picker, nav_next = st.columns([1, 2, 1])
+with nav_prev:
+    if st.button("← Semaine précédente", key="planner-prev-week"):
+        new_date = st.session_state["planner_week_date"] - dt.timedelta(days=7)
+        st.session_state["planner_week_date"] = new_date
+        st.session_state["planner_week_picker"] = new_date
+        st.rerun()
+with nav_picker:
+    st.date_input(
+        "Week (pick any day)",
+        value=st.session_state["planner_week_picker"],
+        key="planner_week_picker",
+        on_change=_update_week_from_picker,
+    )
+with nav_next:
+    if st.button("Semaine suivante →", key="planner-next-week"):
+        new_date = st.session_state["planner_week_date"] + dt.timedelta(days=7)
+        st.session_state["planner_week_date"] = new_date
+        st.session_state["planner_week_picker"] = new_date
+        st.rerun()
+
+selected_week_date = st.session_state["planner_week_date"]
+week_start = iso_week_start(selected_week_date)
+week_end = iso_week_end(selected_week_date)
 st.caption(f"Week range: {week_start.date()} → {week_end.date()}")
 
 st.divider()
@@ -105,51 +180,224 @@ with st.expander("Create/Edit session", expanded=bool(edit_ctx)):
 
     date = st.date_input("Date", value=default_date)
     if existing:
-        typ = existing.get("type")
+        typ = (existing.get("type") or "FUNDAMENTAL_ENDURANCE").upper()
+        type_options = ["FUNDAMENTAL_ENDURANCE", "LONG_RUN", "INTERVAL_SIMPLE"]
+        if typ not in type_options:
+            type_options.append(typ)
+        typ = st.selectbox(
+            "Type",
+            type_options,
+            index=type_options.index(typ),
+        )
+        base_payload = existing
     else:
-        typ = st.selectbox("Type", ["FUNDAMENTAL_ENDURANCE", "LONG_RUN", "INTERVAL_SIMPLE"], index=0)
+        template_records = get_session_templates_cached(athlete_id) if athlete_id else []
+        base_options: List[Dict[str, Any]] = [
+            {"kind": "type", "value": "FUNDAMENTAL_ENDURANCE", "label": "Endurance fondamentale"},
+            {"kind": "type", "value": "LONG_RUN", "label": "Sortie longue"},
+        ]
+        for tpl in template_records:
+            label = tpl.get("title") or tpl.get("templateId")
+            base_options.append(
+                {
+                    "kind": "template",
+                    "value": tpl.get("templateId"),
+                    "label": f"Modèle • {label}",
+                    "template": tpl,
+                }
+            )
+        if not base_options:
+            base_options = [{"kind": "type", "value": "FUNDAMENTAL_ENDURANCE", "label": "Endurance fondamentale"}]
+        option_keys = list(range(len(base_options)))
+        default_index = option_keys[0]
+        base_choice = st.selectbox(
+            "Type ou modèle",
+            option_keys,
+            index=default_index,
+            format_func=lambda idx: base_options[idx]["label"],
+            key="planner_base_selector",
+        )
+        chosen = base_options[base_choice]
+        if chosen["kind"] == "type":
+            typ = str(chosen["value"]).upper()
+            base_payload = {}
+        else:
+            tpl_record = chosen.get("template") or session_templates.get(str(chosen.get("value") or ""))
+            payload_source = (tpl_record or {}).get("payload") or {}
+            payload = dict(payload_source)
+            payload["type"] = (payload.get("type") or (tpl_record or {}).get("baseType") or "FUNDAMENTAL_ENDURANCE").upper()
+            base_payload = payload
+            typ = payload.get("type")
+        col_template_btn, _ = st.columns([1, 3])
+        with col_template_btn:
+            if st.button("Créer un modèle", key="planner-create-template"):
+                st.session_state["session_creator_prefill"] = {
+                    "date": str(date),
+                    "athleteId": athlete_id,
+                }
+                st.switch_page("pages/SessionCreator.py")
 
-    notes = st.text_area("Notes", value=(existing.get("notes") if existing else ""))
+    notes_default = base_payload.get("notes") if base_payload else ""
+    if isinstance(notes_default, float) and math.isnan(notes_default):
+        notes_default = ""
+    notes = st.text_area("Notes", value=notes_default or "")
 
-    target_type = existing.get("targetType") if existing else None
-    target_label = existing.get("targetLabel") if existing else None
-    planned_distance_km = existing.get("plannedDistanceKm") if existing else None
-    planned_duration_sec = existing.get("plannedDurationSec") if existing else None
-    planned_ascent_m = existing.get("plannedAscentM") if existing else None
-    step_end_mode = existing.get("stepEndMode") if existing else None
-    steps_json = existing.get("stepsJson") if existing else None
+    target_type = base_payload.get("targetType") if base_payload else None
+    target_label = base_payload.get("targetLabel") if base_payload else None
+    planned_distance_km = base_payload.get("plannedDistanceKm") if base_payload else None
+    planned_duration_sec = base_payload.get("plannedDurationSec") if base_payload else None
+    planned_ascent_m = base_payload.get("plannedAscentM") if base_payload else None
+    step_end_mode = base_payload.get("stepEndMode") if base_payload else None
+    steps_json = base_payload.get("stepsJson") if base_payload else None
+    if isinstance(target_type, float) and math.isnan(target_type):
+        target_type = None
+    if isinstance(target_label, float) and math.isnan(target_label):
+        target_label = None
 
     if typ == "FUNDAMENTAL_ENDURANCE":
-        planned_duration_sec = int(st.number_input("Duration (sec)", min_value=0, value=int(planned_duration_sec or 3600), step=300))
-        target_type = st.selectbox(
-            "Target type",
-            ["none", "hr", "pace"],
-            index=(0 if not target_type else ["none", "hr", "pace"].index(target_type)),
+        step_end_mode = None
+        steps_json = None
+        mode_options = ["distance", "duration"]
+        distance_present = _coerce_float(planned_distance_km, 0.0) > 0
+        duration_present = _coerce_int(planned_duration_sec, 0) > 0
+        default_index = 0 if distance_present or not duration_present else 1
+        mode_choice = st.radio(
+            "Mode de saisie",
+            mode_options,
+            index=default_index,
+            format_func=lambda x: "Distance + D+" if x == "distance" else "Durée + D+ mini",
+            horizontal=True,
         )
-        if target_type in ("hr", "pace"):
-            names = get_threshold_names_cached(athlete_id) if athlete_id else ["Fundamental", "Threshold 30", "Threshold 60"]
-            idx = names.index(target_label) if target_label in names else 0
-            target_label = st.selectbox("Threshold", names, index=idx)
-        planned_ascent_m = int(st.number_input("Planned ascent (m)", min_value=0, value=int(planned_ascent_m or 0), step=50))
-        est_km = planner.estimate_km(athlete_id, planned_duration_sec) if athlete_id else None
-        if est_km is not None:
-            st.caption(f"Estimated km ≈ {est_km:.1f}")
-            # Persist estimated distance for Fundamental Endurance
-            planned_distance_km = round(est_km, 1)
+        distance_eq_preview = None
+
+        if mode_choice == "distance":
+            distance_input = st.number_input(
+                "Distance planifiée (km)",
+                min_value=0.0,
+                value=_coerce_float(planned_distance_km, 0.0),
+                step=0.1,
+            )
+            ascent_input = st.number_input(
+                "Ascension planifiée (m)",
+                min_value=0,
+                value=_coerce_int(planned_ascent_m, 0),
+                step=50,
+            )
+            derived = planner.derive_from_distance(str(athlete_id or ""), distance_input, ascent_input)
+            planned_distance_km = derived["distanceKm"]
+            planned_duration_sec = derived["durationSec"]
+            planned_ascent_m = int(ascent_input)
+            distance_eq_preview = derived["distanceEqKm"]
+            st.caption(
+                f"Distance-eq ≈ {fmt_decimal(distance_eq_preview, 1)} km • Durée estimée ≈ {_format_session_duration(planned_duration_sec)}"
+            )
+        else:
+            duration_input = st.number_input(
+                "Durée planifiée (sec)",
+                min_value=0,
+                value=_coerce_int(planned_duration_sec, 3600),
+                step=300,
+            )
+            ascent_input = st.number_input(
+                "Ascension minimale (m)",
+                min_value=0,
+                value=_coerce_int(planned_ascent_m, 0),
+                step=50,
+            )
+            derived = planner.derive_from_duration(str(athlete_id or ""), int(duration_input), ascent_input)
+            planned_distance_km = derived["distanceKm"]
+            planned_duration_sec = derived["durationSec"]
+            planned_ascent_m = int(ascent_input)
+            distance_eq_preview = derived["distanceEqKm"]
+            st.caption(
+                f"Distance estimée ≈ {fmt_decimal(planned_distance_km, 1)} km • Distance-eq ≈ {fmt_decimal(distance_eq_preview, 1)} km"
+            )
+
+        target_options = ["none", "hr", "pace"]
+        current_target = target_type if target_type in target_options else "pace"
+        target_type = st.selectbox(
+            "Cible",
+            target_options,
+            index=target_options.index(current_target),
+        )
+        if target_type == "none":
+            target_label = None
+        else:
+            target_label = "Fundamental"
+            st.caption("Seuil fixé automatiquement sur Fundamental.")
 
     elif typ == "LONG_RUN":
-        planned_distance_km = float(st.number_input("Distance (km)", min_value=0.0, value=float(planned_distance_km or 20.0), step=1.0))
-        planned_duration_sec = int(st.number_input("Time (sec, optional)", min_value=0, value=int(planned_duration_sec or 0), step=300)) or None
-        planned_ascent_m = int(st.number_input("Min ascent (m)", min_value=0, value=int(planned_ascent_m or 500), step=50))
+        step_end_mode = None
+        steps_json = None
+        mode_options = ["distance", "duration"]
+        distance_present = _coerce_float(planned_distance_km, 0.0) > 0
+        duration_present = _coerce_int(planned_duration_sec, 0) > 0
+        default_index = 0 if distance_present or not duration_present else 1
+        mode_choice = st.radio(
+            "Mode de saisie",
+            mode_options,
+            index=default_index,
+            format_func=lambda x: "Distance + D+" if x == "distance" else "Durée + D+ mini",
+            horizontal=True,
+        )
+        distance_eq_preview = None
+
+        if mode_choice == "distance":
+            distance_input = st.number_input(
+                "Distance planifiée (km)",
+                min_value=0.0,
+                value=_coerce_float(planned_distance_km, 0.0),
+                step=0.5,
+            )
+            ascent_input = st.number_input(
+                "Ascension planifiée (m)",
+                min_value=0,
+                value=_coerce_int(planned_ascent_m, 500),
+                step=50,
+            )
+            derived = planner.derive_from_distance(str(athlete_id or ""), distance_input, ascent_input)
+            planned_distance_km = derived["distanceKm"]
+            planned_duration_sec = derived["durationSec"]
+            planned_ascent_m = int(ascent_input)
+            distance_eq_preview = derived["distanceEqKm"]
+            st.caption(
+                f"Distance-eq ≈ {fmt_decimal(distance_eq_preview, 1)} km • Durée estimée ≈ {_format_session_duration(planned_duration_sec)}"
+            )
+        else:
+            duration_input = st.number_input(
+                "Durée planifiée (sec)",
+                min_value=0,
+                value=_coerce_int(planned_duration_sec, 7200),
+                step=300,
+            )
+            ascent_input = st.number_input(
+                "Ascension minimale (m)",
+                min_value=0,
+                value=_coerce_int(planned_ascent_m, 500),
+                step=50,
+            )
+            derived = planner.derive_from_duration(str(athlete_id or ""), int(duration_input), ascent_input)
+            planned_distance_km = derived["distanceKm"]
+            planned_duration_sec = derived["durationSec"]
+            planned_ascent_m = int(ascent_input)
+            distance_eq_preview = derived["distanceEqKm"]
+            st.caption(
+                f"Distance estimée ≈ {fmt_decimal(planned_distance_km, 1)} km • Distance-eq ≈ {fmt_decimal(distance_eq_preview, 1)} km"
+            )
+
         target_type = st.selectbox(
-            "Target type",
+            "Cible",
             ["none", "hr", "pace"],
             index=(0 if not target_type else ["none", "hr", "pace"].index(target_type)),
         )
         if target_type in ("hr", "pace"):
-            names = get_threshold_names_cached(athlete_id) if athlete_id else ["Fundamental", "Threshold 30", "Threshold 60"]
+            names = (
+                get_threshold_names_cached(athlete_id)
+                if athlete_id
+                else ["Fundamental", "Threshold 30", "Threshold 60"]
+            )
             idx = names.index(target_label) if target_label in names else 0
-            target_label = st.selectbox("Threshold", names, index=idx)
+            target_label = st.selectbox("Seuil", names, index=idx)
 
     elif typ == "INTERVAL_SIMPLE":
         warmup = 600
@@ -163,6 +411,14 @@ with st.expander("Create/Edit session", expanded=bool(edit_ctx)):
             except Exception:
                 parsed = {}
         warmup = int(st.number_input("Warm-up (sec)", min_value=0, value=int(parsed.get("warmupSec", warmup)), step=60))
+        cooldown = int(
+            st.number_input(
+                "Cool-down (sec)",
+                min_value=0,
+                value=int(parsed.get("cooldownSec", cooldown)),
+                step=60,
+            )
+        )
         if mode == "Simple repeats":
             repeats = parsed.get("repeats", [])
             num_rep = st.number_input("Repeats", min_value=1, value=max(1, len(repeats) or 6), step=1)
@@ -263,7 +519,6 @@ with st.expander("Create/Edit session", expanded=bool(edit_ctx)):
                     built_actions.append({"kind": kind, "sec": sec, "targetType": tt, "targetLabel": tl, "ascendM": ascend, "descendM": descend})
                 built_loops.append({"repeats": repeats, "actions": built_actions})
             steps = {"warmupSec": warmup, "loops": built_loops, "betweenLoopRecoverSec": between}
-        cooldown = int(st.number_input("Cool-down (sec)", min_value=0, value=int(parsed.get("cooldownSec", cooldown)), step=60))
         step_end_mode = st.selectbox("Interval end mode", ["auto", "lap"], index=( ["auto","lap"].index(step_end_mode or "auto") ))
         steps["cooldownSec"] = cooldown
         steps_json = json.dumps(steps)
@@ -295,6 +550,7 @@ with st.expander("Create/Edit session", expanded=bool(edit_ctx)):
                 else:
                     sid = sessions_repo.create(row)
                     st.success(f"Session added: {sid}")
+                get_sessions_df_cached.clear()
                 st.session_state["planner_edit"] = None
                 st.rerun()
     with col_cancel:
@@ -304,6 +560,7 @@ with st.expander("Create/Edit session", expanded=bool(edit_ctx)):
     with col_delete:
         if existing and st.button("🗑️ Delete", help="Delete session"):
             sessions_repo.delete(existing["plannedSessionId"])
+            get_sessions_df_cached.clear()
             st.session_state["planner_edit"] = None
             st.rerun()
 
@@ -355,6 +612,7 @@ if athlete_id:
                     step_mode = record.get("stepEndMode") if isinstance(record.get("stepEndMode"), str) else None
 
                     estimated_distance = planner.estimate_session_distance_km(athlete_id, record)
+                    distance_eq = planner.compute_session_distance_eq(athlete_id, record)
 
                     model = build_card_view_model(
                         {
@@ -367,6 +625,7 @@ if athlete_id:
                             "stepEndMode": step_mode,
                         },
                         estimated_distance_km=estimated_distance,
+                        distance_eq_km=distance_eq,
                     )
                     st.markdown("<div class='rm-card'>", unsafe_allow_html=True)
                     badges = " | ".join(model["badges"])
@@ -375,16 +634,38 @@ if athlete_id:
                         f"<div class='rm-top'>{model['header']}{suffix}</div>",
                         unsafe_allow_html=True,
                     )
-                    c1, c2, c3 = st.columns([1, 1, 1])
-                    for col, action in zip((c1, c2, c3), model["actions"]):
+                    action_cols = st.columns([1] * len(model["actions"]))
+                    for col, action in zip(action_cols, model["actions"]):
                         key = f"{action.action}-{action.session_id}"
                         with col:
                             if st.button(action.icon, key=key, help=action.label):
                                 if action.action == "edit":
                                     st.session_state["planner_edit"] = {"mode": "edit", "plannedSessionId": sid}
                                     st.rerun()
+                                elif action.action == "save-template":
+                                    session_for_template = dict(record)
+                                    if not session_for_template.get("athleteId"):
+                                        session_for_template["athleteId"] = athlete_id
+                                    try:
+                                        title_hint = _default_template_title(session_for_template)
+                                        template_id = session_templates.create_from_session(
+                                            session_for_template,
+                                            title=title_hint,
+                                        )
+                                        get_session_templates_cached.clear()
+                                        st.session_state["planner_flash"] = (
+                                            "success",
+                                            f"Modèle enregistré ({title_hint}) – id {template_id}",
+                                        )
+                                    except Exception as exc:
+                                        st.session_state["planner_flash"] = (
+                                            "error",
+                                            f"Impossible de créer le modèle: {exc}",
+                                        )
+                                    st.rerun()
                                 elif action.action == "delete":
                                     sessions_repo.delete(str(sid))
+                                    get_sessions_df_cached.clear()
                                     st.rerun()
                                 elif action.action == "view":
                                     st.session_state["session_view_sid"] = str(sid)
@@ -395,6 +676,7 @@ if athlete_id:
                 st.caption(f"{placeholder['message']} {placeholder['cta']}")
             if st.button("＋", key=f"add-{day}", help="Add session"):
                 st.session_state["planner_edit"] = {"mode": "create", "date": str(day)}
+                st.session_state.pop("planner_base_selector", None)
                 st.rerun()
 
     totals = planner.compute_weekly_totals(athlete_id, week_records)
@@ -402,6 +684,13 @@ if athlete_id:
         f"Totals — {_format_week_duration(totals['timeSec'])} • {fmt_decimal(totals['distanceKm'], 1)} km • {fmt_m(totals['ascentM'])}"
     )
     st.caption(totals_caption)
+    flash = st.session_state.pop("planner_flash", None)
+    if flash:
+        level, message = flash
+        if level == "success":
+            st.success(message)
+        elif level == "error":
+            st.error(message)
 else:
     st.info("Select an athlete to view sessions.")
 
@@ -436,6 +725,7 @@ if athlete_id:
                     for _, row in df_in_week.iterrows():
                         sessions_repo.delete(str(row.get("plannedSessionId")))
                 tmpl.apply_week_template(athlete_id, options[sel], week_start.date(), sessions_repo)
+                get_sessions_df_cached.clear()
                 st.success("Template applied")
                 st.rerun()
         else:

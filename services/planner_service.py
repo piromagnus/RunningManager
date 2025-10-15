@@ -7,7 +7,12 @@ import math
 from typing import Any, Dict, List, Optional
 
 from persistence.csv_storage import CsvStorage
-from persistence.repositories import ThresholdsRepo, ActivitiesRepo, PlannedSessionsRepo
+from persistence.repositories import (
+    ThresholdsRepo,
+    ActivitiesRepo,
+    PlannedSessionsRepo,
+    SettingsRepo,
+)
 
 
 @dataclass
@@ -18,6 +23,8 @@ class PlannerService:
         self.thresholds = ThresholdsRepo(self.storage)
         self.activities = ActivitiesRepo(self.storage)
         self.sessions = PlannedSessionsRepo(self.storage)
+        self.settings = SettingsRepo(self.storage)
+        self._distance_eq_factor_cache: Optional[float] = None
 
     def list_threshold_names(self, athlete_id: str) -> List[str]:
         df = self.thresholds.list(athleteId=athlete_id)
@@ -264,3 +271,82 @@ class PlannerService:
             "distanceKm": float(total_dist),
             "ascentM": int(total_ascent),
         }
+
+    # --- Distance equivalent helpers ---
+    def _distance_eq_factor(self) -> float:
+        if self._distance_eq_factor_cache is not None:
+            return self._distance_eq_factor_cache
+        row = self.settings.get("coach-1") or {}
+        try:
+            factor = float(row.get("distanceEqFactor", 0.01))
+        except Exception:
+            factor = 0.01
+        if factor < 0:
+            factor = 0.0
+        self._distance_eq_factor_cache = factor
+        return factor
+
+    def compute_distance_eq_km(self, distance_km: float, ascent_m: float) -> float:
+        distance = max(float(distance_km or 0.0), 0.0)
+        ascent = max(float(ascent_m or 0.0), 0.0)
+        return distance + ascent * self._distance_eq_factor()
+
+    def derive_from_distance(
+        self,
+        athlete_id: str,
+        distance_km: float,
+        ascent_m: float,
+    ) -> Dict[str, float]:
+        eq_km = self.compute_distance_eq_km(distance_km, ascent_m)
+        pace = max(self._fundamental_pace_kmh(athlete_id), 0.1)
+        duration_sec = int(round((eq_km / pace) * 3600))
+        return {
+            "distanceKm": max(float(distance_km or 0.0), 0.0),
+            "distanceEqKm": eq_km,
+            "durationSec": max(duration_sec, 0),
+        }
+
+    def derive_from_duration(
+        self,
+        athlete_id: str,
+        duration_sec: int,
+        ascent_m: float,
+    ) -> Dict[str, float]:
+        duration = max(int(duration_sec or 0), 0)
+        pace = max(self._fundamental_pace_kmh(athlete_id), 0.1)
+        distance_eq_km = (duration / 3600.0) * pace
+        ascent = max(float(ascent_m or 0.0), 0.0)
+        distance_km = max(distance_eq_km - ascent * self._distance_eq_factor(), 0.0)
+        return {
+            "distanceKm": distance_km,
+            "distanceEqKm": distance_eq_km,
+            "durationSec": duration,
+        }
+
+    def compute_session_distance_eq(
+        self,
+        athlete_id: str,
+        session: Dict[str, Any],
+    ) -> Optional[float]:
+        distance = session.get("plannedDistanceKm")
+        ascent = session.get("plannedAscentM") or 0
+        try:
+            if distance not in (None, ""):
+                return self.compute_distance_eq_km(float(distance), float(ascent or 0))
+        except Exception:
+            pass
+        session_type = (session.get("type") or "").upper()
+        if session_type in {"FUNDAMENTAL_ENDURANCE", "LONG_RUN"}:
+            duration = session.get("plannedDurationSec")
+            if duration not in (None, ""):
+                derived = self.derive_from_duration(
+                    athlete_id,
+                    int(float(duration)),
+                    float(ascent or 0),
+                )
+                return derived["distanceEqKm"]
+        if session_type == "INTERVAL_SIMPLE":
+            distance_est = self.estimate_session_distance_km(athlete_id, session)
+            if distance_est is not None:
+                return self.compute_distance_eq_km(distance_est, float(ascent or 0))
+        return None

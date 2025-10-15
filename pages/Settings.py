@@ -5,6 +5,7 @@ import streamlit as st
 
 from persistence.csv_storage import CsvStorage
 from persistence.repositories import AthletesRepo, SettingsRepo, TokensRepo
+from services.metrics_service import MetricsComputationService
 from services.strava_service import StravaService
 from utils.config import load_config
 from utils.formatting import set_locale
@@ -21,6 +22,24 @@ settings_repo = SettingsRepo(storage)
 tokens_repo = TokensRepo(storage)
 athletes_repo = AthletesRepo(storage)
 state_file = Path(cfg.data_dir) / ".strava_state"
+
+
+def _coerce_float(value: object, default: float) -> float:
+    try:
+        if value in (None, ""):
+            return default
+        return float(value)
+    except Exception:
+        return default
+
+
+def _coerce_int(value: object, default: int) -> int:
+    try:
+        if value in (None, ""):
+            return default
+        return int(float(value))
+    except Exception:
+        return default
 
 
 def _first_athlete_id() -> str | None:
@@ -82,21 +101,47 @@ def _strava_service() -> StravaService | None:
 
 strava_service = _strava_service()
 athlete_id = _first_athlete_id()
+metrics_service = MetricsComputationService(storage)
+
+existing_settings = settings_repo.get("coach-1") or {}
+distance_eq_default = _coerce_float(existing_settings.get("distanceEqFactor"), 0.01)
+strava_days_default = _coerce_int(existing_settings.get("stravaSyncDays"), 14)
 
 
 st.subheader("Coach Settings")
 units = st.selectbox("Units", ["metric"], index=0, help="Metric units only in MVP")
 distance_eq = st.number_input(
-    "Distance-eq factor (km per meter ascent)", min_value=0.0, max_value=0.1, value=0.01, step=0.001,
+    "Distance-eq factor (km per meter ascent)",
+    min_value=0.0,
+    max_value=0.1,
+    value=float(distance_eq_default),
+    step=0.001,
     help="Default: 0.01 (100 m ascent = 1.0 km)"
+)
+strava_sync_days = st.number_input(
+    "Jours à synchroniser avec Strava",
+    min_value=1,
+    max_value=31,
+    value=int(strava_days_default),
+    step=1,
+    help="Nombre de jours remontés lors d'une synchronisation manuelle Strava.",
 )
 
 if st.button("Save Settings"):
-    settings_repo.update(
-        "coach-1",
-        {"coachId": "coach-1", "units": units, "distanceEqFactor": distance_eq},
-    )
+    payload = {
+        "coachId": "coach-1",
+        "units": units,
+        "distanceEqFactor": float(distance_eq),
+        "stravaSyncDays": int(strava_sync_days),
+        "analyticsActivityTypes": existing_settings.get("analyticsActivityTypes", ""),
+    }
+    settings_repo.update("coach-1", payload)
+    existing_settings.update(payload)
     st.success("Settings saved")
+
+if st.button("Recompute weekly & daily metrics"):
+    metrics_service.recompute_all()
+    st.success("Métriques recalculées.")
 
 if "strava_state" not in st.session_state:
     persisted = _load_state_file()
@@ -200,15 +245,22 @@ else:
         st.success("Compte Strava connecté.")
         if expires_label:
             st.caption(f"Expiration du token : {expires_label}")
-        if st.button("Synchroniser les 14 derniers jours", type="primary"):
+        sync_days = _coerce_int(existing_settings.get("stravaSyncDays"), int(strava_sync_days))
+        if st.button(f"Synchroniser les {sync_days} derniers jours", type="primary"):
             try:
-                imported = strava_service.sync_last_14_days(athlete_id)
+                imported = strava_service.sync_last_n_days(athlete_id, sync_days)
                 if imported:
-                    st.success(f"{len(imported)} activité(s) importée(s).")
+                    st.success(f"{len(imported)} activité(s) importée(s) sur les {sync_days} derniers jours.")
                 else:
-                    st.info("Aucune nouvelle activité sur les 14 derniers jours.")
+                    st.info(f"Aucune nouvelle activité sur les {sync_days} derniers jours.")
             except Exception as exc:  # pragma: no cover - runtime API failures
                 st.error(f"La synchronisation Strava a échoué : {exc}")
+        if st.button("Reconstruire les activités depuis le cache Strava", key="strava-rebuild-cache"):
+            try:
+                rebuilt = strava_service.rebuild_from_cache(athlete_id)
+                st.success(f"{len(rebuilt)} activité(s) recréée(s) depuis le cache Strava.")
+            except Exception as exc:  # pragma: no cover - runtime API failures
+                st.error(f"Reconstruction depuis le cache impossible : {exc}")
         _render_link("Gérer l'autorisation Strava", auth_url)
     else:
         st.warning("Aucun compte Strava connecté.")

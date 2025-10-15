@@ -335,18 +335,18 @@
         "testStrategy": "- Mock garminconnect client in unit tests; simulate activities list and details; verify mapping and CSV writes.\n- FIT/TCX parser tests with sample files; assert timeseries rows and computed paceKmh correctness.\n- Manual UI test: upload TCX and confirm activity appears as unlinked.\n- Error paths: invalid credentials, MFA required, network errors handled with user-friendly messages.",
         "priority": "medium",
         "dependencies": [],
-        "status": "pending",
+        "status": "in_progress",
         "subtasks": []
       },
       {
         "id": 7,
         "title": "Activities page: details view, linking workflow, suggestions, and RPE capture",
         "description": "Provide Activities page to review synced/ingested activities, view details (splits/elevation/timeseries), link to planned sessions with suggested matches, and record RPE (1–10) and comments.",
-        "details": "Linking logic (services/linking_service.py):\n- Suggestion heuristic matchScore in [0,1]:\n  score = 0.4*(1 - min(|dist_diff|/max(plannedDistanceKm,1),1)) + 0.4*(1 - min(|dur_diff|/max(plannedDurationSec,1),1)) + 0.2*(1 - min(|date_diff_days|/2,1))\n- Consider type compatibility: add +0.1 bonus if both interval vs non-interval align; cap at 1.0\n- For fundamental/long runs missing targets, rely on duration/distance\n- Provide API: suggest_links(athlete_id, window_days=7) -> list of (activityId, plannedSessionId, score)\nActivities page UI:\n- Tabs: Unlinked | Linked\n- Unlinked: list last 14 days activities not in links.csv; show Strava/Garmin source icon\n- On select activity: show details panel with summary + charts (Altair): pace/hr over time, elevation profile; splits if available\n- Suggest matches sorted by score; allow manual override via dropdown of planned sessions on same week\n- Link form: choose plannedSessionId, enter RPE slider 1–10, comments; on save, write links.csv with linkId and matchScore\n- Edit/delete link; RPE editable post-save\n- Only activities not yet linked appear in default list\nData use:\n- Read activities.csv, planned_sessions.csv, links.csv; join to show statuses\nPseudocode:\n  def create_link(activity_id, planned_id, rpe, comments):\n      score = compute_score(activity_id, planned_id)\n      links_repo.create({linkId: uuid(), plannedSessionId: planned_id, activityId: activity_id, matchScore: score, rpe: rpe, comments: comments})\n",
+        "details": "Linking logic (services/linking_service.py):\n- Suggestion heuristic matchScore in [0,1]:\n  score = 0.4*(1 - min(|dist_diff|/max(plannedDistanceKm,1),1)) + 0.4*(1 - min(|dur_diff|/max(plannedDurationSec,1),1)) + 0.2*(1 - min(|date_diff_days|/2,1))\n- Consider type compatibility: add +0.1 bonus if both interval vs non-interval align; cap at 1.0\n- For fundamental/long runs missing targets, rely on duration/distance\n- Provide API: suggest_links(athlete_id, window_days=7) -> list of (activityId, plannedSessionId, score)\nActivities page UI:\n- Tabs: Unlinked | Linked\n- Unlinked: list last 14 days activities not in links.csv; show Strava/Garmin source icon\n- On select activity: show details panel with summary + charts (Altair): pace/hr over time, elevation profile; splits if available\n- Suggest matches sorted by score; allow manual override via dropdown of planned sessions on same week\n- Link form: choose plannedSessionId, enter RPE slider 1–10, comments; on save, write links.csv with linkId and matchScore\n- Edit/delete link; RPE editable post-save\n- Only activities not yet linked appear in default list\nData use:\n- Read activities.csv, planned_sessions.csv, links.csv; join to show statuses\nPseudocode:\n  def create_link(activity_id, planned_id, rpe, comments):\n      score = compute_score(activity_id, planned_id)\n      links_repo.create({linkId: uuid(), plannedSessionId: planned_id, activityId: activity_id, matchScore: score, rpe: rpe, comments: comments})\n\n<info added on 2025-10-07T16:56:02.534Z>\n- Implemented LinkingService with distance/duration/date scoring, interval-vs-non-interval detection via Strava raw JSON, unlinked/linked listings, a timeseries loader, and CRUD helpers for links.\n- Rebuilt Activities page: added Strava sync button; Unlinked tab shows detail metrics, Altair pace/HR/elevation charts, suggested matches table, and linking form (RPE 1–10 + comments). Linked tab supports editing/deleting links and displays the same charts in details.\n- Added unit tests for score calculation (including edge cases), suggestions ordering, link create/update/delete, and integration verifying unlinked filtering after linking.\n- Test run: pytest with 34 tests passing.\n</info added on 2025-10-07T16:56:02.534Z>",
         "testStrategy": "- Unit tests for compute_score with edge cases: perfect match (score≈1), date off by 3 days (penalized), missing planned distance/duration.\n- Integration test: create planned + import dummy activity; link and verify links.csv entry; ensure activity removed from Unlinked list.\n- UI manual test: enter RPE and comments, edit link, delete link.\n- Visualization sanity: charts render when timeseries exists; fall back gracefully if missing.",
         "priority": "medium",
         "dependencies": [],
-        "status": "in-progress",
+        "status": "done",
         "subtasks": []
       },
       {
@@ -369,7 +369,64 @@
         "priority": "medium",
         "dependencies": [],
         "status": "pending",
-        "subtasks": []
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Scaffold analytics service and define metrics.csv schema",
+            "description": "Create service skeleton, IO helpers, and define metrics columns.",
+            "dependencies": [],
+            "details": "Add services/analytics_service.py with compute_weekly_metrics(athlete_id) and private helpers. Define metrics.csv schema: [athleteId, isoYear, isoWeek, weekStartDate, weekEndDate, plannedTimeSec, actualTimeSec, plannedDistanceKm, actualDistanceKm, actualDistanceEqKm, intenseTimeSec, easyTimeSec, numPlannedSessions, numActualSessions, adherencePct]. Wire readers for planned_sessions.csv, activities.csv, and links.csv. Ensure utils/time.py exposes ISO week helpers (to_iso_year_week(date), week_start_end(iso_year, iso_week)). Load coach distanceEqFactor from settings (default 0.01).",
+            "status": "pending",
+            "testStrategy": "Contract tests for IO helpers: load and validate columns; schema snapshot test for metrics.csv header; utils/time ISO week roundtrip tests."
+          },
+          {
+            "id": 2,
+            "title": "Implement Intense vs Easy classification utilities",
+            "description": "Build classification functions per rules and fallbacks.",
+            "dependencies": [
+              1
+            ],
+            "details": "Create classify_intensity(activity, planned_session) and accumulate_intensity_for_week(week_acts, week_planned, links). Rules: Intense = (a) linked INTERVAL_SIMPLE planned sessions count only workSec from stepsJson; (b) races: any activity on a race goal date or linked to planned type RACE. Easy = recovery steps, fundamental, long runs, and any unlinked activity by default unless it falls on race day. If HR/pace missing, rely on session type/step type tags. Guard against missing links; handle multi-step intervals; sum seconds per week.",
+            "status": "pending",
+            "testStrategy": "Unit tests with synthetic planned intervals: only workSec counted as intense; recovery steps excluded. Race-day activity classified intense even if unlinked. Missing HR/pace falls back to session type. Negative tests: no intervals -> all easy."
+          },
+          {
+            "id": 3,
+            "title": "Compute weekly aggregates and write metrics.csv",
+            "description": "Aggregate planned vs actual by ISO week and persist metrics.",
+            "dependencies": [
+              1,
+              2
+            ],
+            "details": "Implement group_by_week using utils/time.py (Mon–Sun ISO). For each athlete/week: sums = plannedDurationSec (planned), movingSec (actual), plannedDistanceKm (planned), distanceKm (actual). Compute distanceEqKm = actualDistanceKm + ascentM * distanceEqFactor. Derive intenseTimeSec/easyTimeSec via utilities from subtask 2. Count numPlannedSessions and numActualSessions. Compute adherencePct = (linked_planned_count / numPlannedSessions)*100. Write one row per (athlete, isoYear, isoWeek) to data/metrics.csv atomically (temp file + replace). Make function idempotent and re-runnable.",
+            "status": "pending",
+            "testStrategy": "Deterministic aggregation tests: feed small CSV fixtures and assert exact row values in metrics.csv, including adherencePct rounding and distanceEqKm. Edge cases: weeks spanning month boundaries; no planned or no actual -> zeros with valid row."
+          },
+          {
+            "id": 4,
+            "title": "Build Dashboard and Analytics pages with charts and filters",
+            "description": "Create UI pages rendering KPIs, alerts, and charts from metrics.",
+            "dependencies": [
+              3
+            ],
+            "details": "Dashboard (pages/Dashboard.py): show alerts (unlinked activities count; missed sessions where planned has no link and date < today), weekly snapshot tiles (planned vs actual time/distance/distanceEq, intensity split), and upcoming key sessions (next 14 days: LONG_RUN, INTERVAL_SIMPLE, RACE). Analytics (pages/Analytics.py): filters for athlete and week range; Altair/Plotly stacked bars for planned vs actual by week (time, distance, distanceEq); pie chart of intense vs easy time for selected week. Load from metrics.csv and base CSVs; ensure fast reload and empty-state handling.",
+            "status": "pending",
+            "testStrategy": "Manual UI walk-through plus smoke tests: charts render without errors across filters; pie updates on week selection; alerts match fixture data. Visual diff or screenshot tests for chart presence; filter change triggers data refetch."
+          },
+          {
+            "id": 5,
+            "title": "Add tests, caching, and documentation for analytics pipeline",
+            "description": "Harden with unit/integration tests, cache, and docs.",
+            "dependencies": [
+              2,
+              3,
+              4
+            ],
+            "details": "Add pytest suites: (1) classification unit tests (intervals, races, unlinked defaults); (2) aggregation integration tests comparing full metrics.csv rows; (3) adherencePct scenarios with partial linking. Implement caching for compute_weekly_metrics using file mtime-based invalidation or app cache (e.g., st.cache_data). Add README section describing metrics.csv schema, recompute triggers, and UI usage. Include fixtures and CI job to run tests.",
+            "status": "pending",
+            "testStrategy": "CI pipeline runs unit/integration tests; measure coverage of analytics_service. Manual regression: update settings distanceEqFactor and verify distanceEq charts change. Performance check: cache reduces recompute time on repeated loads."
+          }
+        ]
       },
       {
         "id": 10,
@@ -578,11 +635,55 @@
         ],
         "priority": "medium",
         "subtasks": []
+      },
+      {
+        "id": 17,
+        "title": "TRIMP metrics pipeline and storage overhaul",
+        "description": "Compute exponential TRIMP (Bannister model) for each activity and planned session using heart-rate reserve. Rename metrics.csv to weekly_metrics.csv. Create activities_metrics.csv containing TRIMP and other advanced per-activity metrics. Introduce daily_metrics.csv with rolling acute (7-day) and chronic (28-day) load metrics for distance, moving time, distance-equivalent, TRIMP, and ascent (window sizes configurable via config). Ensure synchronization updates all metrics when new/older data arrive, and update repositories/services accordingly.",
+        "details": "",
+        "testStrategy": "",
+        "status": "done",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": 18,
+        "title": "UI updates for TRIMP metrics",
+        "description": "Surface TRIMP throughout the UI: merge activities_metrics into activity listings, show actual TRIMP on linked and unlinked activities, estimate TRIMP for planned sessions based on targets, and extend analytics views to compare planned vs actual TRIMP.",
+        "details": "",
+        "testStrategy": "",
+        "status": "in_progress",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": []
+      },
+      {
+        "id": 19,
+        "title": "Training Load page and chronic vs acute visualization",
+        "description": "Build a new Streamlit page \"Training Load\" that charts acute vs chronic load curves (7- and 28-day rolling metrics) for distance, moving time, distance-equivalent, TRIMP, and ascent. Provide a metric selector dropdown and fill the area between 0.75×chronic and 1.5×chronic to highlight load range. Integrate the underlying data from daily_metrics.csv.",
+        "details": "",
+        "testStrategy": "",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": []
+      },
+      {
+        "id": 20,
+        "title": "Planner distance/time heuristics and cooldown positioning",
+        "description": "Enhance the Planner session editor: for Fundamental Endurance and Long Run types, allow specifying either (distance + ascent) or duration (mutually exclusive) and auto-derive the missing field via heuristics; reposition the cool-down input directly below the warm-up section for better UX.",
+        "details": "",
+        "testStrategy": "",
+        "status": "in_progress",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": []
       }
     ],
     "metadata": {
       "created": "2025-10-06T19:00:14.797Z",
-      "updated": "2025-10-07T16:50:53.899Z",
+      "updated": "2025-10-09T08:45:07.753Z",
       "description": "Tasks for master context"
     }
   }

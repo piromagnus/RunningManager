@@ -34,7 +34,12 @@ def _coerce_float(value: object) -> Optional[float]:
         return None
 
 
-def build_card_view_model(session: Dict[str, object], *, estimated_distance_km: Optional[float] = None) -> Dict[str, object]:
+def build_card_view_model(
+    session: Dict[str, object],
+    *,
+    estimated_distance_km: Optional[float] = None,
+    distance_eq_km: Optional[float] = None,
+) -> Dict[str, object]:
     session_id = str(session.get("plannedSessionId") or "")
     session_type = str(session.get("type") or "").upper()
     duration = _coerce_int(session.get("plannedDurationSec")) or 0
@@ -46,6 +51,8 @@ def build_card_view_model(session: Dict[str, object], *, estimated_distance_km: 
         badges.append(f"dist={fmt_decimal(planned_distance, 1)} km")
     elif estimated_distance_km is not None:
         badges.append(f"est≈{fmt_decimal(estimated_distance_km, 1)} km")
+    if distance_eq_km is not None:
+        badges.append(f"deq={fmt_decimal(distance_eq_km, 1)} km")
 
     target_type = session.get("targetType")
     target_label = session.get("targetLabel")
@@ -58,6 +65,7 @@ def build_card_view_model(session: Dict[str, object], *, estimated_distance_km: 
 
     actions = [
         CardAction("⚙️", "Edit session", "edit", session_id),
+        CardAction("📄", "Save as template", "save-template", session_id),
         CardAction("🗑️", "Delete session", "delete", session_id),
         CardAction("🔎", "View details", "view", session_id),
     ]

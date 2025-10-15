@@ -169,6 +169,64 @@ class MetricsRepo(BaseRepo):
         )
 
 
+class WeeklyMetricsRepo(BaseRepo):
+    def __init__(self, storage: CsvStorage):
+        super().__init__(
+            storage,
+            "weekly_metrics.csv",
+            [
+                "athleteId",
+                "isoYear",
+                "isoWeek",
+                "weekStartDate",
+                "weekEndDate",
+                "plannedTimeSec",
+                "actualTimeSec",
+                "plannedDistanceKm",
+                "plannedDistanceEqKm",
+                "actualDistanceKm",
+                "actualDistanceEqKm",
+                "plannedTrimp",
+                "actualTrimp",
+                "intenseTimeSec",
+                "easyTimeSec",
+                "numPlannedSessions",
+                "numActualSessions",
+                "adherencePct",
+            ],
+            id_column="weekStartDate",
+        )
+
+
+class DailyMetricsRepo(BaseRepo):
+    def __init__(self, storage: CsvStorage):
+        super().__init__(
+            storage,
+            "daily_metrics.csv",
+            [
+                "dailyId",
+                "athleteId",
+                "date",
+                "distanceKm",
+                "timeSec",
+                "distanceEqKm",
+                "trimp",
+                "ascentM",
+                "acuteDistanceKm",
+                "chronicDistanceKm",
+                "acuteTimeSec",
+                "chronicTimeSec",
+                "acuteDistanceEqKm",
+                "chronicDistanceEqKm",
+                "acuteTrimp",
+                "chronicTrimp",
+                "acuteAscentM",
+                "chronicAscentM",
+            ],
+            id_column="dailyId",
+        )
+
+
 class ThresholdsRepo(BaseRepo):
     def __init__(self, storage: CsvStorage):
         super().__init__(
@@ -224,6 +282,66 @@ class TemplatesRepo(BaseRepo):
         )
 
 
+class SessionTemplatesRepo(BaseRepo):
+    def __init__(self, storage: CsvStorage):
+        super().__init__(
+            storage,
+            "session_templates.csv",
+            [
+                "templateId",
+                "athleteId",
+                "title",
+                "baseType",
+                "payloadJson",
+                "notes",
+                "lastUsedAt",
+            ],
+            id_column="templateId",
+        )
+
+
+class ActivitiesMetricsRepo(BaseRepo):
+    def __init__(self, storage: CsvStorage):
+        super().__init__(
+            storage,
+            "activities_metrics.csv",
+            [
+                "activityId",
+                "athleteId",
+                "startDate",
+                "sportType",
+                "category",
+                "source",
+                "distanceKm",
+                "timeSec",
+                "ascentM",
+                "distanceEqKm",
+                "trimp",
+                "avgHr",
+            ],
+            id_column="activityId",
+        )
+
+
+class PlannedMetricsRepo(BaseRepo):
+    def __init__(self, storage: CsvStorage):
+        super().__init__(
+            storage,
+            "planned_metrics.csv",
+            [
+                "plannedSessionId",
+                "athleteId",
+                "date",
+                "type",
+                "timeSec",
+                "distanceKm",
+                "distanceEqKm",
+                "trimp",
+            ],
+            id_column="plannedSessionId",
+        )
+
+
 class AthletesRepo(BaseRepo):
     def __init__(self, storage: CsvStorage):
         super().__init__(
@@ -235,6 +353,8 @@ class AthletesRepo(BaseRepo):
                 "name",
                 "thresholdsProfileId",
                 "units",
+                "hrRest",
+                "hrMax",
             ],
             id_column="athleteId",
         )
@@ -249,6 +369,8 @@ class SettingsRepo(BaseRepo):
                 "coachId",
                 "units",
                 "distanceEqFactor",
+                "stravaSyncDays",
+                "analyticsActivityTypes",
             ],
             id_column="coachId",
         )

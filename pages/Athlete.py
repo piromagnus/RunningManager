@@ -7,6 +7,8 @@ from persistence.csv_storage import CsvStorage
 from persistence.repositories import AthletesRepo, ThresholdsRepo
 from utils.ids import new_id
 
+DEFAULT_HR_REST = 60.0
+DEFAULT_HR_MAX = 190.0
 
 st.set_page_config(page_title="Running Manager - Athlete")
 st.title("Athlete")
@@ -56,6 +58,8 @@ if st.session_state.get("adding_athlete"):
                 "name": name,
                 "thresholdsProfileId": "default",
                 "units": units,
+                "hrRest": DEFAULT_HR_REST,
+                "hrMax": DEFAULT_HR_MAX,
             })
             st.session_state["adding_athlete"] = False
             st.success("Athlete added")
@@ -64,6 +68,40 @@ st.subheader("Thresholds (manual entries)")
 if selected_athlete_id is None:
     st.warning("Select an athlete to add/view thresholds.")
 else:
+    athlete_record = ath_repo.get(selected_athlete_id) or {}
+    with st.form("athlete-details-form"):
+        col_a, col_b, col_c = st.columns(3)
+        with col_a:
+            name_value = st.text_input("Name", value=str(athlete_record.get("name") or ""))
+        with col_b:
+            units_value = st.selectbox("Units", ["metric"], index=0)
+        with col_c:
+            hr_rest_value = st.number_input(
+                "Resting HR",
+                min_value=30.0,
+                max_value=120.0,
+                value=float(athlete_record.get("hrRest") or DEFAULT_HR_REST),
+                step=1.0,
+            )
+        hr_max_value = st.number_input(
+            "Max HR",
+            min_value=60.0,
+            max_value=240.0,
+            value=float(athlete_record.get("hrMax") or DEFAULT_HR_MAX),
+            step=1.0,
+        )
+        if st.form_submit_button("Save athlete info"):
+            ath_repo.update(
+                selected_athlete_id,
+                {
+                    "name": name_value,
+                    "units": units_value,
+                    "hrRest": hr_rest_value,
+                    "hrMax": hr_max_value,
+                },
+            )
+            st.success("Athlete information updated")
+
     # Show existing thresholds for the selected athlete
     thr_df = thr_repo.list(athleteId=selected_athlete_id)
     if not thr_df.empty:

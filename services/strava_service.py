@@ -15,6 +15,7 @@ import requests
 
 from persistence.csv_storage import CsvStorage
 from persistence.repositories import ActivitiesRepo, TokensRepo
+from services.metrics_service import MetricsComputationService
 from utils.config import Config
 from utils.crypto import decrypt_text, encrypt_text, get_fernet
 
@@ -77,16 +78,23 @@ class StravaService:
             "expires_at": tokens["expires_at"],
         }
 
-    def sync_last_14_days(self, athlete_id: str) -> List[str]:
+    def sync_last_n_days(self, athlete_id: str, days: int) -> List[str]:
+        if days <= 0:
+            raise ValueError("days must be positive")
         tokens = self._ensure_access_token(athlete_id)
         now = self.now_fn()
-        after_ts = int((now - dt.timedelta(days=14)).timestamp())
+        after_ts = int((now - dt.timedelta(days=days)).timestamp())
         existing_ids = self._existing_activity_ids()
+        existing_raw_ids = self._existing_raw_ids()
         imported: List[str] = []
 
         for summary in self._iter_recent_activities(tokens["access_token"], after_ts):
             activity_id = str(summary.get("id"))
-            if not activity_id or activity_id in existing_ids:
+            if (
+                not activity_id
+                or activity_id in existing_ids
+                or activity_id in existing_raw_ids
+            ):
                 continue
             detail = self._get_activity(tokens["access_token"], activity_id)
             if not detail:
@@ -102,8 +110,37 @@ class StravaService:
             )
             self.activities.create(row)
             existing_ids.add(activity_id)
+            existing_raw_ids.add(activity_id)
             imported.append(activity_id)
+        if imported:
+            MetricsComputationService(self.storage).recompute_for_activities(imported)
         return imported
+
+    def sync_last_14_days(self, athlete_id: str) -> List[str]:
+        return self.sync_last_n_days(athlete_id, 14)
+
+    def rebuild_from_cache(self, athlete_id: str) -> List[str]:
+        raw_dir = self.config.raw_strava_dir
+        headers = self.activities.headers
+        rows: List[Dict[str, Any]] = []
+        if raw_dir.exists():
+            for path in sorted(raw_dir.glob("*.json")):
+                try:
+                    with path.open("r", encoding="utf-8") as fh:
+                        detail = json.load(fh)
+                except Exception:
+                    continue
+                activity_id = str(detail.get("id") or path.stem)
+                has_timeseries = (self.config.timeseries_dir / f"{activity_id}.csv").exists()
+                row = self._map_activity_row(detail, athlete_id, has_timeseries, path)
+                rows.append(row)
+        df = pd.DataFrame(rows, columns=headers if rows else None)
+        if df.empty:
+            df = pd.DataFrame(columns=headers)
+        else:
+            df = df[headers]
+        self.activities.storage.write_csv(self.activities.file_name, df)
+        return [str(r.get("activityId")) for r in rows if r.get("activityId")]
 
     # --- OAuth helpers ----------------------------------------------
     def _ensure_access_token(self, athlete_id: str) -> Dict[str, Any]:
@@ -178,6 +215,12 @@ class StravaService:
         if df.empty:
             return set()
         return set(df["activityId"].astype(str))
+
+    def _existing_raw_ids(self) -> set[str]:
+        raw_dir = self.config.raw_strava_dir
+        if not raw_dir.exists():
+            return set()
+        return {path.stem for path in raw_dir.glob("*.json")}
 
     def _save_raw_activity(self, detail: Dict[str, Any]) -> Path:
         activity_id = str(detail.get("id"))
