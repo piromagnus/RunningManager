@@ -97,7 +97,7 @@ Run the app: `streamlit run app.py`
 ## Task Workflows (Taskmaster optional)
 
 - Use `.taskmaster/` if managing tasks; start with `parse_prd` for initial tasks; expand and track subtasks per dev workflow
-- Use mcp server to get the task list, update it and eventuallyexpand tasks
+- Use mcp server to get the task list, update it and eventually expand tasks but never modify the file inside '.taskmaster/'
 
 ## How to Make Changes Safely (Agent Checklist)
 
