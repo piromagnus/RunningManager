@@ -335,7 +335,7 @@
         "testStrategy": "- Mock garminconnect client in unit tests; simulate activities list and details; verify mapping and CSV writes.\n- FIT/TCX parser tests with sample files; assert timeseries rows and computed paceKmh correctness.\n- Manual UI test: upload TCX and confirm activity appears as unlinked.\n- Error paths: invalid credentials, MFA required, network errors handled with user-friendly messages.",
         "priority": "medium",
         "dependencies": [],
-        "status": "in_progress",
+        "status": "pending",
         "subtasks": []
       },
       {
@@ -653,7 +653,7 @@
         "description": "Surface TRIMP throughout the UI: merge activities_metrics into activity listings, show actual TRIMP on linked and unlinked activities, estimate TRIMP for planned sessions based on targets, and extend analytics views to compare planned vs actual TRIMP.",
         "details": "",
         "testStrategy": "",
-        "status": "in_progress",
+        "status": "pending",
         "dependencies": [],
         "priority": "medium",
         "subtasks": []
@@ -671,19 +671,26 @@
       },
       {
         "id": 20,
-        "title": "Planner distance/time heuristics and cooldown positioning",
-        "description": "Enhance the Planner session editor: for Fundamental Endurance and Long Run types, allow specifying either (distance + ascent) or duration (mutually exclusive) and auto-derive the missing field via heuristics; reposition the cool-down input directly below the warm-up section for better UX.",
-        "details": "",
-        "testStrategy": "",
-        "status": "in_progress",
-        "dependencies": [],
-        "priority": "medium",
+        "title": "Planner base-run XOR inputs and session template creator",
+        "description": "Revise Fundamental/Long Run planners to pick either distance+ascent or time+minimal ascent, auto-compute the missing values with distance-equivalent logic, and introduce a session template library with a dedicated builder page feeding streamlined add-session flows.",
+        "status": "done",
+        "dependencies": [
+          4,
+          12,
+          13,
+          14,
+          15,
+          16
+        ],
+        "priority": "high",
+        "details": "Scope\n- Fundamental and Long Run forms use a binary mode selector (Distance + D+ vs Time + D+ mini); enforce XOR inputs, display computed values, and hide threshold pickers for Fundamental (always resolves to target Fundamental profile) while keeping optional target type for Long Run.\n- PlannerService gains helpers to load distanceEqFactor from settings, compute distanceEq from distance/ascent, derive distance from time + ascent via fundamental pace, and return both km and duration estimates without touching CSV schemas (planned_sessions keeps only distance/duration/ascent columns).\n- Planner UI reorganizes interval simple warm-up/cool-down inputs, exposes read-only distanceEq/time outputs, and wires estimation helpers so week cards/details show consistent values.\n- Introduce data/session_templates.csv with repo/service providing CRUD, clone-from-session, and apply-to-calendar helpers; follow existing portalocker patterns and idempotent header migration.\n- Create pages/SessionCreator.py that reuses planner form components to build templates (from scratch or existing session), supports save/update/duplicate flows, and optionally schedules to a date; add planner entry points (add-session modal listing base types + templates, CTA to jump to SessionCreator, save-as-template action on cards).\n- Ensure new templates capture title, base type, notes, steps JSON, ascent, targets, step end mode, and track lastUsedAt when scheduled.\nImplemented metrics pipeline overhaul, activity metrics file, analytics filters, and recompute hooks.",
+        "testStrategy": "Tests\n- PlannerService unit tests for new estimation helpers (distance/time/distanceEq factoring ascent and distanceEqFactor) and XOR mode behaviour.\n- SessionTemplatesService tests covering create/update/clone/apply flows using fake storage.\n- Planner UI helper tests verifying fundamental form hides threshold select, add-session modal options, and interval warm-up/cool-down ordering remains compatible with existing loop estimation tests.\n- Manual smoke: create template from session, duplicate via SessionCreator, schedule to calendar, confirm cards show computed values.",
         "subtasks": []
       }
     ],
     "metadata": {
       "created": "2025-10-06T19:00:14.797Z",
-      "updated": "2025-10-09T08:45:07.753Z",
+      "updated": "2025-10-13T15:07:36.892Z",
       "description": "Tasks for master context"
     }
   }

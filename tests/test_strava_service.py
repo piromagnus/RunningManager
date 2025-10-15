@@ -245,3 +245,83 @@ def test_sync_last_14_days_imports_activity(storage: CsvStorage, config: Config)
     again = service.sync_last_14_days("athlete-1")
     assert again == []
     assert repeat_session.empty
+
+
+def test_sync_skips_cached_raw(storage: CsvStorage, config: Config) -> None:
+    now = dt.datetime(2024, 2, 10, tzinfo=dt.timezone.utc)
+    expires_at = int((now + dt.timedelta(hours=1)).timestamp())
+    activity_id = "4321"
+
+    exchange_session = FakeSession(
+        [
+            (
+                "POST",
+                TOKEN_URL,
+                FakeResponse(
+                    200,
+                    {
+                        "access_token": "token-xyz",
+                        "refresh_token": "refresh-xyz",
+                        "expires_at": expires_at,
+                    },
+                ),
+            )
+        ]
+    )
+    service = StravaService(
+        storage=storage,
+        config=config,
+        session=exchange_session,
+        now_fn=lambda: now,
+    )
+
+    service.exchange_code("athlete-1", "auth")
+    assert exchange_session.empty
+
+    raw_path = config.raw_strava_dir / f"{activity_id}.json"
+    raw_path.write_text("{}", encoding="utf-8")
+
+    fetch_session = FakeSession(
+        [
+            (
+                "GET",
+                f"{API_BASE}/athlete/activities",
+                FakeResponse(200, [{"id": int(activity_id)}]),
+            )
+        ]
+    )
+    service.session = fetch_session
+    imported = service.sync_last_n_days("athlete-1", 7)
+    assert imported == []
+    assert fetch_session.empty
+
+
+def test_rebuild_from_cache(storage: CsvStorage, config: Config) -> None:
+    service = StravaService(storage=storage, config=config, session=FakeSession([]))
+    detail = {
+        "id": 1010,
+        "start_date_local": "2024-03-10T08:00:00",
+        "distance": 15000.0,
+        "elapsed_time": 4000,
+        "moving_time": 3900,
+        "total_elevation_gain": 320.0,
+        "average_heartrate": 140.0,
+        "max_heartrate": 165.0,
+        "map": {"summary_polyline": "abcd"},
+    }
+    raw_path = config.raw_strava_dir / "1010.json"
+    raw_path.parent.mkdir(parents=True, exist_ok=True)
+    raw_path.write_text(json.dumps(detail), encoding="utf-8")
+    ts_path = config.timeseries_dir / "1010.csv"
+    ts_path.parent.mkdir(parents=True, exist_ok=True)
+    ts_path.write_text("timestamp\n", encoding="utf-8")
+
+    rebuilt = service.rebuild_from_cache("athlete-1")
+    assert rebuilt == ["1010"]
+
+    df = storage.read_csv("activities.csv")
+    assert df.shape[0] == 1
+    row = df.iloc[0]
+    assert str(row["activityId"]) == "1010"
+    assert pytest.approx(float(row["distanceKm"]), rel=1e-5) == 15.0
+    assert bool(row["hasTimeseries"]) is True
