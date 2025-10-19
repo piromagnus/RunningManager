@@ -311,8 +311,11 @@ class MetricsComputationService:
     def _resolve_activity_category(self, row: pd.Series) -> Tuple[str, str]:
         sport_type = str(row.get("sportType") or "").strip()
         raw_path = row.get("rawJsonPath")
-        if not sport_type and raw_path:
-            sport_type = self._raw_activity_sport(str(raw_path))
+        if not sport_type and isinstance(raw_path, (str, bytes)):
+            raw_path_str = raw_path.decode() if isinstance(raw_path, (bytes, bytearray)) else raw_path
+            raw_path_str = raw_path_str.strip()
+            if raw_path_str:
+                sport_type = self._raw_activity_sport(raw_path_str)
         if not sport_type:
             sport_type = str(row.get("type") or "")
         category = self._normalize_category(sport_type)
@@ -352,7 +355,6 @@ class MetricsComputationService:
         if hrr <= 0:
             return 0.0
         duration_hours = time_sec / 3600.0
-        print(f"duration_hours: {duration_hours}, hrr: {hrr}")
         return duration_hours * hrr * 0.64 * math.exp(1.92 * hrr)
 
     # ------------------------------------------------------------------
@@ -474,11 +476,11 @@ class MetricsComputationService:
 
         records = []
         for date, values in grouped.iterrows():
-                records.append(
-                    {
-                        "dailyId": f"{athlete_id}-{date.date()}",
-                        "athleteId": athlete_id,
-                        "date": str(date.date()),
+            records.append(
+                {
+                    "dailyId": f"{athlete_id}-{date.date()}",
+                    "athleteId": athlete_id,
+                    "date": str(date.date()),
                     "distanceKm": float(values["distanceKm"]),
                     "timeSec": float(values["timeSec"]),
                     "distanceEqKm": float(values["distanceEqKm"]),

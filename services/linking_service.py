@@ -8,8 +8,10 @@ import pandas as pd
 
 from persistence.csv_storage import CsvStorage
 from persistence.repositories import (
+    ActivitiesMetricsRepo,
     ActivitiesRepo,
     LinksRepo,
+    PlannedMetricsRepo,
     PlannedSessionsRepo,
 )
 from services.metrics_service import MetricsComputationService
@@ -53,6 +55,8 @@ class LinkingService:
         self.activities = ActivitiesRepo(self.storage)
         self.sessions = PlannedSessionsRepo(self.storage)
         self.links = LinksRepo(self.storage)
+        self.activity_metrics = ActivitiesMetricsRepo(self.storage)
+        self.planned_metrics = PlannedMetricsRepo(self.storage)
 
     def _links_df(self) -> pd.DataFrame:
         df = self.links.list()
@@ -67,6 +71,7 @@ class LinkingService:
         activities = self.activities.list(athleteId=athlete_id)
         if activities.empty:
             return activities
+        activities = self._with_activity_metrics(activities)
         links = self._links_df()
         if not links.empty:
             linked_ids = set(links["activityId"])
@@ -111,6 +116,8 @@ class LinkingService:
                 on="plannedSessionId",
                 how="left",
             )
+        merged = self._with_activity_metrics(merged)
+        merged = self._with_planned_metrics(merged)
         merged = merged.sort_values("startTime", ascending=False)
         return merged.reset_index(drop=True)
 
@@ -126,6 +133,62 @@ class LinkingService:
             ]
         planned = planned.sort_values("date")
         return planned.reset_index(drop=True)
+
+    def _with_activity_metrics(self, df: pd.DataFrame) -> pd.DataFrame:
+        if df.empty:
+            return df
+        working = df.copy()
+        working["activityId"] = working["activityId"].astype(str)
+        metrics = self.activity_metrics.list()
+        if metrics.empty:
+            for col in ("activityDistanceEqKm", "activityTimeSec", "activityTrimp"):
+                if col not in working.columns:
+                    working[col] = None
+            return working
+        metrics = metrics[
+            ["activityId", "distanceEqKm", "timeSec", "trimp"]
+        ].copy()
+        metrics["activityId"] = metrics["activityId"].astype(str)
+        metrics = metrics.rename(
+            columns={
+                "distanceEqKm": "activityDistanceEqKm",
+                "timeSec": "activityTimeSec",
+                "trimp": "activityTrimp",
+            }
+        )
+        merged = working.merge(metrics, on="activityId", how="left")
+        for col in ("activityDistanceEqKm", "activityTimeSec", "activityTrimp"):
+            if col not in merged.columns:
+                merged[col] = None
+        return merged
+
+    def _with_planned_metrics(self, df: pd.DataFrame) -> pd.DataFrame:
+        if df.empty or "plannedSessionId" not in df.columns:
+            return df
+        working = df.copy()
+        working["plannedSessionId"] = working["plannedSessionId"].astype(str)
+        metrics = self.planned_metrics.list()
+        if metrics.empty:
+            for col in ("plannedMetricDistanceEqKm", "plannedMetricTimeSec", "plannedMetricTrimp"):
+                if col not in working.columns:
+                    working[col] = None
+            return working
+        metrics = metrics[
+            ["plannedSessionId", "distanceEqKm", "timeSec", "trimp"]
+        ].copy()
+        metrics["plannedSessionId"] = metrics["plannedSessionId"].astype(str)
+        metrics = metrics.rename(
+            columns={
+                "distanceEqKm": "plannedMetricDistanceEqKm",
+                "timeSec": "plannedMetricTimeSec",
+                "trimp": "plannedMetricTrimp",
+            }
+        )
+        merged = working.merge(metrics, on="plannedSessionId", how="left")
+        for col in ("plannedMetricDistanceEqKm", "plannedMetricTimeSec", "plannedMetricTrimp"):
+            if col not in merged.columns:
+                merged[col] = None
+        return merged
 
     def suggest_for_activity(
         self,

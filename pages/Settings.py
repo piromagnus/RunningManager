@@ -121,11 +121,15 @@ distance_eq = st.number_input(
 strava_sync_days = st.number_input(
     "Jours à synchroniser avec Strava",
     min_value=1,
-    max_value=31,
     value=int(strava_days_default),
     step=1,
-    help="Nombre de jours remontés lors d'une synchronisation manuelle Strava.",
+    help="Nombre de jours remontés lors d'une synchronisation manuelle Strava. Aucun plafond n'est imposé.",
 )
+if int(strava_sync_days) > 31:
+    st.warning(
+        "Plus de 31 jours sélectionnés. L'API Strava peut appliquer des limites de débit; "
+        "la synchronisation peut être plus lente et incomplète si la fenêtre est très large."
+    )
 
 if st.button("Save Settings"):
     payload = {
@@ -246,13 +250,53 @@ else:
         if expires_label:
             st.caption(f"Expiration du token : {expires_label}")
         sync_days = _coerce_int(existing_settings.get("stravaSyncDays"), int(strava_sync_days))
+        if int(sync_days) > 31:
+            st.warning(
+                "Fenêtre > 31 jours: attention aux limites de l'API Strava et au temps de traitement."
+            )
         if st.button(f"Synchroniser les {sync_days} derniers jours", type="primary"):
             try:
+                # Preview to estimate API cost and warn if needed
+                try:
+                    preview = strava_service.preview_sync_last_n_days(athlete_id, sync_days)
+                    missing = int(preview.get("missing_raw", 0))
+                    est_req = int(preview.get("est_total_requests", 0))
+                    waits = int(preview.get("est_additional_waits", 0))
+                    hits_daily = bool(preview.get("est_hits_daily_limit", False))
+                    if missing > 100:
+                        msg = (
+                            f"{missing} activités à télécharger (~{est_req} requêtes). "
+                            f"Cela peut nécessiter {waits} attente(s) de 15 minutes"
+                        )
+                        if hits_daily:
+                            msg += ", et potentiellement atteindre la limite quotidienne (1000)."
+                        st.warning(msg)
+                except Exception:
+                    # Best-effort preview; continue even if it fails
+                    pass
+
                 imported = strava_service.sync_last_n_days(athlete_id, sync_days)
-                if imported:
-                    st.success(f"{len(imported)} activité(s) importée(s) sur les {sync_days} derniers jours.")
+                stats = getattr(strava_service, "last_sync_stats", {}) or {}
+                downloaded = int(stats.get("downloaded_count", len(imported) if imported else 0))
+                from_cache = int(stats.get("created_from_cache_count", 0))
+                total_created = int(stats.get("created_rows_count", downloaded + from_cache))
+                if downloaded or from_cache:
+                    st.success(
+                        f"{downloaded} téléchargée(s) + {from_cache} créée(s) depuis le cache "
+                        f"sur les {sync_days} derniers jours (total {total_created})."
+                    )
                 else:
                     st.info(f"Aucune nouvelle activité sur les {sync_days} derniers jours.")
+                # Persist lightweight summary for display
+                st.session_state["strava_last_sync"] = {
+                    "days": stats.get("days", sync_days),
+                    "downloaded_count": downloaded,
+                    "created_from_cache_count": from_cache,
+                    "created_rows_count": total_created,
+                    # Keep IDs but cap display later for readability
+                    "downloaded_ids": list(stats.get("downloaded_ids", [])),
+                    "created_from_cache_ids": list(stats.get("created_from_cache_ids", [])),
+                }
             except Exception as exc:  # pragma: no cover - runtime API failures
                 st.error(f"La synchronisation Strava a échoué : {exc}")
         if st.button("Reconstruire les activités depuis le cache Strava", key="strava-rebuild-cache"):
@@ -262,6 +306,25 @@ else:
             except Exception as exc:  # pragma: no cover - runtime API failures
                 st.error(f"Reconstruction depuis le cache impossible : {exc}")
         _render_link("Gérer l'autorisation Strava", auth_url)
+        # Last sync summary (if any)
+        last_sync = st.session_state.get("strava_last_sync")
+        if last_sync:
+            st.caption("Résumé de la dernière synchronisation")
+            dl = int(last_sync.get("downloaded_count", 0))
+            fc = int(last_sync.get("created_from_cache_count", 0))
+            total = int(last_sync.get("created_rows_count", dl + fc))
+            days = int(last_sync.get("days", sync_days))
+            st.info(
+                f"{dl} téléchargée(s), {fc} depuis cache · fenêtre: {days}j · total lignes créées: {total}"
+            )
+            # Show a concise list of IDs for quick inspection (trim if long)
+            max_ids = 6
+            downloaded_ids = [str(x) for x in (last_sync.get("downloaded_ids") or [])][:max_ids]
+            cached_ids = [str(x) for x in (last_sync.get("created_from_cache_ids") or [])][:max_ids]
+            if downloaded_ids:
+                st.caption("IDs téléchargées: " + ", ".join(downloaded_ids) + ("…" if dl > max_ids else ""))
+            if cached_ids:
+                st.caption("IDs depuis cache: " + ", ".join(cached_ids) + ("…" if fc > max_ids else ""))
     else:
         st.warning("Aucun compte Strava connecté.")
         _render_link("Connecter Strava", auth_url)

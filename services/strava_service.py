@@ -29,6 +29,10 @@ STRAVA_PROVIDER = "strava"
 DEFAULT_SCOPE = "activity:read,activity:read_all"
 STREAM_KEYS = "time,distance,altitude,heartrate,cadence,latlng,velocity_smooth"
 
+# Strava documented rate limits
+RATE_LIMIT_PER_15_MIN = 100
+DAILY_LIMIT = 1000
+
 
 @dataclass
 class StravaService:
@@ -39,6 +43,8 @@ class StravaService:
         default_factory=lambda: (lambda: dt.datetime.now(dt.timezone.utc))
     )
     max_retries: int = 3
+    # Exposes a summary of the last sync for UI/UX (non-persistent)
+    last_sync_stats: Dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         self.session = self.session or requests.Session()
@@ -78,43 +84,150 @@ class StravaService:
             "expires_at": tokens["expires_at"],
         }
 
-    def sync_last_n_days(self, athlete_id: str, days: int) -> List[str]:
+    def preview_sync_last_n_days(self, athlete_id: str, days: int) -> Dict[str, Any]:
+        """Preview sync cost and counts without downloading details/streams.
+
+        Returns a dict containing:
+        - total_in_range: total activities returned by the listing endpoint
+        - already_cached: number with existing raw JSON
+        - missing_raw: number lacking raw JSON (would require download)
+        - est_detail_requests: ~ missing_raw * 2 (detail + streams)
+        - est_page_requests: ~ ceil(total_in_range / 200)
+        - est_total_requests: est_detail_requests + est_page_requests
+        - est_15min_windows_needed: ceil(est_total_requests / 100)
+        - est_additional_waits: max(0, est_15min_windows_needed - 1), capped at 9
+        - est_hits_daily_limit: True if est_total_requests > 1000
+        """
         if days <= 0:
             raise ValueError("days must be positive")
         tokens = self._ensure_access_token(athlete_id)
         now = self.now_fn()
         after_ts = int((now - dt.timedelta(days=days)).timestamp())
+        existing_raw_ids = self._existing_raw_ids()
+
+        total = 0
+        missing = 0
+        # Iterate all summaries once to count
+        for summary in self._iter_recent_activities(tokens["access_token"], after_ts):
+            total += 1
+            sid = str(summary.get("id") or "")
+            if sid and sid not in existing_raw_ids:
+                missing += 1
+
+        est_page_requests = (total + 199) // 200
+        est_detail_requests = missing * 2
+        est_total_requests = est_detail_requests + est_page_requests
+        windows_needed = (est_total_requests + RATE_LIMIT_PER_15_MIN - 1) // RATE_LIMIT_PER_15_MIN
+        additional_waits = max(0, windows_needed - 1)
+        additional_waits = min(additional_waits, 9)  # soft cap (per-day window)
+        hits_daily = est_total_requests > DAILY_LIMIT
+
+        preview = {
+            "total_in_range": total,
+            "already_cached": total - missing,
+            "missing_raw": missing,
+            "est_detail_requests": est_detail_requests,
+            "est_page_requests": est_page_requests,
+            "est_total_requests": est_total_requests,
+            "est_15min_windows_needed": windows_needed,
+            "est_additional_waits": additional_waits,
+            "est_hits_daily_limit": hits_daily,
+        }
+        # Keep for UI usage
+        self.last_sync_stats = {**self.last_sync_stats, "preview": preview}
+        return preview
+
+    def sync_last_n_days(self, athlete_id: str, days: int) -> List[str]:
+        """Sync activities over the last ``days`` and update metrics.
+
+        Behavior:
+        - Always list recent activities from Strava (after ``now - days``).
+        - For each activity in that window:
+          - If raw JSON is missing, fetch detail + streams, persist both, and create
+            the activity row in ``activities.csv``.
+          - If raw JSON already exists, do not call the network again (cache hit),
+            but ensure there's an entry in ``activities.csv`` built from the cache
+            if it is currently missing.
+        - After creating any new ``activities.csv`` rows, recompute metrics only
+          for the affected athlete(s) via ``MetricsComputationService`` (which in
+          turn updates activity, daily and weekly metrics incrementally).
+
+        Returns the list of activity IDs newly downloaded from Strava during this
+        call (i.e., cache misses). Activities created from cache are not counted
+        in the returned list to keep backward-compatible semantics.
+        """
+        if days <= 0:
+            raise ValueError("days must be positive")
+
+        tokens = self._ensure_access_token(athlete_id)
+        now = self.now_fn()
+        after_ts = int((now - dt.timedelta(days=days)).timestamp())
+
         existing_ids = self._existing_activity_ids()
         existing_raw_ids = self._existing_raw_ids()
-        imported: List[str] = []
+
+        imported_from_api: List[str] = []  # strictly newly downloaded raw
+        created_rows: List[str] = []  # activity rows newly created (from API or cache)
 
         for summary in self._iter_recent_activities(tokens["access_token"], after_ts):
             activity_id = str(summary.get("id"))
-            if (
-                not activity_id
-                or activity_id in existing_ids
-                or activity_id in existing_raw_ids
-            ):
+            if not activity_id:
                 continue
-            detail = self._get_activity(tokens["access_token"], activity_id)
-            if not detail:
-                continue
-            raw_path = self._save_raw_activity(detail)
-            streams = self._get_streams(tokens["access_token"], activity_id)
-            has_timeseries = self._save_timeseries(activity_id, detail, streams)
-            row = self._map_activity_row(
-                detail=detail,
-                athlete_id=athlete_id,
-                has_timeseries=has_timeseries,
-                raw_path=raw_path,
-            )
-            self.activities.create(row)
-            existing_ids.add(activity_id)
-            existing_raw_ids.add(activity_id)
-            imported.append(activity_id)
-        if imported:
-            MetricsComputationService(self.storage).recompute_for_activities(imported)
-        return imported
+
+            has_raw = activity_id in existing_raw_ids
+            raw_path = self.config.raw_strava_dir / f"{activity_id}.json"
+            has_row = activity_id in existing_ids
+
+            detail: Dict[str, Any] | None = None
+            has_timeseries = (self.config.timeseries_dir / f"{activity_id}.csv").exists()
+
+            if not has_raw:
+                # Cache miss: fetch detail + streams and persist both
+                detail = self._get_activity(tokens["access_token"], activity_id)
+                if not detail:
+                    continue
+                raw_path = self._save_raw_activity(detail)
+                streams = self._get_streams(tokens["access_token"], activity_id)
+                has_timeseries = self._save_timeseries(activity_id, detail, streams)
+                existing_raw_ids.add(activity_id)
+                imported_from_api.append(activity_id)
+            else:
+                # Cache hit: reuse cached raw to build activities row if needed
+                if not has_row:
+                    try:
+                        with raw_path.open("r", encoding="utf-8") as fh:
+                            detail = json.load(fh)
+                    except Exception:
+                        detail = None
+
+            # Ensure we have an activities.csv row if it does not exist yet
+            if not has_row and detail is not None:
+                row = self._map_activity_row(
+                    detail=detail,
+                    athlete_id=athlete_id,
+                    has_timeseries=has_timeseries,
+                    raw_path=raw_path,
+                )
+                self.activities.create(row)
+                existing_ids.add(activity_id)
+                created_rows.append(activity_id)
+
+        # Recompute metrics for newly added activities (from API or cache)
+        if created_rows:
+            MetricsComputationService(self.storage).recompute_for_activities(created_rows)
+
+        # Record stats for UI
+        created_from_cache = [aid for aid in created_rows if aid not in imported_from_api]
+        self.last_sync_stats = {
+            "days": int(days),
+            "downloaded_count": len(imported_from_api),
+            "created_rows_count": len(created_rows),
+            "created_from_cache_count": len(created_from_cache),
+            "downloaded_ids": list(imported_from_api),
+            "created_from_cache_ids": created_from_cache,
+        }
+
+        return imported_from_api
 
     def sync_last_14_days(self, athlete_id: str) -> List[str]:
         return self.sync_last_n_days(athlete_id, 14)
@@ -293,10 +406,14 @@ class StravaService:
     ) -> Dict[str, Any]:
         distance_m = detail.get("distance")
         ascent_m = detail.get("total_elevation_gain")
+        sport_type = str(detail.get("sport_type") or detail.get("type") or "")
+        title = detail.get("name")
         row = {
             "activityId": str(detail.get("id")),
             "athleteId": athlete_id,
             "source": STRAVA_PROVIDER,
+            "sportType": sport_type,
+            "name": str(title) if title is not None else "",
             "startTime": detail.get("start_date_local") or detail.get("start_date"),
             "distanceKm": ((float(distance_m) / 1000.0) if distance_m else None),
             "elapsedSec": detail.get("elapsed_time"),

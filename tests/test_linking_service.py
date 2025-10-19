@@ -1,8 +1,10 @@
 import pandas as pd
+import pytest
 
 from persistence.csv_storage import CsvStorage
-from persistence.repositories import ActivitiesRepo, PlannedSessionsRepo
+from persistence.repositories import ActivitiesRepo, AthletesRepo, PlannedSessionsRepo, SettingsRepo
 from services.linking_service import LinkingService
+from services.metrics_service import MetricsComputationService
 
 
 def _create_activity(repo: ActivitiesRepo, **overrides) -> str:
@@ -106,3 +108,70 @@ def test_linking_service_suggests_and_links(tmp_path):
 
     link_service.delete_link(link_id)
     assert link_service.linked_activities("ath1").empty
+
+
+def test_linking_service_enriches_with_metrics(tmp_path):
+    storage = CsvStorage(tmp_path)
+    link_service = LinkingService(storage)
+    activities_repo = link_service.activities
+    planned_repo = link_service.sessions
+
+    athletes_repo = AthletesRepo(storage)
+    athletes_repo.create(
+        {
+            "athleteId": "ath1",
+            "coachId": "coach-1",
+            "name": "Test Athlete",
+            "thresholdsProfileId": "",
+            "units": "metric",
+            "hrRest": 50,
+            "hrMax": 190,
+        }
+    )
+    settings_repo = SettingsRepo(storage)
+    settings_repo.update(
+        "coach-1",
+        {
+            "coachId": "coach-1",
+            "distanceEqFactor": 0.01,
+            "units": "metric",
+        },
+    )
+
+    planned_id = _create_planned(
+        planned_repo,
+        plannedSessionId="ps-10",
+        athleteId="ath1",
+        plannedDistanceKm=12.0,
+        plannedDurationSec=4200,
+        plannedAscentM=300,
+        targetType="pace",
+        targetLabel="Fundamental",
+    )
+    activity_id = _create_activity(
+        activities_repo,
+        activityId="act-10",
+        athleteId="ath1",
+        distanceKm=12.2,
+        movingSec=4100,
+        ascentM=320,
+        avgHr=145,
+    )
+
+    metrics_service = MetricsComputationService(storage)
+    metrics_service.recompute_all()
+
+    unlinked = link_service.unlinked_activities("ath1")
+    assert {"activityDistanceEqKm", "activityTimeSec", "activityTrimp"}.issubset(unlinked.columns)
+    activity_row = unlinked[unlinked["activityId"].astype(str) == str(activity_id)].iloc[0]
+    assert float(activity_row["activityDistanceEqKm"]) >= float(activity_row["distanceKm"])
+    assert pd.notna(activity_row["activityTrimp"])
+    assert float(activity_row["activityTrimp"]) >= 0.0
+
+    link_service.create_link("ath1", activity_id, planned_id, rpe=6, comments="")
+    linked = link_service.linked_activities("ath1")
+    assert {"plannedMetricDistanceEqKm", "plannedMetricTimeSec", "plannedMetricTrimp"}.issubset(linked.columns)
+    linked_row = linked.iloc[0]
+    assert pytest.approx(float(linked_row["activityTrimp"]), rel=1e-6) == float(activity_row["activityTrimp"])
+    assert pd.notna(linked_row["plannedMetricTrimp"])
+    assert float(linked_row["plannedMetricDistanceEqKm"]) >= 0.0

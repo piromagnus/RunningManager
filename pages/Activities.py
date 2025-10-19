@@ -46,19 +46,6 @@ ath_repo = AthletesRepo(storage)
 thresholds_repo = ThresholdsRepo(storage)
 link_service = LinkingService(storage)
 ts_service = TimeseriesService(cfg)
-_activities_metrics_df = storage.read_csv("activities_metrics.csv")
-if not _activities_metrics_df.empty:
-    _activities_metrics_df["activityId"] = _activities_metrics_df["activityId"].astype(str)
-    ACTIVITY_METRICS_MAP = _activities_metrics_df.set_index("activityId").to_dict(orient="index")
-else:
-    ACTIVITY_METRICS_MAP = {}
-
-_planned_metrics_df = storage.read_csv("planned_metrics.csv")
-if not _planned_metrics_df.empty:
-    _planned_metrics_df["plannedSessionId"] = _planned_metrics_df["plannedSessionId"].astype(str)
-    PLANNED_METRICS_MAP = _planned_metrics_df.set_index("plannedSessionId").to_dict(orient="index")
-else:
-    PLANNED_METRICS_MAP = {}
 _RAW_CACHE: Dict[str, Optional[Dict[str, object]]] = {}
 ALLOWED_TYPES = {"run", "hike", "trailrun", "trail running"}
 ALLOWED_TYPES_NORMALIZED = {t.replace(" ", "").lower() for t in ALLOWED_TYPES}
@@ -185,7 +172,7 @@ def _planned_label(row: pd.Series) -> str:
 
 
 def _render_summary(activity: pd.Series) -> None:
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
         st.metric("Distance", fmt_km(_coerce_float(activity.get("distanceKm"))))
     with col2:
@@ -194,6 +181,8 @@ def _render_summary(activity: pd.Series) -> None:
         st.metric("D+", fmt_m(_coerce_float(activity.get("ascentM"))))
     with col4:
         st.metric("FC moyenne", fmt_decimal(_coerce_float(activity.get("avgHr")), 0))
+    with col5:
+        st.metric("TRIMP", fmt_decimal(_coerce_float(activity.get("activityTrimp")), 1))
     name = _activity_name(activity)
     if name:
         st.caption(f"Nom Strava : {name}")
@@ -380,9 +369,6 @@ def _render_comparison(selected_row: pd.Series) -> None:
     planned_id = str(selected_row.get("plannedSessionId") or "")
     planned_row = link_service.sessions.get(planned_id) if planned_id else None
 
-    activity_metrics = ACTIVITY_METRICS_MAP.get(str(selected_row.get("activityId") or ""))
-    planned_metrics = PLANNED_METRICS_MAP.get(planned_id) if planned_id else None
-
     planned_distance = _coerce_float(
         selected_row.get("plannedDistanceKm")
         if selected_row.get("plannedDistanceKm") not in (None, "")
@@ -391,13 +377,11 @@ def _render_comparison(selected_row: pd.Series) -> None:
     actual_distance = _coerce_float(selected_row.get("distanceKm"))
 
     planned_distance_eq = _coerce_float(
-        (planned_metrics or {}).get("distanceEqKm")
-        if planned_metrics and planned_metrics.get("distanceEqKm") not in (None, "")
+        selected_row.get("plannedMetricDistanceEqKm")
+        if selected_row.get("plannedMetricDistanceEqKm") not in (None, "")
         else (planned_row or {}).get("plannedDistanceEqKm")
     )
-    actual_distance_eq = _coerce_float(
-        (activity_metrics or {}).get("distanceEqKm")
-    )
+    actual_distance_eq = _coerce_float(selected_row.get("activityDistanceEqKm"))
 
     planned_duration = _coerce_float(
         selected_row.get("plannedDurationSec")
@@ -418,10 +402,10 @@ def _render_comparison(selected_row: pd.Series) -> None:
             planned_duration = (planned_distance / pace) * 3600.0
 
     planned_hr = _threshold_mid_hr(threshold_row)
-    planned_trimp = _coerce_float((planned_metrics or {}).get("trimp"))
+    planned_trimp = _coerce_float(selected_row.get("plannedMetricTrimp"))
     if planned_trimp is None:
         planned_trimp = _compute_trimp(planned_duration, planned_hr)
-    actual_trimp = _coerce_float((activity_metrics or {}).get("trimp"))
+    actual_trimp = _coerce_float(selected_row.get("activityTrimp"))
     if actual_trimp is None:
         actual_trimp = _compute_trimp(actual_duration, _coerce_float(selected_row.get("avgHr")))
 
@@ -504,6 +488,7 @@ with tab_unlinked:
                 "Nom Strava": _activity_name(selected_row) or "-",
                 "Durée totale": moving_total,
                 "Vitesse moyenne": fmt_speed_kmh(avg_speed),
+                "TRIMP": _fmt_optional(_coerce_float(selected_row.get("activityTrimp")), 1),
             }
         )
         st.markdown("#### Timeseries")
@@ -572,6 +557,8 @@ with tab_linked:
             "Session planifiée": _planned_label(selected_row),
             "Type activité": _activity_type(selected_row) or "-",
             "Score de correspondance": fmt_decimal(_coerce_float(selected_row.get("matchScore")), 2),
+            "TRIMP planifié": _fmt_optional(_coerce_float(selected_row.get("plannedMetricTrimp")), 1),
+            "TRIMP réalisé": _fmt_optional(_coerce_float(selected_row.get("activityTrimp")), 1),
         }
         st.write(planned_info)
 
