@@ -13,3 +13,4 @@ data/timeseries/
 .venv/
 uv.lock
 requirements.lock.txt
+.cursor/mcp.json
