@@ -686,11 +686,134 @@
         "details": "Scope\n- Fundamental and Long Run forms use a binary mode selector (Distance + D+ vs Time + D+ mini); enforce XOR inputs, display computed values, and hide threshold pickers for Fundamental (always resolves to target Fundamental profile) while keeping optional target type for Long Run.\n- PlannerService gains helpers to load distanceEqFactor from settings, compute distanceEq from distance/ascent, derive distance from time + ascent via fundamental pace, and return both km and duration estimates without touching CSV schemas (planned_sessions keeps only distance/duration/ascent columns).\n- Planner UI reorganizes interval simple warm-up/cool-down inputs, exposes read-only distanceEq/time outputs, and wires estimation helpers so week cards/details show consistent values.\n- Introduce data/session_templates.csv with repo/service providing CRUD, clone-from-session, and apply-to-calendar helpers; follow existing portalocker patterns and idempotent header migration.\n- Create pages/SessionCreator.py that reuses planner form components to build templates (from scratch or existing session), supports save/update/duplicate flows, and optionally schedules to a date; add planner entry points (add-session modal listing base types + templates, CTA to jump to SessionCreator, save-as-template action on cards).\n- Ensure new templates capture title, base type, notes, steps JSON, ascent, targets, step end mode, and track lastUsedAt when scheduled.\nImplemented metrics pipeline overhaul, activity metrics file, analytics filters, and recompute hooks.",
         "testStrategy": "Tests\n- PlannerService unit tests for new estimation helpers (distance/time/distanceEq factoring ascent and distanceEqFactor) and XOR mode behaviour.\n- SessionTemplatesService tests covering create/update/clone/apply flows using fake storage.\n- Planner UI helper tests verifying fundamental form hides threshold select, add-session modal options, and interval warm-up/cool-down ordering remains compatible with existing loop estimation tests.\n- Manual smoke: create template from session, duplicate via SessionCreator, schedule to calendar, confirm cards show computed values.",
         "subtasks": []
+      },
+      {
+        "id": 21,
+        "title": "Replace Activities with Activity Feed + Detail Page (cards, linking dialog, map)",
+        "description": "Replace the current Activities tab with a recent-activity feed and add a dedicated Activity detail page.",
+        "details": "Scope\n- Replace pages/Activities.py list/selection with a scrollable feed of recent activities rendered as cards.\n- Card fields: name (Strava), distanceKm, ascentM, avgHr, start date (local), duration (movingSec/elapsedSec with friendly format), TRIMP, distanceEqKm.\n- Visual status: add a round green tick icon at the end of the card if linked; also set a red border for linked items (per request). Tooltip shows link score if available.\n- Above the feed, render a small horizontal list of unlinked planned sessions (cards). Each card shows: date, type, plannedDistanceKm/plannedDurationSec, target label.\n- Clicking a planned-session card opens a dialog/popup listing preloaded candidate activities (±14 days around planned date) with main info. Selecting one triggers link flow (reuses LinkingService), then refreshes.\n- Clicking any activity card (linked or not) navigates to a new Activity detail page (new file, e.g., pages/Activity.py) showing:\n  - Title: activity name; below: date; description from Strava raw JSON (if present).\n  - Summary KPIs (distance, duration, ascent, avgHR, TRIMP, DistEq).\n  - If linked: comparison panel plan vs actual (distance/time/trimp/ascent deltas); else message: \"no planned activities linked\".\n  - Timeseries charts (HR, speed, elevation) using existing TimeseriesService.\n  - Map section using pydeck: plot route polyline (from activities.csv summary polyline decoded) or, if missing, use timeseries lat/lon to render a PathLayer. Fallback gracefully if no geo.\n- Keep deep links (e.g., Feed → Activity page via query param activityId) compatible with Dashboard links.\n\nImplementation notes\n- Activity feed query: activities.csv join activities_metrics.csv and links.csv to compute link status and TRIMP/DistEq; order by startTime desc; paginate with st.button(\"Charger plus\") or simple slice.\n- Unlinked planned sessions: planned_sessions.csv left-join links.csv to find sessions without a link; sort by date (recent past → near future). Click opens st.dialog (or st.experimental_dialog fallback) to present candidate activities window ±14 days, sorted by match score using existing LinkingService or simplified sorting.\n- Activity detail page: accept activityId via st.experimental_get_query_params; re-use comparison/render helpers from Activities page; add pydeck map. Consider optional polyline decoding (polyline lib), otherwise build path from timeseries lat/lon.\n- Styling: use st.container() with border via st.markdown CSS, or st.columns to lay out icon at the end. Green tick icon: unicode ✅ or emoji; red border via CSS.\n- Do not change CSV schemas beyond UI needs; rely on repositories and services.\n\nUX\n- Top: small cards of unlinked planned sessions → dialog to pick an activity.\n- Below: infinite/scrollable feed (paged) of recent activities as cards.\n- Click any card → Activity detail page with maps + timeseries.\n\nDependencies\n- Prefer pydeck (already used by Streamlit) to render the map; no external network fetch required.\n\nAcceptance\n- Activities feed replaces Activities selection UI while preserving linking functionality through the dialog.\n- Activity detail page renders KPIs, comparison (if linked), timeseries, and map.\n- Dashboard deep-link continues to open Activity detail page.\n- Works for activities without timeseries/geo (map is hidden with a notice).\n",
+        "testStrategy": "- Unit tests for feed query builders: ensure sorting, linking status, and metrics fields are computed correctly (pure helpers).\\n- Tests for candidate activity window (±14 days) selection given a planned date and verify filtering and ordering by score.\\n- Tests for detail page helpers: title/date/description extraction from raw JSON, comparison deltas, polyline decoding fallback.\\n- Manual UI verification: \\\"unlinked planned\\\" list displays; dialog opens and links; feed renders with green tick + red border for linked; detail page shows maps and timeseries; Dashboard deep-link navigates correctly.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Scan repo for Activities UI and linking services",
+            "description": "Explore the codebase to locate the current Activities page, related services, repositories, and tests to understand existing implementations and patterns.",
+            "dependencies": [],
+            "details": "Use ripgrep to find `pages/Activities.py`, `services/linking_service.py`, `services/timeseries_service.py`, `persistence/repositories.py`, and any activity-related tests or helpers to reuse.",
+            "status": "pending",
+            "testStrategy": "None (discovery and mapping)."
+          },
+          {
+            "id": 2,
+            "title": "Review CSV schemas and repository APIs for activities",
+            "description": "Examine persistence files and CSV headers to confirm available fields and how to query activities, metrics, links, and planned sessions.",
+            "dependencies": [
+              1
+            ],
+            "details": "Read `persistence/repositories.py` and inspect headers in `data/*.csv` for `activities.csv`, `activities_metrics.csv`, `links.csv`, `planned_sessions.csv`. Note any helper methods for joins or computed fields.",
+            "status": "pending",
+            "testStrategy": "None (analysis to inform implementation)."
+          },
+          {
+            "id": 3,
+            "title": "Implement feed query helper to join activities, metrics, and links",
+            "description": "Create pure helpers to assemble feed items with required fields, compute link status/score, and sort by start time descending.",
+            "dependencies": [
+              2
+            ],
+            "details": "Add a helper module (e.g., `services/activity_feed_service.py`) to load and join activity tables, map to card fields (name, distanceKm, ascentM, avgHr, local start, moving/elapsed, TRIMP, distanceEqKm), include linked flag and score, and support simple pagination.",
+            "status": "pending",
+            "testStrategy": "Unit tests verifying sorting, field mapping, TRIMP/DistEq presence handling, and link status/score across edge cases."
+          },
+          {
+            "id": 4,
+            "title": "Replace Activities list with scrollable card feed",
+            "description": "Refactor `pages/Activities.py` to render recent activities as cards using the new feed helper, with visuals for linked status and simple pagination.",
+            "dependencies": [
+              3
+            ],
+            "details": "Use Streamlit containers/columns for cards; add green tick icon for linked and red border styling; show tooltip with score when available; paginate with a 'Charger plus' button or slice.",
+            "status": "pending",
+            "testStrategy": "Lightweight unit tests for any card-render helpers; manual UI smoke via Streamlit for pagination and visuals."
+          },
+          {
+            "id": 5,
+            "title": "Add horizontal unlinked planned sessions strip",
+            "description": "Display a small horizontal list above the feed showing unlinked planned sessions with key info and sorting by date.",
+            "dependencies": [
+              3,
+              4
+            ],
+            "details": "Implement left-join of `planned_sessions.csv` vs `links.csv` to filter unlinked; render compact cards with date, type, planned distance/duration, and target label.",
+            "status": "pending",
+            "testStrategy": "Unit tests for unlinked filtering and recent past→near future ordering; UI smoke for rendering layout."
+          },
+          {
+            "id": 6,
+            "title": "Implement linking dialog with candidate window and link flow",
+            "description": "Enable clicking a planned-session card to open a dialog showing activities within ±14 days ordered by match score, and perform linking.",
+            "dependencies": [
+              5
+            ],
+            "details": "Use `st.dialog` (or `st.experimental_dialog`) to list candidates; reuse `LinkingService` to compute scores and create link on selection; refresh feed/strip after linking.",
+            "status": "pending",
+            "testStrategy": "Unit tests for candidate window filtering and ordering by score; integration test with fakes ensuring a link is created and UI refreshes data."
+          },
+          {
+            "id": 7,
+            "title": "Create Activity detail page with deep-link support",
+            "description": "Add `pages/Activity.py` to show details for a selected activity and accept `activityId` via query params for navigation compatibility.",
+            "dependencies": [
+              4
+            ],
+            "details": "Use `st.experimental_get_query_params` to read `activityId`; ensure feed cards and Dashboard can deep-link to this page; wire navigation from feed cards.",
+            "status": "pending",
+            "testStrategy": "Unit test for query param parsing and routing helper; manual verification that Dashboard links open the detail page."
+          },
+          {
+            "id": 8,
+            "title": "Detail page KPIs, description, and plan-vs-actual panel",
+            "description": "Render title, date, description, summary KPIs, and show comparison panel when linked with deltas (distance, duration, TRIMP, ascent).",
+            "dependencies": [
+              7,
+              3
+            ],
+            "details": "Reuse any existing comparison/render helpers from Activities; compute deltas when linked; format values via `utils/formatting` for fr-FR display; show message when no link exists.",
+            "status": "pending",
+            "testStrategy": "Unit tests for comparison helpers on sample data; verify formatting outputs expected display strings."
+          },
+          {
+            "id": 9,
+            "title": "Detail page timeseries charts using TimeseriesService",
+            "description": "Add HR, speed, and elevation timeseries charts with graceful handling when data is missing.",
+            "dependencies": [
+              7
+            ],
+            "details": "Reuse `services/timeseries_service.py` to load series; conditionally render charts only if present; display a short notice when unavailable.",
+            "status": "pending",
+            "testStrategy": "Unit tests for availability checks and data shaping; UI smoke with sample timeseries data."
+          },
+          {
+            "id": 10,
+            "title": "Detail page pydeck map from polyline or lat/lon",
+            "description": "Render a map using pydeck PathLayer from summary polyline if present, else fallback to path built from timeseries lat/lon; hide with notice if no geo.",
+            "dependencies": [
+              7,
+              9
+            ],
+            "details": "Decode polyline from `activities.csv` (polyline lib) and plot; if absent, build coordinates from timeseries to render the path; ensure no external network fetch; hide map and show a notice when both sources are missing.",
+            "status": "pending",
+            "testStrategy": "Unit tests for polyline decoding and path-building fallbacks; UI smoke to verify map visibility across scenarios."
+          }
+        ]
       }
     ],
     "metadata": {
       "created": "2025-10-06T19:00:14.797Z",
-      "updated": "2025-10-19T20:48:53.275Z",
+      "updated": "2025-10-19T21:18:18.861Z",
       "description": "Tasks for master context"
     }
   }
