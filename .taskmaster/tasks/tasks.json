@@ -368,7 +368,7 @@
         "testStrategy": "- Unit tests: classification function with synthetic planned intervals and races; verify only work steps counted as intense.\n- Aggregation tests: known inputs produce exact metrics.csv row values; adherencePct correct with partial linking.\n- UI tests: charts render; filter changes recompute and update views.\n- Edge cases: missing plannedDistanceKm or plannedDurationSec should not break; default to 0 for planned where missing.",
         "priority": "medium",
         "dependencies": [],
-        "status": "pending",
+        "status": "done",
         "subtasks": [
           {
             "id": 1,
@@ -376,7 +376,7 @@
             "description": "Create service skeleton, IO helpers, and define metrics columns.",
             "dependencies": [],
             "details": "Add services/analytics_service.py with compute_weekly_metrics(athlete_id) and private helpers. Define metrics.csv schema: [athleteId, isoYear, isoWeek, weekStartDate, weekEndDate, plannedTimeSec, actualTimeSec, plannedDistanceKm, actualDistanceKm, actualDistanceEqKm, intenseTimeSec, easyTimeSec, numPlannedSessions, numActualSessions, adherencePct]. Wire readers for planned_sessions.csv, activities.csv, and links.csv. Ensure utils/time.py exposes ISO week helpers (to_iso_year_week(date), week_start_end(iso_year, iso_week)). Load coach distanceEqFactor from settings (default 0.01).",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Contract tests for IO helpers: load and validate columns; schema snapshot test for metrics.csv header; utils/time ISO week roundtrip tests."
           },
           {
@@ -387,7 +387,7 @@
               1
             ],
             "details": "Create classify_intensity(activity, planned_session) and accumulate_intensity_for_week(week_acts, week_planned, links). Rules: Intense = (a) linked INTERVAL_SIMPLE planned sessions count only workSec from stepsJson; (b) races: any activity on a race goal date or linked to planned type RACE. Easy = recovery steps, fundamental, long runs, and any unlinked activity by default unless it falls on race day. If HR/pace missing, rely on session type/step type tags. Guard against missing links; handle multi-step intervals; sum seconds per week.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Unit tests with synthetic planned intervals: only workSec counted as intense; recovery steps excluded. Race-day activity classified intense even if unlinked. Missing HR/pace falls back to session type. Negative tests: no intervals -> all easy."
           },
           {
@@ -399,7 +399,7 @@
               2
             ],
             "details": "Implement group_by_week using utils/time.py (Mon–Sun ISO). For each athlete/week: sums = plannedDurationSec (planned), movingSec (actual), plannedDistanceKm (planned), distanceKm (actual). Compute distanceEqKm = actualDistanceKm + ascentM * distanceEqFactor. Derive intenseTimeSec/easyTimeSec via utilities from subtask 2. Count numPlannedSessions and numActualSessions. Compute adherencePct = (linked_planned_count / numPlannedSessions)*100. Write one row per (athlete, isoYear, isoWeek) to data/metrics.csv atomically (temp file + replace). Make function idempotent and re-runnable.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Deterministic aggregation tests: feed small CSV fixtures and assert exact row values in metrics.csv, including adherencePct rounding and distanceEqKm. Edge cases: weeks spanning month boundaries; no planned or no actual -> zeros with valid row."
           },
           {
@@ -410,7 +410,7 @@
               3
             ],
             "details": "Dashboard (pages/Dashboard.py): show alerts (unlinked activities count; missed sessions where planned has no link and date < today), weekly snapshot tiles (planned vs actual time/distance/distanceEq, intensity split), and upcoming key sessions (next 14 days: LONG_RUN, INTERVAL_SIMPLE, RACE). Analytics (pages/Analytics.py): filters for athlete and week range; Altair/Plotly stacked bars for planned vs actual by week (time, distance, distanceEq); pie chart of intense vs easy time for selected week. Load from metrics.csv and base CSVs; ensure fast reload and empty-state handling.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Manual UI walk-through plus smoke tests: charts render without errors across filters; pie updates on week selection; alerts match fixture data. Visual diff or screenshot tests for chart presence; filter change triggers data refetch."
           },
           {
@@ -423,7 +423,7 @@
               4
             ],
             "details": "Add pytest suites: (1) classification unit tests (intervals, races, unlinked defaults); (2) aggregation integration tests comparing full metrics.csv rows; (3) adherencePct scenarios with partial linking. Implement caching for compute_weekly_metrics using file mtime-based invalidation or app cache (e.g., st.cache_data). Add README section describing metrics.csv schema, recompute triggers, and UI usage. Include fixtures and CI job to run tests.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "CI pipeline runs unit/integration tests; measure coverage of analytics_service. Manual regression: update settings distanceEqFactor and verify distanceEq charts change. Performance check: cache reduces recompute time on repeated loads."
           }
         ]
@@ -653,7 +653,7 @@
         "description": "Surface TRIMP throughout the UI: merge activities_metrics into activity listings, show actual TRIMP on linked and unlinked activities, estimate TRIMP for planned sessions based on targets, and extend analytics views to compare planned vs actual TRIMP.",
         "details": "",
         "testStrategy": "",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "medium",
         "subtasks": []
@@ -664,7 +664,7 @@
         "description": "Build a new Streamlit page \"Training Load\" that charts acute vs chronic load curves (7- and 28-day rolling metrics) for distance, moving time, distance-equivalent, TRIMP, and ascent. Provide a metric selector dropdown and fill the area between 0.75×chronic and 1.5×chronic to highlight load range. Integrate the underlying data from daily_metrics.csv.",
         "details": "",
         "testStrategy": "",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "medium",
         "subtasks": []
@@ -690,7 +690,7 @@
     ],
     "metadata": {
       "created": "2025-10-06T19:00:14.797Z",
-      "updated": "2025-10-13T15:07:36.892Z",
+      "updated": "2025-10-19T20:48:53.275Z",
       "description": "Tasks for master context"
     }
   }

@@ -140,6 +140,28 @@ if not linked_df.empty:
         )
     ].reset_index(drop=True)
 
+# Optional deep-link selection via query param ?activityId=...
+params = st.experimental_get_query_params()
+target_activity_id = None
+if "activityId" in params and params["activityId"]:
+    target_activity_id = str(params["activityId"][0])
+
+default_unlinked_index = 0
+default_linked_index = 0
+if target_activity_id:
+    try:
+        unlinked_ids = unlinked_df["activityId"].astype(str).tolist() if not unlinked_df.empty else []
+        if target_activity_id in unlinked_ids:
+            default_unlinked_index = max(0, unlinked_ids.index(target_activity_id))
+    except Exception:
+        default_unlinked_index = 0
+    try:
+        linked_ids = linked_df["activityId"].astype(str).tolist() if not linked_df.empty else []
+        if target_activity_id in linked_ids:
+            default_linked_index = max(0, linked_ids.index(target_activity_id))
+    except Exception:
+        default_linked_index = 0
+
 
 def _activity_label(row: pd.Series) -> str:
     date = row.get("startTime")
@@ -462,6 +484,7 @@ with tab_unlinked:
         selected_id = st.selectbox(
             "Sélectionnez une activité",
             activity_ids,
+            index=default_unlinked_index if target_activity_id in activity_ids else 0,
             format_func=lambda aid: labels[aid],
         )
         selected_row = unlinked_df[unlinked_df["activityId"].astype(str) == selected_id].iloc[0]
@@ -548,6 +571,7 @@ with tab_linked:
         selected_id = st.selectbox(
             "Activité liée",
             activity_ids,
+            index=default_linked_index if target_activity_id in activity_ids else 0,
             format_func=lambda aid: labels[aid],
         )
         selected_row = linked_df[linked_df["activityId"].astype(str) == selected_id].iloc[0]

@@ -14,7 +14,7 @@
 
 # Activites analytics
 - Compute automatic split ascend, flat and descent with metrics in each one of them, segment fusion easy in UI 
-- 
+- Similar activities for an activity -> recent similar activities.
 
 # Dashboard
 - Best runs in DistEQSpeed / Time
