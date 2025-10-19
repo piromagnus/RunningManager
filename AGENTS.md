@@ -33,10 +33,10 @@ See `.taskmaster/docs/prd.txt` for full requirements and domain rules.
   - `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET`, `STRAVA_REDIRECT_URI` (if enabling Strava OAuth)
   - `ENCRYPTION_KEY` (Fernet key for token at-rest encryption; required before storing tokens)
 
-Run the app: `streamlit run app.py`
+Run the app: `uv run streamlit run app.py`
 
 ## Commands
-
+- Use uv command to replace python. Eg : "uv run" instead of "python3".
 - Tests: `pytest`
 - Lint (Ruff configured): run ruff if available; line length 100, rules E,F,I
 
