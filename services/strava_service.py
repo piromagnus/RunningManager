@@ -11,6 +11,8 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional
 
 import pandas as pd
+import portalocker
+from urllib.parse import urlparse
 import requests
 
 from persistence.csv_storage import CsvStorage
@@ -45,12 +47,15 @@ class StravaService:
     max_retries: int = 3
     # Exposes a summary of the last sync for UI/UX (non-persistent)
     last_sync_stats: Dict[str, Any] = field(default_factory=dict)
+    # Last known rate status parsed from headers/log (non-persistent)
+    last_rate_status: Dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         self.session = self.session or requests.Session()
         self.activities = ActivitiesRepo(self.storage)
         self.tokens = TokensRepo(self.storage)
         self._fernet = None
+        self._rate_log_path = self.storage.base_dir / "strava_api_log.json"
 
     # --- Public API -------------------------------------------------
     def authorization_url(self, state: str, approval_prompt: str = "auto") -> str:
@@ -515,6 +520,12 @@ class StravaService:
                 json=json_payload,
                 timeout=30,
             )
+            # Log and parse rate headers best-effort
+            try:
+                self._log_api_call(method, url, response.status_code, response.headers)
+                self.last_rate_status = self._rate_status_from_headers(response.headers)
+            except Exception:
+                pass
             if response.status_code == 429 and attempt < self.max_retries - 1:
                 retry_after = int(response.headers.get("Retry-After", "1"))
                 time.sleep(min(retry_after, 60))
@@ -533,6 +544,173 @@ class StravaService:
 
     def _auth_headers(self, access_token: str) -> Dict[str, str]:
         return {"Authorization": f"Bearer {access_token}"}
+
+    # --- Rate-limit logging and status --------------------------------
+    def _log_api_call(self, method: str, url: str, status: int, headers: Dict[str, str]) -> None:
+        entry = {
+            "ts": self.now_fn().isoformat(),
+            "method": method,
+            "endpoint": self._endpoint_for_log(url),
+            "status": int(status),
+        }
+        usage = headers.get("X-RateLimit-Usage") or headers.get("x-ratelimit-usage")
+        limit = headers.get("X-RateLimit-Limit") or headers.get("x-ratelimit-limit")
+        if usage:
+            try:
+                parts = [int(p.strip()) for p in str(usage).split(",") if p.strip()]
+                if len(parts) >= 2:
+                    entry["usage_short"] = parts[0]
+                    entry["usage_daily"] = parts[1]
+            except Exception:
+                pass
+        if limit:
+            try:
+                parts = [int(p.strip()) for p in str(limit).split(",") if p.strip()]
+                if len(parts) >= 2:
+                    entry["limit_short"] = parts[0]
+                    entry["limit_daily"] = parts[1]
+            except Exception:
+                pass
+        # Append JSON line under lock; keep recent ~500 entries to avoid growth
+        path = self._rate_log_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with portalocker.Lock(str(path), timeout=10, flags=portalocker.LOCK_EX):
+            entries: list[dict] = []
+            if path.exists() and path.stat().st_size > 0:
+                try:
+                    entries = json.loads(path.read_text(encoding="utf-8"))
+                    if not isinstance(entries, list):
+                        entries = []
+                except Exception:
+                    entries = []
+            entries.append(entry)
+            if len(entries) > 500:
+                entries = entries[-500:]
+            path.write_text(json.dumps(entries), encoding="utf-8")
+
+    @staticmethod
+    def _endpoint_for_log(url: str) -> str:
+        try:
+            parsed = urlparse(url)
+            # keep only path, mask tokens in path (none expected), drop query entirely
+            return parsed.path
+        except Exception:
+            return url
+
+    def _rate_status_from_headers(self, headers: Dict[str, str]) -> Dict[str, Any]:
+        now = self.now_fn()
+        limit = headers.get("X-RateLimit-Limit") or headers.get("x-ratelimit-limit")
+        usage = headers.get("X-RateLimit-Usage") or headers.get("x-ratelimit-usage")
+        short_limit = DAILY_LIMIT
+        daily_limit = DAILY_LIMIT
+        short_used = None
+        daily_used = None
+        try:
+            if limit:
+                parts = [int(p.strip()) for p in str(limit).split(",") if p.strip()]
+                if len(parts) >= 2:
+                    short_limit, daily_limit = parts[0], parts[1]
+            if usage:
+                parts = [int(p.strip()) for p in str(usage).split(",") if p.strip()]
+                if len(parts) >= 2:
+                    short_used, daily_used = parts[0], parts[1]
+        except Exception:
+            pass
+        # Compute wait until next 15-min window (approx) if capped
+        def seconds_to_next_quarter(dt_now: dt.datetime) -> int:
+            # next boundary at minute in {0,15,30,45}
+            minutes = (dt_now.minute // 15 + 1) * 15
+            hour = dt_now.hour
+            day = dt_now.date()
+            if minutes >= 60:
+                minutes -= 60
+                hour = (hour + 1) % 24
+                if hour == 0:
+                    day = (dt_now + dt.timedelta(days=1)).date()
+            next_dt = dt.datetime(dt_now.year, dt_now.month, dt_now.day, hour, minutes, 0, tzinfo=dt_now.tzinfo)
+            return max(0, int((next_dt - dt_now).total_seconds()))
+
+        wait = 0
+        if short_used is not None and short_used >= short_limit:
+            wait = seconds_to_next_quarter(now)
+        return {
+            "short_used": short_used,
+            "short_limit": short_limit,
+            "daily_used": daily_used,
+            "daily_limit": daily_limit,
+            "wait_seconds": wait,
+            "as_of": now.isoformat(),
+        }
+
+    def get_rate_status(self) -> Dict[str, Any]:
+        """Return current rate status using last headers or from local log as fallback."""
+        if self.last_rate_status:
+            return self.last_rate_status
+        # Fallback: compute usage counts from log entries
+        path = self._rate_log_path
+        now = self.now_fn()
+        short_used = 0
+        daily_used = 0
+        short_limit = RATE_LIMIT_PER_15_MIN
+        daily_limit = DAILY_LIMIT
+        if path.exists() and path.stat().st_size > 0:
+            try:
+                entries = json.loads(path.read_text(encoding="utf-8"))
+                # count entries in last 15 minutes and day
+                for e in reversed(entries):
+                    ts = e.get("ts")
+                    if not ts:
+                        continue
+                    try:
+                        ts_dt = dt.datetime.fromisoformat(str(ts))
+                        if ts_dt.tzinfo is None:
+                            ts_dt = ts_dt.replace(tzinfo=dt.timezone.utc)
+                    except Exception:
+                        continue
+                    if (now - ts_dt) <= dt.timedelta(minutes=15):
+                        short_used += 1
+                    if (now - ts_dt) <= dt.timedelta(days=1):
+                        daily_used += 1
+                    # Load limits if present in entry
+                    if "limit_short" in e:
+                        try:
+                            short_limit = int(e["limit_short"])
+                        except Exception:
+                            pass
+                    if "limit_daily" in e:
+                        try:
+                            daily_limit = int(e["limit_daily"])
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+        # approximate wait
+        wait = 0
+        if short_used >= short_limit:
+            # reuse same helper logic
+            wait = self._rate_status_from_headers({}).get("wait_seconds", 0)  # type: ignore[arg-type]
+        status = {
+            "short_used": short_used,
+            "short_limit": short_limit,
+            "daily_used": daily_used,
+            "daily_limit": daily_limit,
+            "wait_seconds": wait,
+            "as_of": now.isoformat(),
+        }
+        self.last_rate_status = status
+        return status
+
+    def get_rate_log(self, limit: int = 5) -> List[Dict[str, Any]]:
+        path = self._rate_log_path
+        if not path.exists() or path.stat().st_size == 0:
+            return []
+        try:
+            entries = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(entries, list):
+                return []
+            return list(reversed(entries[-limit:]))
+        except Exception:
+            return []
 
     @staticmethod
     def _stream_data(streams: Dict[str, Any], key: str) -> List[Any]:

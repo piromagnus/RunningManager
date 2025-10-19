@@ -106,6 +106,9 @@ metrics_service = MetricsComputationService(storage)
 existing_settings = settings_repo.get("coach-1") or {}
 distance_eq_default = _coerce_float(existing_settings.get("distanceEqFactor"), 0.01)
 strava_days_default = _coerce_int(existing_settings.get("stravaSyncDays"), 14)
+bike_eq_dist_default = _coerce_float(existing_settings.get("bikeEqDistance"), 0.3)
+bike_eq_ascent_default = _coerce_float(existing_settings.get("bikeEqAscent"), 0.02)
+bike_eq_descent_default = _coerce_float(existing_settings.get("bikeEqDescent"), 0.0)
 
 
 st.subheader("Coach Settings")
@@ -117,6 +120,32 @@ distance_eq = st.number_input(
     value=float(distance_eq_default),
     step=0.001,
     help="Default: 0.01 (100 m ascent = 1.0 km)"
+)
+
+st.markdown("#### Équivalences vélo (DistEq)")
+bike_eq_distance = st.number_input(
+    "Facteur distance (vélo)",
+    min_value=0.0,
+    max_value=5.0,
+    value=float(bike_eq_dist_default),
+    step=0.01,
+    help="Contribution de la distance pour le vélo (par défaut 0.30)."
+)
+bike_eq_ascent = st.number_input(
+    "Facteur D+ (vélo)",
+    min_value=0.0,
+    max_value=1.0,
+    value=float(bike_eq_ascent_default),
+    step=0.001,
+    help="Contribution du dénivelé positif pour le vélo (par défaut 0.02)."
+)
+bike_eq_descent = st.number_input(
+    "Facteur D- (vélo)",
+    min_value=0.0,
+    max_value=1.0,
+    value=float(bike_eq_descent_default),
+    step=0.001,
+    help="Contribution du dénivelé négatif pour le vélo (par défaut 0.00)."
 )
 strava_sync_days = st.number_input(
     "Jours à synchroniser avec Strava",
@@ -138,6 +167,9 @@ if st.button("Save Settings"):
         "distanceEqFactor": float(distance_eq),
         "stravaSyncDays": int(strava_sync_days),
         "analyticsActivityTypes": existing_settings.get("analyticsActivityTypes", ""),
+        "bikeEqDistance": float(bike_eq_distance),
+        "bikeEqAscent": float(bike_eq_ascent),
+        "bikeEqDescent": float(bike_eq_descent),
     }
     settings_repo.update("coach-1", payload)
     existing_settings.update(payload)
@@ -306,6 +338,45 @@ else:
             except Exception as exc:  # pragma: no cover - runtime API failures
                 st.error(f"Reconstruction depuis le cache impossible : {exc}")
         _render_link("Gérer l'autorisation Strava", auth_url)
+        # Détails récents des appels API
+        with st.expander("Détails appels API Strava (récents)"):
+            try:
+                recent = strava_service.get_rate_log(limit=8)
+            except Exception:
+                recent = []
+            if not recent:
+                st.caption("Aucun appel récent enregistré.")
+            else:
+                for e in recent:
+                    ts = e.get("ts", "")
+                    method = e.get("method", "")
+                    endpoint = e.get("endpoint", "")
+                    status = e.get("status", "")
+                    usage_s = e.get("usage_short")
+                    usage_d = e.get("usage_daily")
+                    extra = (
+                        f" · usage15={usage_s}" if usage_s is not None else ""
+                    ) + (f" · usageJour={usage_d}" if usage_d is not None else "")
+                    st.caption(f"{ts} · {method} {endpoint} → {status}{extra}")
+        # API rate status
+        try:
+            rate = strava_service.get_rate_status()
+        except Exception:
+            rate = {}
+        if rate:
+            short_used = rate.get("short_used")
+            short_limit = rate.get("short_limit")
+            daily_used = rate.get("daily_used")
+            daily_limit = rate.get("daily_limit")
+            wait_sec = int(rate.get("wait_seconds") or 0)
+            if short_used is not None and short_limit is not None:
+                st.caption(f"API Strava (15 min): {short_used}/{short_limit}")
+            if daily_used is not None and daily_limit is not None:
+                st.caption(f"API Strava (jour): {daily_used}/{daily_limit}")
+            if wait_sec > 0:
+                minutes = wait_sec // 60
+                seconds = wait_sec % 60
+                st.warning(f"Fenêtre 15 min saturée. Réessaie dans ~{minutes:02d}:{seconds:02d}.")
         # Last sync summary (if any)
         last_sync = st.session_state.get("strava_last_sync")
         if last_sync:

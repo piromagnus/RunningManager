@@ -111,6 +111,62 @@ if daily_metrics.empty:
     st.info("Aucune donnée journalière disponible pour cet athlète.")
     st.stop()
 
+# --- Date range controls (same behavior as Analytics) ---
+min_date = daily_metrics["date"].min().date()
+max_date = daily_metrics["date"].max().date()
+
+default_end = max_date
+default_start = max(min_date, default_end - pd.Timedelta(days=28).to_pytimedelta())
+
+if "dashboard_range" not in st.session_state:
+    st.session_state["dashboard_range"] = (
+        pd.Timestamp(default_start).to_pydatetime(),
+        pd.Timestamp(default_end).to_pydatetime(),
+    )
+
+col_btn1, col_btn2, col_btn3, col_btn4 = st.columns(4)
+if col_btn1.button("7 jours"):
+    st.session_state["dashboard_range"] = (
+        (pd.Timestamp(max_date) - pd.Timedelta(days=7)).to_pydatetime(),
+        pd.Timestamp(max_date).to_pydatetime(),
+    )
+if col_btn2.button("28 jours"):
+    st.session_state["dashboard_range"] = (
+        (pd.Timestamp(max_date) - pd.Timedelta(days=28)).to_pydatetime(),
+        pd.Timestamp(max_date).to_pydatetime(),
+    )
+if col_btn3.button("3 mois"):
+    st.session_state["dashboard_range"] = (
+        (pd.Timestamp(max_date) - pd.DateOffset(months=3)).to_pydatetime(),
+        pd.Timestamp(max_date).to_pydatetime(),
+    )
+if col_btn4.button("1 an"):
+    st.session_state["dashboard_range"] = (
+        (pd.Timestamp(max_date) - pd.DateOffset(years=1)).to_pydatetime(),
+        pd.Timestamp(max_date).to_pydatetime(),
+    )
+
+start_dt, end_dt = st.slider(
+    "Période",
+    min_value=pd.Timestamp(min_date).to_pydatetime(),
+    max_value=pd.Timestamp(max_date).to_pydatetime(),
+    value=(
+        pd.to_datetime(st.session_state["dashboard_range"][0]).to_pydatetime(),
+        pd.to_datetime(st.session_state["dashboard_range"][1]).to_pydatetime(),
+    ),
+    format="YYYY-MM-DD",
+)
+st.session_state["dashboard_range"] = (start_dt, end_dt)
+
+start_date = pd.Timestamp(start_dt).date()
+end_date = pd.Timestamp(end_dt).date()
+
+# Filter daily metrics to selected date range
+mask = (daily_metrics["date"].dt.normalize() >= pd.Timestamp(start_date)) & (
+    daily_metrics["date"].dt.normalize() <= pd.Timestamp(end_date)
+)
+daily_metrics = daily_metrics[mask]
+
 metric_definitions = {
     "Time": {
         "label": "Temps (s)",

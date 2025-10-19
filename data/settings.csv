@@ -1,2 +1,2 @@
-coachId,units,distanceEqFactor,stravaSyncDays,analyticsActivityTypes
-coach-1,metric,0.01,180,
+coachId,units,distanceEqFactor,stravaSyncDays,analyticsActivityTypes,bikeEqDistance,bikeEqAscent,bikeEqDescent
+coach-1,metric,0.01,360,,0.3,0.02,0.0

@@ -7,7 +7,7 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 import pandas as pd
 
 from persistence.csv_storage import CsvStorage
-from persistence.repositories import WeeklyMetricsRepo, LinksRepo
+from persistence.repositories import WeeklyMetricsRepo, LinksRepo, SettingsRepo
 
 
 def _to_numeric(df: pd.DataFrame, columns: Iterable[str]) -> pd.DataFrame:
@@ -24,6 +24,7 @@ class AnalyticsService:
     def __post_init__(self) -> None:
         self.weekly_repo = WeeklyMetricsRepo(self.storage)
         self.links_repo = LinksRepo(self.storage)
+        self.settings_repo = SettingsRepo(self.storage)
 
     def load_weekly_metrics(self, athlete_id: Optional[str] = None) -> pd.DataFrame:
         df = self.weekly_repo.list(athleteId=athlete_id) if athlete_id else self.weekly_repo.list()
@@ -283,3 +284,160 @@ class AnalyticsService:
         daily["planned_value"] = pd.to_numeric(daily.get("planned_value"), errors="coerce").fillna(0.0)
         daily["actual_value"] = pd.to_numeric(daily.get("actual_value"), errors="coerce").fillna(0.0)
         return daily
+
+    # ------------------------
+    # Weekly range API (recomputed from included activities)
+    def weekly_range(
+        self,
+        *,
+        athlete_id: str,
+        metric_label: str,
+        selected_types: Optional[Sequence[str]],
+        start_date: dt.date,
+        end_date: dt.date,
+    ) -> pd.DataFrame:
+        """Recompute weekly planned vs actual for a given date range.
+
+        - Actuals: from activities_metrics.csv filtered by athlete and selected categories.
+          For DistEq metric, bike (RIDE) activities use bike equivalence factors from settings.
+          Descent contribution defaults to 0 unless a timeseries is available and a non-zero
+          descent factor is configured (best-effort computation).
+        - Planned: from planned_metrics.csv by planned date (not rescheduled), summed per ISO week.
+        - Returns DataFrame with columns: weekStart, isoYear, isoWeek, planned_value, actual_value.
+        """
+        # Build weeks grid
+        grid: List[dt.date] = []
+        cur = (start_date - dt.timedelta(days=start_date.isoweekday() - 1))
+        while cur <= end_date:
+            grid.append(cur)
+            cur = cur + dt.timedelta(days=7)
+        weeks_df = pd.DataFrame({"weekStart": pd.to_datetime(grid)})
+        iso = weeks_df["weekStart"].dt.isocalendar()
+        weeks_df["isoYear"] = iso.year.astype(int)
+        weeks_df["isoWeek"] = iso.week.astype(int)
+
+        # Planned
+        pm_path = self.storage.base_dir / "planned_metrics.csv"
+        if pm_path.exists():
+            pm_df = pd.read_csv(pm_path)
+        else:
+            pm_df = pd.DataFrame()
+        planned_col_map = {
+            "Time": "timeSec",
+            "Distance": "distanceKm",
+            "DistEq": "distanceEqKm",
+            "Trimp": "trimp",
+        }
+        planned_col = planned_col_map.get(metric_label, "distanceKm")
+        if not pm_df.empty:
+            pm_df = pm_df[pm_df.get("athleteId") == athlete_id]
+            pm_df["date"] = pd.to_datetime(pm_df.get("date"), errors="coerce").dt.normalize()
+            pm_df = pm_df[(pm_df["date"] >= pd.Timestamp(start_date)) & (pm_df["date"] <= pd.Timestamp(end_date))]
+            pm_df["isoYear"] = pm_df["date"].dt.isocalendar().year.astype(int)
+            pm_df["isoWeek"] = pm_df["date"].dt.isocalendar().week.astype(int)
+            if planned_col in pm_df.columns:
+                planned_weekly = (
+                    pm_df.groupby(["isoYear", "isoWeek"], as_index=False)[planned_col].sum()
+                )
+            else:
+                planned_weekly = pd.DataFrame(columns=["isoYear", "isoWeek", planned_col])
+        else:
+            planned_weekly = pd.DataFrame(columns=["isoYear", "isoWeek", planned_col])
+
+        # Actuals (with bike DistEq override)
+        acts_path = self.storage.base_dir / "activities_metrics.csv"
+        if acts_path.exists():
+            acts_df = pd.read_csv(acts_path)
+        else:
+            acts_df = pd.DataFrame()
+        actual_col_map = {
+            "Time": "timeSec",
+            "Distance": "distanceKm",
+            "DistEq": "distanceEqKm",
+            "Trimp": "trimp",
+        }
+        actual_col = actual_col_map.get(metric_label, "distanceKm")
+
+        bike_eq = self._load_bike_eq_factors()
+
+        if not acts_df.empty:
+            acts_df = acts_df[acts_df.get("athleteId") == athlete_id].copy()
+            if selected_types:
+                acts_df["category"] = acts_df.get("category", pd.Series(dtype=str)).astype(str).str.upper()
+                acts_df = acts_df[acts_df["category"].isin([s.upper() for s in selected_types])]
+            acts_df["date"] = pd.to_datetime(acts_df.get("startDate"), errors="coerce").dt.normalize()
+            acts_df = acts_df[(acts_df["date"] >= pd.Timestamp(start_date)) & (acts_df["date"] <= pd.Timestamp(end_date))]
+            # If DistEq and category RIDE, override per-activity value
+            if metric_label == "DistEq":
+                acts_df["_value"] = acts_df.apply(
+                    lambda r: self._bike_disteq_value(r, bike_eq)
+                    if str(r.get("category", "")).upper() == "RIDE"
+                    else float(r.get("distanceEqKm") or 0.0),
+                    axis=1,
+                )
+                value_series = acts_df["_value"].astype(float)
+            else:
+                value_series = pd.to_numeric(acts_df.get(actual_col), errors="coerce").fillna(0.0)
+
+            acts_df["isoYear"] = acts_df["date"].dt.isocalendar().year.astype(int)
+            acts_df["isoWeek"] = acts_df["date"].dt.isocalendar().week.astype(int)
+            actual_weekly = (
+                acts_df.groupby(["isoYear", "isoWeek"], as_index=False).agg(actual_value=(value_series.name if metric_label != "DistEq" else "_value", "sum"))
+            )
+            if metric_label != "DistEq":
+                # recompute with correct name if not DistEq path
+                actual_weekly = (
+                    acts_df.groupby(["isoYear", "isoWeek"], as_index=False)[actual_col].sum().rename(columns={actual_col: "actual_value"})
+                )
+        else:
+            actual_weekly = pd.DataFrame(columns=["isoYear", "isoWeek", "actual_value"])
+
+        # Join onto weeks grid
+        out = weeks_df.merge(
+            planned_weekly.rename(columns={planned_col: "planned_value"}),
+            on=["isoYear", "isoWeek"],
+            how="left",
+        ).merge(
+            actual_weekly,
+            on=["isoYear", "isoWeek"],
+            how="left",
+        )
+        out["planned_value"] = pd.to_numeric(out.get("planned_value"), errors="coerce").fillna(0.0)
+        out["actual_value"] = pd.to_numeric(out.get("actual_value"), errors="coerce").fillna(0.0)
+        return out
+
+    def _load_bike_eq_factors(self) -> Tuple[float, float, float]:
+        settings = self.settings_repo.get("coach-1") or {}
+        dist = self._safe_float(settings.get("bikeEqDistance"), 0.3)
+        asc = self._safe_float(settings.get("bikeEqAscent"), 0.02)
+        desc = self._safe_float(settings.get("bikeEqDescent"), 0.0)
+        return dist, asc, desc
+
+    @staticmethod
+    def _safe_float(value: object, default: float) -> float:
+        try:
+            if value in (None, "", "NaN"):
+                return default
+            return float(value)
+        except Exception:
+            return default
+
+    def _bike_disteq_value(self, row: pd.Series, factors: Tuple[float, float, float]) -> float:
+        dist_f, asc_f, desc_f = factors
+        distance_km = self._safe_float(row.get("distanceKm"), 0.0)
+        ascent_m = self._safe_float(row.get("ascentM"), 0.0)
+        descent_m = 0.0
+        if desc_f > 0:
+            # Optional: best-effort compute descent from timeseries if available
+            aid = str(row.get("activityId") or "")
+            if aid:
+                ts_path = self.storage.base_dir / "timeseries" / f"{aid}.csv"
+                if ts_path.exists():
+                    try:
+                        ts = pd.read_csv(ts_path)
+                        if "elevationM" in ts.columns:
+                            diffs = pd.to_numeric(ts["elevationM"], errors="coerce").fillna(method="ffill").diff()
+                            descent_m = float((-diffs[diffs < 0].sum()) if not diffs.empty else 0.0)
+                    except Exception:
+                        descent_m = 0.0
+        return distance_km * dist_f + ascent_m * asc_f - descent_m * desc_f

@@ -211,35 +211,16 @@ if df.empty:
     st.stop()
 
 working_df = df.copy()
-# Build a continuous grid of ISO weeks covering the selected range
-start_week = iso_week_start(start_date).date()
-weeks: list[dt.date] = []
-cur = start_week
-while cur <= end_date:
-    weeks.append(cur)
-    cur = cur + dt.timedelta(days=7)
-
-weeks_df = pd.DataFrame({"weekStartDate": pd.to_datetime(weeks)})
-iso = weeks_df["weekStartDate"].dt.isocalendar()
-weeks_df["isoYear"] = iso.year.astype(int)
-weeks_df["isoWeek"] = iso.week.astype(int)
-
-# Merge weekly metrics onto the grid so all weeks in range appear
-weekly_all = working_df.copy()
-weekly_all["isoYear"] = pd.to_numeric(weekly_all["isoYear"], errors="coerce").fillna(0).astype(int)
-weekly_all["isoWeek"] = pd.to_numeric(weekly_all["isoWeek"], errors="coerce").fillna(0).astype(int)
-grid = weeks_df.merge(weekly_all, on=["isoYear", "isoWeek"], how="left")
-
-# Select planned/actual weekly columns for the chosen metric
-weekly_actual_col = {
-    "Time": "actualTimeSec",
-    "Distance": "actualDistanceKm",
-    "DistEq": "actualDistanceEqKm",
-    "Trimp": "actualTrimp",
-}[metric_label]
-
-planned_raw = pd.to_numeric(grid[metric_cfg["planned_col"]], errors="coerce").fillna(0.0)
-actual_raw = pd.to_numeric(grid[weekly_actual_col], errors="coerce").fillna(0.0)
+weekly_df = analytics.weekly_range(
+    athlete_id=athlete_id,
+    metric_label=metric_label,
+    selected_types=selected_types,
+    start_date=start_date,
+    end_date=end_date,
+)
+weeks_df = weekly_df[["weekStart", "isoYear", "isoWeek"]].rename(columns={"weekStart": "weekStartDate"})
+planned_raw = pd.to_numeric(weekly_df.get("planned_value"), errors="coerce").fillna(0.0)
+actual_raw = pd.to_numeric(weekly_df.get("actual_value"), errors="coerce").fillna(0.0)
 
 metrics_path = storage.base_dir / "activities_metrics.csv"
 if metrics_path.exists():
@@ -337,7 +318,7 @@ weekly_input = pd.DataFrame(
         "athleteId": athlete_id,
         "isoYear": weeks_df["isoYear"].astype(int),
         "isoWeek": weeks_df["isoWeek"].astype(int),
-        "weekLabel": weeks_df["weekStartDate"].dt.strftime("%Y-%m-%d"),
+        "weekLabel": pd.to_datetime(weeks_df["weekStartDate"]).dt.strftime("%Y-%m-%d"),
         "planned_metric": planned_values,
         "actual_metric": actual_values,
     }
