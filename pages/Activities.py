@@ -12,6 +12,7 @@ from utils.config import load_config
 from utils.formatting import fmt_decimal, fmt_km, fmt_m, fmt_speed_kmh, set_locale
 from persistence.csv_storage import CsvStorage
 from persistence.repositories import AthletesRepo, ThresholdsRepo
+from services.lap_metrics_service import LapMetricsService
 from services.linking_service import LinkingService
 from services.timeseries_service import TimeseriesService
 
@@ -46,6 +47,7 @@ ath_repo = AthletesRepo(storage)
 thresholds_repo = ThresholdsRepo(storage)
 link_service = LinkingService(storage)
 ts_service = TimeseriesService(cfg)
+lap_metrics_service = LapMetricsService(storage, cfg)
 _activities_metrics_df = storage.read_csv("activities_metrics.csv")
 if not _activities_metrics_df.empty:
     _activities_metrics_df["activityId"] = _activities_metrics_df["activityId"].astype(str)
@@ -346,6 +348,82 @@ def _render_timeseries(activity_id: str) -> None:
         st.altair_chart(elevation_chart, use_container_width=True)
 
 
+def _format_lap_table(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty:
+        return pd.DataFrame(
+            columns=[
+                "#",
+                "Phase",
+                "Segment",
+                "Distance (km)",
+                "Dist. équiv. (km)",
+                "Durée",
+                "TRIMP",
+                "FC moy",
+                "FC max",
+                "% FC max",
+                "Vitesse (km/h)",
+            ]
+        )
+
+    def _series(name: str) -> pd.Series:
+        if name in df.columns:
+            return df[name]
+        return pd.Series([None] * len(df), index=df.index)
+
+    def _format_numeric(series: pd.Series, digits: int) -> List[str]:
+        return series.map(lambda v: _fmt_optional(v, digits)).tolist()
+
+    lap_numbers = pd.to_numeric(_series("lapIndex"), errors="coerce").fillna(0).astype(int).tolist()
+    labels = _series("label").fillna("Recovery").astype(str).tolist()
+    names = _series("name").fillna("").astype(str).tolist()
+    splits = _series("split").fillna("").astype(str).tolist()
+    segments: List[str] = []
+    for name_value, split_value in zip(names, splits):
+        label = name_value.strip()
+        if not label:
+            label = split_value.strip()
+        segments.append(label)
+
+    distance_km = _format_numeric(_series("distanceKm"), 2)
+    distance_eq_km = _format_numeric(_series("distanceEqKm"), 2)
+    durations = _series("timeSec").map(_format_duration).tolist()
+    trimp = _format_numeric(_series("trimp"), 1)
+    avg_hr = _format_numeric(_series("avgHr"), 0)
+    max_hr = _format_numeric(_series("maxHr"), 0)
+    hr_percent = _format_numeric(_series("hrPercentMax"), 0)
+    speeds = _format_numeric(_series("avgSpeedKmh"), 1)
+
+    return pd.DataFrame(
+        {
+            "#": lap_numbers,
+            "Phase": labels,
+            "Segment": segments,
+            "Distance (km)": distance_km,
+            "Dist. équiv. (km)": distance_eq_km,
+            "Durée": durations,
+            "TRIMP": trimp,
+            "FC moy": avg_hr,
+            "FC max": max_hr,
+            "% FC max": hr_percent,
+            "Vitesse (km/h)": speeds,
+        }
+    )
+
+
+def _render_laps(activity_id: str) -> None:
+    lap_df = lap_metrics_service.load(activity_id)
+    if lap_df is None:
+        st.caption("Aucune donnée d'intervalles disponible.")
+        return
+    if lap_df.empty:
+        st.caption("Aucun intervalle détecté pour cette activité.")
+        return
+    lap_df = lap_df.sort_values("lapIndex").reset_index(drop=True)
+    table = _format_lap_table(lap_df)
+    st.dataframe(table, use_container_width=True, hide_index=True)
+
+
 def _suggestions_table(suggestions: List[Dict[str, object]]) -> None:
     if not suggestions:
         st.caption("Aucune suggestion disponible.")
@@ -508,6 +586,8 @@ with tab_unlinked:
         )
         st.markdown("#### Timeseries")
         _render_timeseries(selected_id)
+        st.markdown("#### Intervalles")
+        _render_laps(selected_id)
 
         suggestions = link_service.suggest_for_activity(athlete_id, selected_row)
         st.markdown("#### Suggestions")
