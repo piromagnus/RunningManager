@@ -17,6 +17,7 @@ import requests
 
 from persistence.csv_storage import CsvStorage
 from persistence.repositories import ActivitiesRepo, TokensRepo
+from services.lap_metrics_service import LapMetricsService
 from services.metrics_service import MetricsComputationService
 from utils.config import Config
 from utils.crypto import decrypt_text, encrypt_text, get_fernet
@@ -54,6 +55,7 @@ class StravaService:
         self.session = self.session or requests.Session()
         self.activities = ActivitiesRepo(self.storage)
         self.tokens = TokensRepo(self.storage)
+        self.lap_metrics = LapMetricsService(self.storage, self.config)
         self._fernet = None
         self._rate_log_path = self.storage.base_dir / "strava_api_log.json"
 
@@ -250,6 +252,7 @@ class StravaService:
                     continue
                 activity_id = str(detail.get("id") or path.stem)
                 has_timeseries = (self.config.timeseries_dir / f"{activity_id}.csv").exists()
+                self.lap_metrics.compute_and_store(athlete_id, detail)
                 row = self._map_activity_row(detail, athlete_id, has_timeseries, path)
                 rows.append(row)
         df = pd.DataFrame(rows, columns=headers if rows else None)

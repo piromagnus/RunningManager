@@ -809,7 +809,18 @@
             "testStrategy": "Unit tests for polyline decoding and path-building fallbacks; UI smoke to verify map visibility across scenarios."
           }
         ]
-      }
+      },
+      {
+      "id": 22,
+      "title": "Derive lap metrics from Strava raw JSON and surface in Activities page",
+      "description": "Parse stored Strava raw JSON to extract laps per activity, compute per-lap metrics mirroring config.py fields plus heart-rate aggregates, classify each lap as Run or Recovery, persist results under data/laps/{activity_id}.csv, and expose the interval breakdown on the Activities linked detail view. Implementation completed: lap metrics are extracted and labeled (Run/Recovery), CSVs are written to data/laps/*.csv, and the Activities linked view renders an intervals table sourced from these files.",
+      "status": "done",
+      "dependencies": [],
+      "priority": "high",
+      "details": "- Implemented lap extraction from stored Strava raw JSON and computation of per-lap metrics aligning with fields configured in config.py, including heart-rate aggregates (avg/max/min where available).\n- Lap classification implemented as Run vs Recovery; labeling persisted alongside per-lap metrics.\n- Output location standardized to data/laps/{activity_id}.csv (one CSV per activity); ensured idempotent writes during sync/update.\n- Activities page linked detail view loads the corresponding data/laps CSV and renders an intervals table with lap order, type (Run/Recovery), and key metrics.\n- Handled missing/partial HR data gracefully (metrics null where unavailable) and ensured unit consistency with existing metrics (distance meters, time seconds, etc.).\n- Wired the pipeline into the Strava sync flow so new/updated activities refresh their corresponding laps CSV and UI view.",
+      "testStrategy": "- Unit tests: lap extraction from representative Strava JSON fixtures; verification of computed per-lap metrics (distance, duration, pace proxies) and HR aggregates when present; classification logic yields expected Run/Recovery labeling on mixed-interval activities.\n- Integration tests: end-to-end pipeline from Strava JSON ingestion to data/laps/{activity_id}.csv creation; re-run on updated JSON verifies deterministic/idempotent outputs; Activities linked detail view renders intervals table populated from CSV.\n- Strava integration tests: validate parsing robustness against variations in Strava lap payloads (missing HR, partial laps) and ensure graceful fallbacks.\n- Regression guard: snapshot comparison of CSV headers and essential columns to prevent schema drift.",
+      "subtasks": []
+    }
     ],
     "metadata": {
       "created": "2025-10-06T19:00:14.797Z",

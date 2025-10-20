@@ -24,6 +24,7 @@ class Config:
     encryption_key: Optional[str]
     timeseries_dir: Path
     raw_strava_dir: Path
+    laps_dir: Path
 
 
 def _ensure_dir(path: Path) -> None:
@@ -44,10 +45,12 @@ def load_config() -> Config:
 
     timeseries_dir = data_dir / "timeseries"
     raw_strava_dir = data_dir / "raw" / "strava"
+    laps_dir = data_dir / "laps"
 
     _ensure_dir(data_dir)
     _ensure_dir(timeseries_dir)
     _ensure_dir(raw_strava_dir)
+    _ensure_dir(laps_dir)
 
     return Config(
         strava_client_id=strava_client_id,
@@ -57,6 +60,7 @@ def load_config() -> Config:
         encryption_key=encryption_key,
         timeseries_dir=timeseries_dir,
         raw_strava_dir=raw_strava_dir,
+        laps_dir=laps_dir,
     )
 
 
@@ -71,5 +75,4 @@ def redact(value: Optional[str], keep_last: int = 4) -> str:
 
 def have_crypto_key(cfg: Config) -> bool:
     return bool(cfg.encryption_key)
-
 

@@ -9,6 +9,7 @@ import pytest
 from cryptography.fernet import Fernet
 
 from persistence.csv_storage import CsvStorage
+from persistence.repositories import AthletesRepo
 from services.strava_service import API_BASE, TOKEN_URL, StravaService
 from utils.config import Config
 from utils.crypto import decrypt_text, get_fernet
@@ -55,8 +56,10 @@ def config(tmp_path: Path) -> Config:
     key = Fernet.generate_key().decode()
     timeseries_dir = tmp_path / "timeseries"
     raw_dir = tmp_path / "raw" / "strava"
+    laps_dir = tmp_path / "laps"
     timeseries_dir.mkdir(parents=True, exist_ok=True)
     raw_dir.mkdir(parents=True, exist_ok=True)
+    laps_dir.mkdir(parents=True, exist_ok=True)
     return Config(
         strava_client_id="1234",
         strava_client_secret="top-secret",
@@ -65,6 +68,7 @@ def config(tmp_path: Path) -> Config:
         encryption_key=key,
         timeseries_dir=timeseries_dir,
         raw_strava_dir=raw_dir,
+        laps_dir=laps_dir,
     )
 
 
@@ -125,6 +129,15 @@ def test_sync_last_14_days_imports_activity(storage: CsvStorage, config: Config)
     now = dt.datetime(2024, 1, 20, tzinfo=dt.timezone.utc)
     expires_at = int((now + dt.timedelta(hours=1)).timestamp())
     activity_id = "987654"
+    AthletesRepo(storage).create(
+        {
+            "athleteId": "athlete-1",
+            "coachId": "coach-1",
+            "name": "Test",
+            "hrRest": 50,
+            "hrMax": 190,
+        }
+    )
     responses = [
         (
             "POST",
@@ -168,6 +181,28 @@ def test_sync_last_14_days_imports_activity(storage: CsvStorage, config: Config)
                     "start_date": "2024-01-19T07:00:00Z",
                     "start_date_local": "2024-01-19T08:00:00+01:00",
                     "map": {"summary_polyline": "abcd"},
+                    "laps": [
+                        {
+                            "lap_index": 1,
+                            "elapsed_time": 320,
+                            "moving_time": 310,
+                            "distance": 1500.0,
+                            "total_elevation_gain": 30.0,
+                            "average_heartrate": 150.0,
+                            "max_heartrate": 165.0,
+                            "average_speed": 4.5,
+                        },
+                        {
+                            "lap_index": 2,
+                            "elapsed_time": 180,
+                            "moving_time": 175,
+                            "distance": 400.0,
+                            "total_elevation_gain": 5.0,
+                            "average_heartrate": 110.0,
+                            "max_heartrate": 125.0,
+                            "average_speed": 2.0,
+                        },
+                    ],
                 },
             ),
         ),
@@ -220,6 +255,12 @@ def test_sync_last_14_days_imports_activity(storage: CsvStorage, config: Config)
     ts_df = pd.read_csv(ts_path)
     assert list(ts_df.columns) == ["timestamp", "hr", "paceKmh", "elevationM", "cadence", "lat", "lon"]
     assert pytest.approx(ts_df.iloc[1]["paceKmh"], rel=1e-3) == 12.6
+
+    laps_path = config.laps_dir / f"{activity_id}.csv"
+    assert laps_path.exists()
+    laps_df = pd.read_csv(laps_path)
+    assert laps_df.shape[0] == 2
+    assert set(laps_df["label"]) == {"Run", "Recovery"}
 
     assert session.empty
 
