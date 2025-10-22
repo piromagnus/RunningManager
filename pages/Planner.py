@@ -10,6 +10,7 @@ from typing import Any, Dict, List
 
 from utils.config import load_config
 from utils.formatting import set_locale, fmt_decimal, fmt_m
+from utils.styling import apply_theme
 from utils.time import iso_week_start, iso_week_end
 from persistence.csv_storage import CsvStorage
 from persistence.repositories import PlannedSessionsRepo, AthletesRepo, ThresholdsRepo
@@ -20,6 +21,7 @@ from services.session_templates_service import SessionTemplatesService
 
 
 st.set_page_config(page_title="Running Manager - Planner", layout="wide")
+apply_theme()
 st.title("Planner")
 
 cfg = load_config()

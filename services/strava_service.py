@@ -196,6 +196,10 @@ class StravaService:
                 raw_path = self._save_raw_activity(detail)
                 streams = self._get_streams(tokens["access_token"], activity_id)
                 has_timeseries = self._save_timeseries(activity_id, detail, streams)
+                try:
+                    self.lap_metrics.compute_and_store(athlete_id, detail)
+                except Exception:
+                    LOGGER.exception("Failed to compute lap metrics for activity %s", activity_id)
                 existing_raw_ids.add(activity_id)
                 imported_from_api.append(activity_id)
             else:
@@ -206,6 +210,14 @@ class StravaService:
                             detail = json.load(fh)
                     except Exception:
                         detail = None
+                    if detail is not None:
+                        try:
+                            self.lap_metrics.compute_and_store(athlete_id, detail)
+                        except Exception:
+                            LOGGER.exception(
+                                "Failed to compute lap metrics from cache for activity %s",
+                                activity_id,
+                            )
 
             # Ensure we have an activities.csv row if it does not exist yet
             if not has_row and detail is not None:

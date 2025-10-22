@@ -11,6 +11,7 @@ import streamlit as st
 from config import METRICS as CONFIG_METRICS
 from utils.config import load_config
 from utils.formatting import fmt_decimal, set_locale
+from utils.styling import apply_theme
 from persistence.csv_storage import CsvStorage
 from persistence.repositories import AthletesRepo, SettingsRepo, LinksRepo
 from services.analytics_service import AnalyticsService
@@ -18,6 +19,7 @@ from utils.time import iso_week_start
 
 
 st.set_page_config(page_title="Running Manager - Analytics", layout="wide")
+apply_theme()
 st.title("Analytics")
 
 cfg = load_config()
@@ -421,6 +423,7 @@ if not daily_df.empty:
             "weekLabel": daily_df["date"].dt.strftime("%Y-%m-%d"),
             "planned_metric": daily_df["planned_metric"],
             "actual_metric": daily_df["actual_metric"],
+            "activity_names": daily_df["activity_names"].fillna(""),
         }
     )
     day_stack_df = analytics.build_planned_vs_actual_segments(
@@ -429,8 +432,17 @@ if not daily_df.empty:
         actual_column="actual_metric",
         metric_key=metric_label.lower(),
     )
+
+    if "activity_names" in shaped.columns and not day_stack_df.empty:
+        activity_names_lookup = shaped[["weekLabel", "activity_names"]].drop_duplicates()
+        day_stack_df = day_stack_df.merge(activity_names_lookup, on="weekLabel", how="left")
+        actual_segments = day_stack_df["segment"].isin(["Réalisé", "Au-dessus du plan"])
+        day_stack_df.loc[~actual_segments, "activity_names"] = ""
+        day_stack_df["activity_names"] = day_stack_df["activity_names"].fillna("")
 else:
-    day_stack_df = pd.DataFrame(columns=["weekLabel", "segment", "value", "planned", "actual", "maxValue", "order"])  # minimal columns
+    day_stack_df = pd.DataFrame(
+        columns=["weekLabel", "segment", "value", "planned", "actual", "maxValue", "order", "activity_names"]
+    )  # minimal columns
 
 if not day_stack_df.empty:
     day_chart = (
@@ -448,6 +460,7 @@ if not day_stack_df.empty:
                 alt.Tooltip("planned:Q", title="Planifié", format=".2f"),
                 alt.Tooltip("actual:Q", title="Réalisé", format=".2f"),
                 alt.Tooltip("maxValue:Q", title="Max", format=".2f"),
+                alt.Tooltip("activity_names:N", title="Activités"),
             ],
         )
         .properties(height=300, width="container")

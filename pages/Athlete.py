@@ -3,6 +3,7 @@ from pathlib import Path
 
 from utils.config import load_config
 from utils.formatting import set_locale
+from utils.styling import apply_theme
 from persistence.csv_storage import CsvStorage
 from persistence.repositories import AthletesRepo, ThresholdsRepo
 from utils.ids import new_id
@@ -11,6 +12,7 @@ DEFAULT_HR_REST = 60.0
 DEFAULT_HR_MAX = 190.0
 
 st.set_page_config(page_title="Running Manager - Athlete")
+apply_theme()
 st.title("Athlete")
 
 cfg = load_config()

@@ -76,6 +76,7 @@ class MetricsComputationService:
         self.daily_repo = DailyMetricsRepo(self.storage)
         self.athletes = AthletesRepo(self.storage)
         self.planner = PlannerService(self.storage)
+        self._bike_eq_cache: Optional[Tuple[float, float, float]] = None
 
     # ------------------------------------------------------------------
     # Public API
@@ -206,9 +207,12 @@ class MetricsComputationService:
             if time_sec <= 0:
                 time_sec = float(_safe_int(row.get("elapsedSec")))
             avg_hr = _safe_float(row.get("avgHr"))
-            distance_eq_km = self.planner.compute_distance_eq_km(distance_km, ascent_m)
             trimp = self._compute_trimp(avg_hr, time_sec, hr_profile)
             sport_type, category = self._resolve_activity_category(row)
+            if category == "RIDE":
+                distance_eq_km = self._compute_bike_distance_eq(activity_id, distance_km, ascent_m)
+            else:
+                distance_eq_km = self.planner.compute_distance_eq_km(distance_km, ascent_m)
 
             rows.append(
                 {
@@ -309,7 +313,10 @@ class MetricsComputationService:
         return profiles
 
     def _resolve_activity_category(self, row: pd.Series) -> Tuple[str, str]:
-        sport_type = str(row.get("sportType") or "").strip()
+        raw_sport = row.get("sportType")
+        sport_type = str(raw_sport).strip() if raw_sport is not None else ""
+        if sport_type.lower() in {"", "nan", "none"}:
+            sport_type = ""
         raw_path = row.get("rawJsonPath")
         if not sport_type and isinstance(raw_path, (str, bytes)):
             raw_path_str = raw_path.decode() if isinstance(raw_path, (bytes, bytearray)) else raw_path
@@ -317,7 +324,13 @@ class MetricsComputationService:
             if raw_path_str:
                 sport_type = self._raw_activity_sport(raw_path_str)
         if not sport_type:
-            sport_type = str(row.get("type") or "")
+            fallback = row.get("type")
+            if fallback is not None:
+                fallback_str = str(fallback).strip()
+                if fallback_str.lower() not in {"", "nan", "none"}:
+                    sport_type = fallback_str
+            if not sport_type:
+                sport_type = ""
         category = self._normalize_category(sport_type)
         return sport_type or "", category
 
@@ -551,6 +564,44 @@ class MetricsComputationService:
             )
             total = self._compute_trimp(target_hr, duration_sec, hr_profile)
         return total
+
+    def _bike_eq_factors(self) -> Tuple[float, float, float]:
+        if self._bike_eq_cache is not None:
+            return self._bike_eq_cache
+        settings = self.settings.get("coach-1") or {}
+        if "bikeEqDistance" in settings:
+            dist = max(float(_safe_float(settings.get("bikeEqDistance"))), 0.0)
+        else:
+            dist = 0.3
+        if "bikeEqAscent" in settings:
+            asc = max(float(_safe_float(settings.get("bikeEqAscent"))), 0.0)
+        else:
+            asc = 0.02
+        if "bikeEqDescent" in settings:
+            desc = max(float(_safe_float(settings.get("bikeEqDescent"))), 0.0)
+        else:
+            desc = 0.0
+        self._bike_eq_cache = (float(dist), float(asc), float(desc))
+        return self._bike_eq_cache
+
+    def _compute_bike_distance_eq(self, activity_id: str, distance_km: float, ascent_m: float) -> float:
+        dist_f, asc_f, desc_f = self._bike_eq_factors()
+        distance = max(float(distance_km or 0.0), 0.0)
+        ascent = max(float(ascent_m or 0.0), 0.0)
+        descent = 0.0
+        if desc_f > 0 and activity_id:
+            ts_path = self.storage.base_dir / "timeseries" / f"{activity_id}.csv"
+            if ts_path.exists():
+                try:
+                    ts = pd.read_csv(ts_path)
+                    if "elevationM" in ts.columns:
+                        elevation = pd.to_numeric(ts["elevationM"], errors="coerce").ffill()
+                        diffs = elevation.diff()
+                        if diffs is not None and not diffs.empty:
+                            descent = float((-diffs[diffs < 0].sum()) if (diffs < 0).any() else 0.0)
+                except Exception:
+                    descent = 0.0
+        return distance * dist_f + ascent * asc_f + descent * desc_f
 
     def _planned_segments(
         self,

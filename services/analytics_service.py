@@ -203,17 +203,39 @@ class AnalyticsService:
             acts_df = pd.read_csv(acts_path)
         else:
             acts_df = pd.DataFrame()
+
+        activity_names_by_date = pd.DataFrame(columns=["date", "activity_names"])
+
         if not acts_df.empty:
-            acts_df = acts_df[acts_df.get("athleteId") == athlete_id]
+            acts_df = acts_df[acts_df.get("athleteId") == athlete_id].copy()
             if selected_types:
                 acts_df["category"] = acts_df.get("category", pd.Series(dtype=str)).astype(str).str.upper()
                 acts_df = acts_df[acts_df["category"].isin([s.upper() for s in selected_types])]
             acts_df["date"] = pd.to_datetime(acts_df.get("startDate"), errors="coerce").dt.normalize()
             mask = (acts_df["date"] >= pd.Timestamp(start_date)) & (acts_df["date"] <= pd.Timestamp(end_date))
             acts_df = acts_df[mask]
+
+            # Attach activity names from activities.csv when available
+            activities_path = self.storage.base_dir / "activities.csv"
+            if not acts_df.empty and activities_path.exists():
+                activities_df = pd.read_csv(activities_path)
+                if {"activityId", "name"}.issubset(activities_df.columns):
+                    name_map = activities_df[["activityId", "name"]].copy()
+                    name_map["activityId"] = name_map["activityId"].astype(str)
+                    acts_df["activityId"] = acts_df.get("activityId", pd.Series(dtype=str)).astype(str)
+                    acts_df = acts_df.merge(name_map, on="activityId", how="left")
+            acts_df["activity_name"] = acts_df.get("name", pd.Series(dtype=str)).fillna("").astype(str)
+
             actual_daily = (
                 acts_df.groupby("date", as_index=False)[value_col].sum().rename(columns={value_col: "actual_value"})
             )
+
+            if "activity_name" in acts_df.columns:
+                activity_names_by_date = (
+                    acts_df.groupby("date", as_index=False)["activity_name"]
+                    .agg(lambda values: "\n".join(dict.fromkeys(str(v).strip() for v in values if str(v).strip())))
+                    .rename(columns={"activity_name": "activity_names"})
+                )
         else:
             actual_daily = pd.DataFrame(columns=["date", "actual_value"])
 
@@ -281,8 +303,13 @@ class AnalyticsService:
         else:
             all_days = pd.DataFrame(columns=["date"])
         daily = all_days.merge(planned_daily, on="date", how="left").merge(actual_daily, on="date", how="left")
+        if not activity_names_by_date.empty:
+            daily = daily.merge(activity_names_by_date, on="date", how="left")
+        else:
+            daily["activity_names"] = ""
         daily["planned_value"] = pd.to_numeric(daily.get("planned_value"), errors="coerce").fillna(0.0)
         daily["actual_value"] = pd.to_numeric(daily.get("actual_value"), errors="coerce").fillna(0.0)
+        daily["activity_names"] = daily.get("activity_names", pd.Series(dtype=str)).fillna("").astype(str)
         return daily
 
     # ------------------------

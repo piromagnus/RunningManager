@@ -25,6 +25,7 @@ class Config:
     timeseries_dir: Path
     raw_strava_dir: Path
     laps_dir: Path
+    mapbox_token: Optional[str]
 
 
 def _ensure_dir(path: Path) -> None:
@@ -42,6 +43,7 @@ def load_config() -> Config:
     strava_client_secret = os.getenv("STRAVA_CLIENT_SECRET")
     strava_redirect_uri = os.getenv("STRAVA_REDIRECT_URI")
     encryption_key = os.getenv("ENCRYPTION_KEY")
+    mapbox_token = os.getenv("MAPBOX_TOKEN") or os.getenv("MAPBOX_API_KEY")
 
     timeseries_dir = data_dir / "timeseries"
     raw_strava_dir = data_dir / "raw" / "strava"
@@ -61,6 +63,7 @@ def load_config() -> Config:
         timeseries_dir=timeseries_dir,
         raw_strava_dir=raw_strava_dir,
         laps_dir=laps_dir,
+        mapbox_token=mapbox_token,
     )
 
 
@@ -75,4 +78,3 @@ def redact(value: Optional[str], keep_last: int = 4) -> str:
 
 def have_crypto_key(cfg: Config) -> bool:
     return bool(cfg.encryption_key)
-

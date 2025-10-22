@@ -41,10 +41,17 @@ class BaseRepo:
         df = self.list()
         if self.id_column not in df.columns:
             return None
-        hit = df[df[self.id_column] == entity_id]
+        working = df.copy()
+        try:
+            working[self.id_column] = working[self.id_column].astype(str)
+        except Exception:
+            working[self.id_column] = working[self.id_column].apply(lambda v: str(v))
+        target = str(entity_id)
+        hit = working[working[self.id_column] == target]
         if hit.empty:
             return None
-        return hit.iloc[0].to_dict()
+        record = hit.iloc[0].to_dict()
+        return record
 
     def create(self, row: Dict[str, Any]) -> str:
         if self.id_column not in row or not row[self.id_column]:
@@ -64,7 +71,11 @@ class BaseRepo:
         df = self.storage.read_csv(self.file_name)
         if df.empty or self.id_column not in df.columns:
             return
-        df = df[df[self.id_column] != entity_id]
+        try:
+            df[self.id_column] = df[self.id_column].astype(str)
+        except Exception:
+            df[self.id_column] = df[self.id_column].apply(lambda v: str(v))
+        df = df[df[self.id_column] != str(entity_id)]
         df = _ensure_headers(df, self.headers)
         self.storage.write_csv(self.file_name, df)
 

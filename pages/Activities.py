@@ -1,24 +1,46 @@
 from __future__ import annotations
 
-import altair as alt
-import pandas as pd
+import datetime as dt
+from typing import Callable, Optional
+
 import streamlit as st
-import json
-import math
-from pathlib import Path
-from typing import Dict, List, Optional
 
 from utils.config import load_config
-from utils.formatting import fmt_decimal, fmt_km, fmt_m, fmt_speed_kmh, set_locale
+from utils.formatting import fmt_decimal, fmt_km, fmt_m, set_locale
+from utils.styling import apply_theme
 from persistence.csv_storage import CsvStorage
-from persistence.repositories import AthletesRepo, ThresholdsRepo
-from services.lap_metrics_service import LapMetricsService
+from persistence.repositories import AthletesRepo
+from services.activity_feed_service import ActivityFeedItem, ActivityFeedService, PlannedSessionCard
 from services.linking_service import LinkingService
-from services.timeseries_service import TimeseriesService
 
 
-st.set_page_config(page_title="Running Manager - Activities", layout="wide")
-st.title("Activités")
+st.set_page_config(page_title="Running Manager - Activités", layout="wide")
+apply_theme()
+st.title("Flux d'activités")
+
+_CARD_STYLES = """
+<style>
+.planned-strip {display:flex; gap:0.75rem; overflow-x:auto; padding-bottom:0.5rem;}
+.planned-card {min-width:220px; border:1px solid rgba(228,204,160,0.35); border-radius:12px; padding:0.75rem; background-color:rgba(41,61,86,0.85);}
+.planned-card h4 {font-size:0.95rem; margin:0 0 0.35rem 0; color:#e4cca0;}
+.planned-card .secondary {color:#60ac84; font-size:0.8rem;}
+.planned-card .metrics {margin-top:0.25rem; font-size:0.85rem; color:#f8fafc;}
+.activity-card {border:1px solid rgba(228,204,160,0.25); border-radius:12px; padding:1rem 1rem 0.75rem 1rem; margin-bottom:0.9rem; background:rgba(41,61,86,0.88);}
+.activity-card.linked {border:2px solid #60ac84; box-shadow:0 0 0 1px rgba(96,172,132,0.35);}
+.activity-card .header {display:flex; justify-content:space-between; align-items:flex-start; gap:0.75rem;}
+.activity-card .header h3 {margin:0; font-size:1.15rem; color:#e4cca0;}
+.activity-card .header .status {font-size:1.4rem;}
+.activity-card .header .status span {display:inline-flex; align-items:center;}
+.activity-card .header .status span[title] {cursor:help;}
+.activity-card .meta {color:#d4acb4; font-size:0.82rem; margin-bottom:0.75rem;}
+.activity-card .metrics {display:flex; flex-wrap:wrap; gap:1.4rem; margin-bottom:0.5rem;}
+.metric {display:flex; flex-direction:column;}
+.metric .label {font-size:0.72rem; text-transform:uppercase; color:#d4acb4; letter-spacing:0.05em;}
+.metric .value {font-size:1.05rem; color:#f8fafc;}
+.activity-tag {display:inline-flex; align-items:center; gap:0.4rem; font-size:0.78rem; color:#f8fafc;}
+.activity-tag span {background:#04813c; color:#f8fafc; padding:0.25rem 0.5rem; border-radius:8px; font-size:0.72rem; text-transform:uppercase; letter-spacing:0.05em;}
+</style>
+"""
 
 
 def _trigger_rerun() -> None:
@@ -28,7 +50,7 @@ def _trigger_rerun() -> None:
 
 
 def _format_duration(seconds: Optional[float]) -> str:
-    if seconds in (None, "") or pd.isna(seconds):
+    if seconds in (None, "", float("nan")):
         return "-"
     total = int(float(seconds))
     hours, remainder = divmod(total, 3600)
@@ -40,664 +62,301 @@ def _format_duration(seconds: Optional[float]) -> str:
     return f"{secs}s"
 
 
-cfg = load_config()
-set_locale("fr_FR")
-storage = CsvStorage(base_dir=Path(cfg.data_dir))
-ath_repo = AthletesRepo(storage)
-thresholds_repo = ThresholdsRepo(storage)
-link_service = LinkingService(storage)
-ts_service = TimeseriesService(cfg)
-lap_metrics_service = LapMetricsService(storage, cfg)
-_activities_metrics_df = storage.read_csv("activities_metrics.csv")
-if not _activities_metrics_df.empty:
-    _activities_metrics_df["activityId"] = _activities_metrics_df["activityId"].astype(str)
-    ACTIVITY_METRICS_MAP = _activities_metrics_df.set_index("activityId").to_dict(orient="index")
-else:
-    ACTIVITY_METRICS_MAP = {}
-
-_planned_metrics_df = storage.read_csv("planned_metrics.csv")
-if not _planned_metrics_df.empty:
-    _planned_metrics_df["plannedSessionId"] = _planned_metrics_df["plannedSessionId"].astype(str)
-    PLANNED_METRICS_MAP = _planned_metrics_df.set_index("plannedSessionId").to_dict(orient="index")
-else:
-    PLANNED_METRICS_MAP = {}
-_RAW_CACHE: Dict[str, Optional[Dict[str, object]]] = {}
-ALLOWED_TYPES = {"run", "hike", "trailrun", "trail running"}
-ALLOWED_TYPES_NORMALIZED = {t.replace(" ", "").lower() for t in ALLOWED_TYPES}
-
-
-ath_df = ath_repo.list()
-if ath_df.empty:
-    st.warning("Aucun athlète disponible.")
-    st.stop()
-
-ath_options = {
-    f"{row.get('name') or 'Sans nom'} ({row.get('athleteId')})": row.get("athleteId")
-    for _, row in ath_df.iterrows()
-}
-ath_label = st.selectbox("Athlète", list(ath_options.keys()))
-athlete_id = ath_options.get(ath_label)
-
-if not athlete_id:
-    st.stop()
-
-athlete_row = ath_df[ath_df["athleteId"] == athlete_id].iloc[0]
-thresholds_df = thresholds_repo.list(athleteId=athlete_id)
-
-activities = storage.read_csv("activities.csv")
-if activities.empty:
-    st.info("Aucune activité enregistrée pour le moment.")
-    st.stop()
-
-activities = activities[activities["athleteId"] == athlete_id]
-if activities.empty:
-    st.info("Aucune activité pour cet athlète.")
-    st.stop()
-
-activities["startTime"] = pd.to_datetime(activities["startTime"], errors="coerce")
-activities = activities.sort_values("startTime", ascending=False).reset_index(drop=True)
-
-
-def _load_raw_detail(row: pd.Series) -> Optional[Dict[str, object]]:
-    path_str = row.get("rawJsonPath")
-    if not path_str:
-        return None
-    path = Path(cfg.data_dir) / Path(str(path_str))
-    key = str(path.resolve())
-    if key in _RAW_CACHE:
-        return _RAW_CACHE[key]
-    if not path.exists():
-        _RAW_CACHE[key] = None
-        return None
+def _format_datetime(ts: Optional[dt.datetime]) -> str:
+    if ts is None:
+        return "-"
+    display = ts
     try:
-        with path.open("r", encoding="utf-8") as fh:
-            data = json.load(fh)
+        display = ts.tz_convert("Europe/Paris")
     except Exception:
-        data = None
-    _RAW_CACHE[key] = data
-    return data
+        pass
+    return display.strftime("%d/%m/%Y · %H:%M")
 
 
-def _activity_type(row: pd.Series) -> Optional[str]:
-    detail = _load_raw_detail(row)
-    if not detail:
-        return None
-    type_value = detail.get("type")
-    if not type_value and "sport_type" in detail:
-        type_value = detail.get("sport_type")
-    if isinstance(type_value, str):
-        return type_value
+def _format_sport_type(raw: str) -> str:
+    if not raw:
+        return "-"
+    normalized = raw.replace("_", " ").replace("-", " ").strip()
+    return normalized.capitalize()
+
+
+def _dialog_factory() -> Optional[Callable]:
+    if hasattr(st, "dialog"):
+        return getattr(st, "dialog")
+    if hasattr(st, "experimental_dialog"):
+        return getattr(st, "experimental_dialog")
     return None
 
 
-def _activity_name(row: pd.Series) -> str:
-    detail = _load_raw_detail(row)
-    if not detail:
-        return ""
-    name = detail.get("name")
-    return str(name) if name else ""
+def main() -> None:
+    cfg = load_config()
+    set_locale("fr_FR")
+    storage = CsvStorage(base_dir=cfg.data_dir)
+    ath_repo = AthletesRepo(storage)
+    feed_service = ActivityFeedService(storage)
+    link_service = LinkingService(storage)
 
+    st.markdown(_CARD_STYLES, unsafe_allow_html=True)
 
-unlinked_df = link_service.unlinked_activities(athlete_id)
-if not unlinked_df.empty:
-    unlinked_df = unlinked_df[
-        unlinked_df.apply(
-            lambda r: (_activity_type(r) or "").lower().replace(" ", "") in ALLOWED_TYPES_NORMALIZED,
-            axis=1,
+    ath_df = ath_repo.list()
+    if ath_df.empty:
+        st.warning("Aucun athlète disponible.")
+        st.stop()
+
+    athlete_options = {
+        f"{row.get('name') or 'Sans nom'} ({row.get('athleteId')})": row.get("athleteId")
+        for _, row in ath_df.iterrows()
+    }
+    selected_label = st.selectbox("Athlète", list(athlete_options.keys()))
+    athlete_id = athlete_options.get(selected_label)
+    if not athlete_id:
+        st.stop()
+
+    sport_types = feed_service.available_sport_types(athlete_id)
+    active_types: Optional[set[str]]
+    if sport_types:
+        label_map = {code: _format_sport_type(code) for code in sport_types}
+        preferred_defaults = {"RUN", "TRAIL_RUN", "TRAILRUN", "HIKE", "RIDE", "BIKE"}
+        default_codes = []
+        for code in sport_types:
+            normalized = code.replace("_", "").upper()
+            if normalized in {p.replace("_", "").upper() for p in preferred_defaults}:
+                default_codes.append(code)
+        if not default_codes:
+            default_codes = sport_types
+        default_labels = [label_map[code] for code in default_codes]
+        selected_labels = st.multiselect(
+            "Types d'activités",
+            options=[label_map[code] for code in sport_types],
+            default=default_labels,
+            help="Filtre les cartes du flux par type d'activité. Vider la sélection pour afficher toutes les activités.",
         )
-    ].reset_index(drop=True)
-linked_df = link_service.linked_activities(athlete_id)
-if not linked_df.empty:
-    linked_df = linked_df[
-        linked_df.apply(
-            lambda r: (_activity_type(r) or "").lower().replace(" ", "") in ALLOWED_TYPES_NORMALIZED,
-            axis=1,
-        )
-    ].reset_index(drop=True)
-
-# Optional deep-link selection via query param ?activityId=...
-params = st.experimental_get_query_params()
-target_activity_id = None
-if "activityId" in params and params["activityId"]:
-    target_activity_id = str(params["activityId"][0])
-
-default_unlinked_index = 0
-default_linked_index = 0
-if target_activity_id:
-    try:
-        unlinked_ids = unlinked_df["activityId"].astype(str).tolist() if not unlinked_df.empty else []
-        if target_activity_id in unlinked_ids:
-            default_unlinked_index = max(0, unlinked_ids.index(target_activity_id))
-    except Exception:
-        default_unlinked_index = 0
-    try:
-        linked_ids = linked_df["activityId"].astype(str).tolist() if not linked_df.empty else []
-        if target_activity_id in linked_ids:
-            default_linked_index = max(0, linked_ids.index(target_activity_id))
-    except Exception:
-        default_linked_index = 0
-
-
-def _activity_label(row: pd.Series) -> str:
-    date = row.get("startTime")
-    if pd.notna(date):
-        date = pd.to_datetime(date).strftime("%Y-%m-%d")
-    else:
-        date = "???"
-    dist = row.get("distanceKm")
-    distance_label = fmt_km(float(dist)) if dist not in (None, "") and not pd.isna(dist) else ""
-    title = _activity_name(row) or row.get("source") or "activité"
-    return f"{date} • {distance_label} • {title}"
-
-
-def _planned_label(row: pd.Series) -> str:
-    date = row.get("date") or row.get("plannedDate")
-    if date:
-        try:
-            date = pd.to_datetime(date).strftime("%Y-%m-%d")
-        except Exception:
-            date = str(date)
-    else:
-        date = "???"
-    typ = row.get("type") or row.get("plannedType") or ""
-    dist = row.get("plannedDistanceKm")
-    dist_lbl = fmt_decimal(float(dist), 1) + " km" if dist not in (None, "") and not pd.isna(dist) else ""
-    dur = row.get("plannedDurationSec")
-    dur_lbl = _format_duration(dur) if dur not in (None, "") and not pd.isna(dur) else ""
-    parts = [date, typ, dist_lbl, dur_lbl]
-    return " • ".join([p for p in parts if p])
-
-
-def _render_summary(activity: pd.Series) -> None:
-    col1, col2, col3, col4, col5 = st.columns(5)
-    with col1:
-        st.metric("Distance", fmt_km(_coerce_float(activity.get("distanceKm"))))
-    with col2:
-        st.metric("Temps en mouvement", _format_duration(activity.get("movingSec")))
-    with col3:
-        st.metric("D+", fmt_m(_coerce_float(activity.get("ascentM"))))
-    with col4:
-        st.metric("FC moyenne", fmt_decimal(_coerce_float(activity.get("avgHr")), 0))
-    with col5:
-        st.metric("TRIMP", fmt_decimal(_coerce_float(activity.get("activityTrimp")), 1))
-    name = _activity_name(activity)
-    if name:
-        st.caption(f"Nom Strava : {name}")
-
-
-def _coerce_float(value: object) -> Optional[float]:
-    try:
-        if value in (None, "", "NaN"):
-            return None
-        return float(value)
-    except Exception:
-        return None
-
-
-def _coerce_int(value: object) -> Optional[int]:
-    try:
-        if value in (None, "", "NaN"):
-            return None
-        return int(float(value))
-    except Exception:
-        return None
-
-
-ATHLETE_HR_REST = _coerce_float(athlete_row.get("hrRest"))
-ATHLETE_HR_MAX = _coerce_float(athlete_row.get("hrMax"))
-
-
-def _fmt_optional(value: Optional[float], digits: int = 1) -> str:
-    if value is None:
-        return "-"
-    return fmt_decimal(float(value), digits)
-
-
-def _format_duration_delta(actual_sec: Optional[float], planned_sec: Optional[float]) -> str:
-    if actual_sec is None or planned_sec is None:
-        return "-"
-    delta = float(actual_sec) - float(planned_sec)
-    sign = "+" if delta >= 0 else "-"
-    formatted = _format_duration(abs(delta))
-    return f"{sign}{formatted}"
-
-
-def _compute_trimp(duration_sec: Optional[float], avg_hr: Optional[float]) -> Optional[float]:
-    if (
-        duration_sec in (None, "", "NaN")
-        or avg_hr in (None, "", "NaN")
-        or ATHLETE_HR_REST in (None, "", "NaN")
-        or ATHLETE_HR_MAX in (None, "", "NaN")
-    ):
-        return None
-    duration_sec = float(duration_sec)
-    avg_hr = float(avg_hr)
-    hr_rest = float(ATHLETE_HR_REST)
-    hr_max = float(ATHLETE_HR_MAX)
-    if hr_max <= hr_rest or duration_sec <= 0 or avg_hr <= hr_rest:
-        return None
-    hr_reserve = (avg_hr - hr_rest) / (hr_max - hr_rest)
-    if hr_reserve <= 0:
-        return None
-    duration_hours = duration_sec / 3600.0
-    factor = 0.64 * math.exp(1.92 * hr_reserve)
-    return duration_hours * hr_reserve * factor
-
-
-def _find_threshold(label: Optional[str]) -> Optional[pd.Series]:
-    if thresholds_df.empty:
-        return None
-    target = label or "Fundamental"
-    hit = thresholds_df[thresholds_df["name"] == target]
-    if hit.empty and target != "Fundamental":
-        hit = thresholds_df[thresholds_df["name"] == "Fundamental"]
-    if hit.empty:
-        return None
-    return hit.iloc[0]
-
-
-def _threshold_mid_hr(threshold_row: pd.Series) -> Optional[float]:
-    if threshold_row is None:
-        return None
-    hr_min = _coerce_float(threshold_row.get("hrMin"))
-    hr_max = _coerce_float(threshold_row.get("hrMax"))
-    if hr_min is None or hr_max is None or hr_max <= 0:
-        return None
-    if hr_min <= 0 and hr_max > 0:
-        return hr_max
-    return (hr_min + hr_max) / 2.0
-
-
-def _threshold_avg_pace(threshold_row: pd.Series) -> Optional[float]:
-    if threshold_row is None:
-        return None
-    pace_min = _coerce_float(threshold_row.get("paceFlatKmhMin"))
-    pace_max = _coerce_float(threshold_row.get("paceFlatKmhMax"))
-    if pace_min and pace_max:
-        return (pace_min + pace_max) / 2.0
-    if pace_min:
-        return pace_min
-    if pace_max:
-        return pace_max
-    return None
-def _render_timeseries(activity_id: str) -> None:
-    ts_df = ts_service.load(activity_id)
-    if ts_df is None:
-        st.info("Pas de données timeseries pour cette activité.")
-        return
-    if "timestamp" not in ts_df.columns:
-        st.info("Timeseries incomplète.")
-        return
-    ts_df = ts_df.copy()
-    ts_df["timestamp"] = pd.to_datetime(ts_df["timestamp"], errors="coerce")
-    ts_df = ts_df.dropna(subset=["timestamp"])
-    if ts_df.empty:
-        st.info("Timeseries incomplète.")
-        return
-    ts_df = ts_df.sort_values("timestamp")
-    start = ts_df["timestamp"].iloc[0]
-    ts_df["minutes"] = (ts_df["timestamp"] - start).dt.total_seconds() / 60.0
-
-    if "hr" in ts_df.columns and ts_df["hr"].notna().any():
-        hr_chart = (
-            alt.Chart(ts_df)
-            .mark_line(color="#ef4444")
-            .encode(x=alt.X("minutes:Q", title="Temps (min)"), y=alt.Y("hr:Q", title="FC (bpm)"))
-            .properties(height=180)
-        )
-        st.altair_chart(hr_chart, use_container_width=True)
-
-    if "paceKmh" in ts_df.columns and ts_df["paceKmh"].notna().any():
-        pace_chart = (
-            alt.Chart(ts_df)
-            .mark_line(color="#3b82f6")
-            .encode(
-                x=alt.X("minutes:Q", title="Temps (min)"),
-                y=alt.Y("paceKmh:Q", title="Vitesse (km/h)"),
-            )
-            .properties(height=180)
-        )
-        st.altair_chart(pace_chart, use_container_width=True)
-
-    if "elevationM" in ts_df.columns and ts_df["elevationM"].notna().any():
-        elevation_chart = (
-            alt.Chart(ts_df)
-            .mark_area(color="#10b981", opacity=0.4)
-            .encode(
-                x=alt.X("minutes:Q", title="Temps (min)"),
-                y=alt.Y("elevationM:Q", title="Altitude (m)"),
-            )
-            .properties(height=160)
-        )
-        st.altair_chart(elevation_chart, use_container_width=True)
-
-
-def _format_lap_table(df: pd.DataFrame) -> pd.DataFrame:
-    if df.empty:
-        return pd.DataFrame(
-            columns=[
-                "#",
-                "Phase",
-                "Segment",
-                "Distance (km)",
-                "Dist. équiv. (km)",
-                "Durée",
-                "TRIMP",
-                "FC moy",
-                "FC max",
-                "% FC max",
-                "Vitesse (km/h)",
-            ]
-        )
-
-    def _series(name: str) -> pd.Series:
-        if name in df.columns:
-            return df[name]
-        return pd.Series([None] * len(df), index=df.index)
-
-    def _format_numeric(series: pd.Series, digits: int) -> List[str]:
-        return series.map(lambda v: _fmt_optional(v, digits)).tolist()
-
-    lap_numbers = pd.to_numeric(_series("lapIndex"), errors="coerce").fillna(0).astype(int).tolist()
-    labels = _series("label").fillna("Recovery").astype(str).tolist()
-    names = _series("name").fillna("").astype(str).tolist()
-    splits = _series("split").fillna("").astype(str).tolist()
-    segments: List[str] = []
-    for name_value, split_value in zip(names, splits):
-        label = name_value.strip()
-        if not label:
-            label = split_value.strip()
-        segments.append(label)
-
-    distance_km = _format_numeric(_series("distanceKm"), 2)
-    distance_eq_km = _format_numeric(_series("distanceEqKm"), 2)
-    durations = _series("timeSec").map(_format_duration).tolist()
-    trimp = _format_numeric(_series("trimp"), 1)
-    avg_hr = _format_numeric(_series("avgHr"), 0)
-    max_hr = _format_numeric(_series("maxHr"), 0)
-    hr_percent = _format_numeric(_series("hrPercentMax"), 0)
-    speeds = _format_numeric(_series("avgSpeedKmh"), 1)
-
-    return pd.DataFrame(
-        {
-            "#": lap_numbers,
-            "Phase": labels,
-            "Segment": segments,
-            "Distance (km)": distance_km,
-            "Dist. équiv. (km)": distance_eq_km,
-            "Durée": durations,
-            "TRIMP": trimp,
-            "FC moy": avg_hr,
-            "FC max": max_hr,
-            "% FC max": hr_percent,
-            "Vitesse (km/h)": speeds,
-        }
-    )
-
-
-def _render_laps(activity_id: str) -> None:
-    lap_df = lap_metrics_service.load(activity_id)
-    if lap_df is None:
-        st.caption("Aucune donnée d'intervalles disponible.")
-        return
-    if lap_df.empty:
-        st.caption("Aucun intervalle détecté pour cette activité.")
-        return
-    lap_df = lap_df.sort_values("lapIndex").reset_index(drop=True)
-    table = _format_lap_table(lap_df)
-    st.dataframe(table, use_container_width=True, hide_index=True)
-
-
-def _suggestions_table(suggestions: List[Dict[str, object]]) -> None:
-    if not suggestions:
-        st.caption("Aucune suggestion disponible.")
-        return
-    df = pd.DataFrame(suggestions)
-    df["score"] = df["score"].map(lambda v: fmt_decimal(_coerce_float(v), 2))
-    if "plannedDistanceKm" in df.columns:
-        df["plannedDistanceKm"] = df["plannedDistanceKm"].map(
-            lambda v: fmt_decimal(_coerce_float(v), 1) if _coerce_float(v) is not None else ""
-        )
-    if "plannedDurationSec" in df.columns:
-        df["plannedDurationSec"] = df["plannedDurationSec"].map(
-            lambda v: _format_duration(_coerce_int(v))
-        )
-    st.dataframe(
-        df.rename(
-            columns={
-                "plannedSessionId": "Session",
-                "date": "Date",
-                "type": "Type",
-                "plannedDistanceKm": "Distance planifiée (km)",
-                "plannedDurationSec": "Durée planifiée",
-                "score": "Score",
-            }
-        ),
-        use_container_width=True,
-        hide_index=True,
-    )
-
-
-def _render_comparison(selected_row: pd.Series) -> None:
-    planned_id = str(selected_row.get("plannedSessionId") or "")
-    planned_row = link_service.sessions.get(planned_id) if planned_id else None
-
-    planned_distance = _coerce_float(
-        selected_row.get("plannedDistanceKm")
-        if selected_row.get("plannedDistanceKm") not in (None, "")
-        else (planned_row or {}).get("plannedDistanceKm")
-    )
-    actual_distance = _coerce_float(selected_row.get("distanceKm"))
-
-    planned_distance_eq = _coerce_float(
-        selected_row.get("plannedMetricDistanceEqKm")
-        if selected_row.get("plannedMetricDistanceEqKm") not in (None, "")
-        else (planned_row or {}).get("plannedDistanceEqKm")
-    )
-    actual_distance_eq = _coerce_float(selected_row.get("activityDistanceEqKm"))
-
-    planned_duration = _coerce_float(
-        selected_row.get("plannedDurationSec")
-        if selected_row.get("plannedDurationSec") not in (None, "")
-        else (planned_row or {}).get("plannedDurationSec")
-    )
-    actual_duration = _coerce_float(selected_row.get("movingSec") or selected_row.get("elapsedSec"))
-
-    target_label = (
-        selected_row.get("targetLabel")
-        if selected_row.get("targetLabel") not in (None, "")
-        else (planned_row or {}).get("targetLabel")
-    )
-    threshold_row = _find_threshold(target_label)
-    if planned_duration is None and planned_distance is not None:
-        pace = _threshold_avg_pace(threshold_row)
-        if pace and pace > 0:
-            planned_duration = (planned_distance / pace) * 3600.0
-
-    planned_hr = _threshold_mid_hr(threshold_row)
-    planned_trimp = _coerce_float(selected_row.get("plannedMetricTrimp"))
-    if planned_trimp is None:
-        planned_trimp = _compute_trimp(planned_duration, planned_hr)
-    actual_trimp = _coerce_float(selected_row.get("activityTrimp"))
-    if actual_trimp is None:
-        actual_trimp = _compute_trimp(actual_duration, _coerce_float(selected_row.get("avgHr")))
-
-    rows = [
-        {
-            "Métrique": "Distance (km)",
-            "Planifié": _fmt_optional(planned_distance, 1),
-            "Réalisé": _fmt_optional(actual_distance, 1),
-            "Écart": _fmt_optional(
-                (actual_distance - planned_distance) if (actual_distance is not None and planned_distance is not None) else None,
-                1,
-            ),
-        },
-        {
-            "Métrique": "Distance équivalente (km)",
-            "Planifié": _fmt_optional(planned_distance_eq, 1),
-            "Réalisé": _fmt_optional(actual_distance_eq, 1),
-            "Écart": _fmt_optional(
-                (actual_distance_eq - planned_distance_eq)
-                if (actual_distance_eq is not None and planned_distance_eq is not None)
-                else None,
-                1,
-            ),
-        },
-        {
-            "Métrique": "Durée",
-            "Planifié": _format_duration(planned_duration) if planned_duration is not None else "-",
-            "Réalisé": _format_duration(actual_duration) if actual_duration is not None else "-",
-            "Écart": _format_duration_delta(actual_duration, planned_duration),
-        },
-        {
-            "Métrique": "TRIMP",
-            "Planifié": _fmt_optional(planned_trimp, 1),
-            "Réalisé": _fmt_optional(actual_trimp, 1),
-            "Écart": _fmt_optional(
-                (actual_trimp - planned_trimp) if (actual_trimp is not None and planned_trimp is not None) else None,
-                1,
-            ),
-        },
-    ]
-    st.table(pd.DataFrame(rows))
-
-
-tab_unlinked, tab_linked = st.tabs(["Activités non liées", "Activités liées"])
-
-
-with tab_unlinked:
-    st.subheader("Activités non liées")
-    if unlinked_df.empty:
-        st.info("Toutes les activités disponibles sont déjà liées.")
-    else:
-        activity_ids = unlinked_df["activityId"].astype(str).tolist()
-        labels = {aid: _activity_label(unlinked_df.iloc[idx]) for idx, aid in enumerate(activity_ids)}
-        selected_id = st.selectbox(
-            "Sélectionnez une activité",
-            activity_ids,
-            index=default_unlinked_index if target_activity_id in activity_ids else 0,
-            format_func=lambda aid: labels[aid],
-        )
-        selected_row = unlinked_df[unlinked_df["activityId"].astype(str) == selected_id].iloc[0]
-        _render_summary(selected_row)
-        st.markdown("#### Détails")
-        start_raw = selected_row.get("startTime")
-        start_label = ""
-        if pd.notna(start_raw):
-            try:
-                start_label = pd.to_datetime(start_raw).strftime("%Y-%m-%d %H:%M")
-            except Exception:
-                start_label = str(start_raw)
-        moving_total = _format_duration(selected_row.get("elapsedSec"))
-        moving_sec = _coerce_float(selected_row.get("movingSec"))
-        distance_km = _coerce_float(selected_row.get("distanceKm"))
-        avg_speed = None
-        if moving_sec and moving_sec > 0 and distance_km:
-            avg_speed = distance_km / (moving_sec / 3600.0)
-        st.write(
-            {
-                "Date de départ": start_label,
-                "Source": selected_row.get("source"),
-                "Type": _activity_type(selected_row) or "-",
-                "Nom Strava": _activity_name(selected_row) or "-",
-                "Durée totale": moving_total,
-                "Vitesse moyenne": fmt_speed_kmh(avg_speed),
-                "TRIMP": _fmt_optional(_coerce_float(selected_row.get("activityTrimp")), 1),
-            }
-        )
-        st.markdown("#### Timeseries")
-        _render_timeseries(selected_id)
-        st.markdown("#### Intervalles")
-        _render_laps(selected_id)
-
-        suggestions = link_service.suggest_for_activity(athlete_id, selected_row)
-        st.markdown("#### Suggestions")
-        _suggestions_table(suggestions)
-
-        planned_df = link_service.available_planned_sessions(athlete_id)
-        if planned_df.empty:
-            st.info("Aucune séance planifiée disponible pour établir un lien.")
+        if selected_labels:
+            active_types = {code for code, label in label_map.items() if label in selected_labels}
         else:
-            planned_ids = planned_df["plannedSessionId"].astype(str).tolist()
-            planned_labels = {
-                sid: _planned_label(planned_df.iloc[idx]) for idx, sid in enumerate(planned_ids)
-            }
-            default_selection = None
-            if suggestions:
-                first = suggestions[0]["plannedSessionId"]
-                if first in planned_labels:
-                    default_selection = first
-            default_index = planned_ids.index(default_selection) if default_selection in planned_ids else 0
-
-            with st.form(f"link-form-{selected_id}"):
-                chosen_session = st.selectbox(
-                    "Séance planifiée",
-                    planned_ids,
-                    index=default_index,
-                    format_func=lambda sid: planned_labels[sid],
-                )
-                rpe_value = st.slider("RPE (1-10)", min_value=1, max_value=10, value=5)
-                comment_value = st.text_input("Commentaire (optionnel)")
-                submitted = st.form_submit_button("Lier l'activité")
-                if submitted:
-                    try:
-                        link_service.create_link(
-                            athlete_id,
-                            selected_id,
-                            chosen_session,
-                            rpe=rpe_value,
-                            comments=comment_value,
-                        )
-                        st.success("Activité liée avec succès.")
-                        _trigger_rerun()
-                    except ValueError as exc:
-                        st.error(str(exc))
-
-
-with tab_linked:
-    st.subheader("Activités liées")
-    if linked_df.empty:
-        st.info("Aucune activité liée pour le moment.")
+            active_types = set(sport_types)
     else:
-        activity_ids = linked_df["activityId"].astype(str).tolist()
-        labels = {aid: _activity_label(linked_df.iloc[idx]) for idx, aid in enumerate(activity_ids)}
-        selected_id = st.selectbox(
-            "Activité liée",
-            activity_ids,
-            index=default_linked_index if target_activity_id in activity_ids else 0,
-            format_func=lambda aid: labels[aid],
-        )
-        selected_row = linked_df[linked_df["activityId"].astype(str) == selected_id].iloc[0]
-        _render_summary(selected_row)
-        st.markdown("#### Détails")
-        planned_info = {
-            "Session planifiée": _planned_label(selected_row),
-            "Type activité": _activity_type(selected_row) or "-",
-            "Score de correspondance": fmt_decimal(_coerce_float(selected_row.get("matchScore")), 2),
-            "TRIMP planifié": _fmt_optional(_coerce_float(selected_row.get("plannedMetricTrimp")), 1),
-            "TRIMP réalisé": _fmt_optional(_coerce_float(selected_row.get("activityTrimp")), 1),
-        }
-        st.write(planned_info)
+        active_types = None
 
-        st.markdown("#### Comparaison plan vs réalisé")
-        _render_comparison(selected_row)
+    DEFAULT_BATCH = 10
+    state_key = "activities_feed_limit"
+    if state_key not in st.session_state:
+        st.session_state[state_key] = DEFAULT_BATCH
 
-        st.markdown("#### Timeseries")
-        _render_timeseries(selected_id)
+    planned_cards = feed_service.get_unlinked_planned_sessions(
+        athlete_id,
+        reference_date=dt.date.today(),
+        lookback_days=7,
+        lookahead_days=21,
+        max_items=8,
+    )
 
-        current_rpe = _coerce_int(selected_row.get("rpe")) or 5
-        current_comment = selected_row.get("comments") or ""
-        link_id = str(selected_row.get("linkId"))
-        with st.form(f"edit-link-{link_id}"):
-            new_rpe = st.slider("RPE (1-10)", min_value=1, max_value=10, value=int(current_rpe))
-            new_comment = st.text_input("Commentaire", value=current_comment)
-            submitted = st.form_submit_button("Mettre à jour la liaison")
-            if submitted:
-                link_service.update_link(link_id, rpe=new_rpe, comments=new_comment)
-                st.success("Liaison mise à jour.")
-                _trigger_rerun()
+    if planned_cards:
+        st.subheader("Séances planifiées non liées")
+        _render_planned_strip(planned_cards, athlete_id, link_service)
+    else:
+        st.caption("Toutes les séances planifiées récentes sont déjà liées à une activité.")
 
-        if st.button("Supprimer la liaison", key=f"remove-{link_id}", type="secondary"):
-            link_service.delete_link(link_id)
-            st.success("Liaison supprimée.")
+    batch_limit = st.session_state[state_key]
+    raw_feed = feed_service.get_feed(
+        athlete_id,
+        limit=batch_limit * 3,
+        offset=0,
+    )
+    if active_types:
+        filtered = [
+            item for item in raw_feed if (item.sport_type or "").strip().upper() in active_types
+        ]
+    else:
+        filtered = raw_feed
+    feed_items = filtered[:batch_limit]
+
+    if not feed_items:
+        st.info("Aucune activité enregistrée pour cet athlète.")
+        st.stop()
+
+    for item in feed_items:
+        _render_activity_card(item)
+
+    if len(filtered) > batch_limit:
+        if st.button("Charger plus", type="secondary"):
+            st.session_state[state_key] += DEFAULT_BATCH
             _trigger_rerun()
+
+
+def _render_planned_strip(
+    cards: list[PlannedSessionCard],
+    athlete_id: str,
+    link_service: LinkingService,
+) -> None:
+    max_cols = min(len(cards), 4) or 1
+    for idx in range(0, len(cards), max_cols):
+        chunk = cards[idx : idx + max_cols]
+        columns = st.columns(len(chunk))
+        for card, col in zip(chunk, columns):
+            with col:
+                metrics_parts = []
+                if card.planned_distance_km is not None:
+                    metrics_parts.append(fmt_km(card.planned_distance_km))
+                if card.planned_duration_sec is not None:
+                    metrics_parts.append(_format_duration(card.planned_duration_sec))
+                if card.planned_ascent_m is not None:
+                    metrics_parts.append(fmt_m(card.planned_ascent_m))
+                metrics = " • ".join(metrics_parts) if metrics_parts else "—"
+                st.markdown(
+                    (
+                        '<div class="planned-card">'
+                        f"<h4>{card.date.strftime('%d/%m/%Y')} · {card.session_type or ''}</h4>"
+                        f'<div class="secondary">{card.target_label or "Sans cible"}</div>'
+                        f'<div class="metrics">{metrics}</div>'
+                        "</div>"
+                    ),
+                    unsafe_allow_html=True,
+                )
+                if st.button(
+                    "Associer",
+                    key=f"link-{card.planned_session_id}",
+                    use_container_width=True,
+                ):
+                    _open_link_dialog(card, athlete_id, link_service)
+
+
+def _open_link_dialog(
+    card: PlannedSessionCard,
+    athlete_id: str,
+    link_service: LinkingService,
+) -> None:
+    factory = _dialog_factory()
+    if not factory:
+        st.warning("Version de Streamlit sans prise en charge des dialogues.")
+        return
+
+    title = f"Associer la séance du {card.date.strftime('%d/%m/%Y')}"
+
+    @factory(title)
+    def _dialog() -> None:
+        candidates = link_service.suggest_for_planned_session(
+            athlete_id, card.planned_session_id, window_days=14
+        )
+        if not candidates:
+            st.info("Aucune activité candidate dans la fenêtre ±14 jours.")
+            return
+
+        options = {
+            _format_candidate_label(candidate): candidate.activity_id
+            for candidate in candidates
+        }
+        selected = st.radio(
+            "Activités correspondantes",
+            list(options.keys()),
+            index=0,
+        )
+        selected_id = options[selected]
+
+        if st.button("Associer cette activité", type="primary"):
+            try:
+                link_service.create_link(
+                    athlete_id,
+                    selected_id,
+                    card.planned_session_id,
+                    window_days=14,
+                )
+                st.success("Activité liée avec succès.")
+                _trigger_rerun()
+            except Exception as exc:
+                st.error(f"Impossible de créer le lien : {exc}")
+
+    _dialog()
+
+
+def _format_candidate_label(candidate) -> str:
+    start = candidate.start_time
+    label_date = "-"
+    if start is not None:
+        try:
+            label_date = start.tz_convert("Europe/Paris").strftime("%d/%m/%Y %H:%M")
+        except Exception:
+            label_date = start.strftime("%d/%m/%Y %H:%M")
+    distance = fmt_km(candidate.distance_km) if candidate.distance_km is not None else "-"
+    duration = _format_duration(candidate.moving_sec)
+    score = (
+        f"{fmt_decimal(candidate.match_score * 100, 1)}% de correspondance"
+        if candidate.match_score is not None
+        else "Score inconnu"
+    )
+    return f"{label_date} · {distance} · {duration} · {score}"
+
+
+def _render_activity_card(item: ActivityFeedItem) -> None:
+    status_icon = ""
+    if item.linked:
+        tick = "✅"
+        tooltip_text = (
+            f"Score de lien : {fmt_decimal(item.match_score, 2)}"
+            if item.match_score is not None
+            else "Activité liée"
+        )
+        status_icon = f'<span title="{tooltip_text}">{tick}</span>'
+
+    header_html = (
+        '<div class="header">'
+        f"<h3>{item.name}</h3>"
+        f'<div class="status">{status_icon}</div>'
+        "</div>"
+    )
+
+    type_label = _format_sport_type(item.sport_type)
+    meta_html = (
+        '<div class="meta">'
+        f"{_format_datetime(item.start_time)}"
+        f'<div class="activity-tag"><span>{type_label}</span></div>'
+        "</div>"
+    )
+
+    metrics = [
+        ("Distance", fmt_km(item.distance_km) if item.distance_km is not None else "-"),
+        (
+            "Durée",
+            _format_duration(item.moving_sec)
+            if item.moving_sec is not None
+            else _format_duration(item.elapsed_sec),
+        ),
+        ("D+", fmt_m(item.ascent_m) if item.ascent_m is not None else "-"),
+        ("FC moy", fmt_decimal(item.avg_hr, 0) if item.avg_hr is not None else "-"),
+        ("TRIMP", fmt_decimal(item.trimp, 1) if item.trimp is not None else "-"),
+        (
+            "Dist. équiv.",
+            fmt_decimal(item.distance_eq_km, 1) if item.distance_eq_km is not None else "-",
+        ),
+    ]
+    metrics_html = '<div class="metrics">'
+    for label, value in metrics:
+        metrics_html += (
+            '<div class="metric">'
+            f'<span class="label">{label}</span>'
+            f'<span class="value">{value}</span>'
+            "</div>"
+        )
+    metrics_html += "</div>"
+
+    container_class = "activity-card linked" if item.linked else "activity-card"
+
+    st.markdown(
+        f'<div class="{container_class}">{header_html}{meta_html}{metrics_html}</div>',
+        unsafe_allow_html=True,
+    )
+    if st.button(
+        "Ouvrir l'activité",
+        key=f"open-{item.activity_id}",
+        type="secondary",
+        use_container_width=True,
+    ):
+        st.session_state["activity_view_id"] = item.activity_id
+        st.session_state["activity_view_athlete"] = item.athlete_id
+        qp = st.query_params
+        qp["activityId"] = item.activity_id
+        qp["athleteId"] = item.athlete_id
+        st.switch_page("pages/Activity.py")
+
+
+main()

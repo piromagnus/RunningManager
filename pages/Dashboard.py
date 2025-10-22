@@ -9,12 +9,16 @@ import streamlit as st
 from config import METRICS as CONFIG_METRICS
 from utils.config import load_config
 from utils.formatting import set_locale
+from utils.styling import apply_theme
 from persistence.csv_storage import CsvStorage
 from persistence.repositories import AthletesRepo
 
 
 st.set_page_config(page_title="Running Manager - Dashboard", layout="wide")
+apply_theme()
 st.title("Dashboard")
+
+DEFAULT_CHART_WIDTH = 900
 
 cfg = load_config()
 set_locale("fr_FR")
@@ -99,7 +103,7 @@ def _training_load_chart(df: pd.DataFrame, metric_key: str, metric_cfg: dict) ->
             alt.Tooltip(planned_col, title="Charge chronique", format=".2f"),
             alt.Tooltip(acute_col, title="Charge aiguë", format=".2f"),
         ]
-    ).properties(height=340, width="container")
+    ).properties(height=340, width=DEFAULT_CHART_WIDTH)
 
 
 athlete_id = _select_athlete()
@@ -113,7 +117,7 @@ if daily_metrics.empty:
 
 # --- Date range controls (same behavior as Analytics) ---
 min_date = daily_metrics["date"].min().date()
-max_date = daily_metrics["date"].max().date()
+max_date = max(daily_metrics["date"].max().date(), pd.Timestamp.today().date())
 
 default_end = max_date
 default_start = max(min_date, default_end - pd.Timedelta(days=28).to_pytimedelta())
@@ -168,11 +172,12 @@ mask = (daily_metrics["date"].dt.normalize() >= pd.Timestamp(start_date)) & (
 daily_metrics = daily_metrics[mask]
 
 # Global activity category filter (applies to all charts below)
-cat_options = ["RUN", "TRAIL_RUN", "HIKE"]
+cat_options = ["RUN", "TRAIL_RUN", "HIKE", "RIDE"]
+default_cat_selection = [cat for cat in cat_options if cat != "RIDE"]
 selected_cats = st.multiselect(
     "Types d'activités",
     options=cat_options,
-    default=cat_options,
+    default=default_cat_selection,
     help="Filtre appliqué aux graphiques ci-dessous.",
 )
 
@@ -258,8 +263,8 @@ with tab_charge:
         })
         series = all_days.merge(per_day, on="date", how="left").fillna({"value": 0.0})
         # Rolling sums (acute: 7d, chronic: 42d)
-        series["acute"] = series["value"].rolling(window=7, min_periods=1).sum()
-        series["chronic"] = series["value"].rolling(window=42, min_periods=1).sum()
+        series["acute"] = series["value"].rolling(window=7, min_periods=1).mean()
+        series["chronic"] = series["value"].rolling(window=28, min_periods=1).mean()
         # Slice to selected range only
         series = series[(series["date"] >= pd.Timestamp(start_date)) & (series["date"] <= pd.Timestamp(end_date))]
         # Build a minimal df with expected columns for the selected metric
@@ -335,8 +340,14 @@ with tab_speed:
     cloud = cloud.fillna({"avgHr": 0.0, "name": ""})
     if "activityId" in cloud.columns:
         cloud["activityId"] = cloud["activityId"].astype(str)
-        # Link to Activities page with query param for selection
-        cloud["activityUrl"] = "Activities?activityId=" + cloud["activityId"]
+        base_page = "Activity"
+        cloud["activityUrl"] = (
+            base_page
+            + "?activityId="
+            + cloud["activityId"]
+            + "&athleteId="
+            + str(athlete_id)
+        )
 
     cloud_chart = (
         alt.Chart(cloud)

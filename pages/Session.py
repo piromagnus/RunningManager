@@ -7,12 +7,14 @@ import streamlit as st
 
 from utils.config import load_config
 from utils.formatting import set_locale
+from utils.styling import apply_theme
 from persistence.csv_storage import CsvStorage
 from persistence.repositories import PlannedSessionsRepo
 from services.planner_service import PlannerService
 
 
 st.set_page_config(page_title="Running Manager - Session")
+apply_theme()
 st.title("Session details")
 
 cfg = load_config()

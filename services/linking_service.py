@@ -48,6 +48,16 @@ def _ensure_datetime(value: object) -> Optional[dt.datetime]:
 
 
 @dataclass
+class LinkCandidate:
+    activity_id: str
+    start_time: Optional[pd.Timestamp]
+    distance_km: Optional[float]
+    moving_sec: Optional[int]
+    ascent_m: Optional[float]
+    match_score: float
+
+
+@dataclass
 class LinkingService:
     storage: CsvStorage
 
@@ -264,6 +274,69 @@ class LinkingService:
 
         score = 0.4 * distance_component + 0.4 * duration_component + 0.2 * date_component
         return max(0.0, min(score, 1.0))
+
+    def suggest_for_planned_session(
+        self,
+        athlete_id: str,
+        planned_session_id: str,
+        window_days: int = 14,
+    ) -> List["LinkCandidate"]:
+        planned = self.sessions.get(planned_session_id)
+        if not planned or str(planned.get("athleteId")) != str(athlete_id):
+            return []
+
+        planned_date = _ensure_datetime(planned.get("date"))
+        activities = self.activities.list(athleteId=athlete_id)
+        if activities.empty:
+            return []
+
+        activities = activities.copy()
+        activities["activityId"] = activities["activityId"].astype(str)
+        activities["startTime"] = activities["startTime"].map(_ensure_datetime)
+        activities = activities.dropna(subset=["startTime"])
+
+        if planned_date and window_days > 0:
+            start = planned_date - pd.Timedelta(days=window_days)
+            end = planned_date + pd.Timedelta(days=window_days)
+            activities = activities[
+                (activities["startTime"] >= start) & (activities["startTime"] <= end)
+            ]
+        if activities.empty:
+            return []
+
+        links = self._links_df()
+        if not links.empty:
+            linked_ids = set(links["activityId"])
+            activities = activities[
+                ~activities["activityId"].isin(linked_ids)
+            ]
+        if activities.empty:
+            return []
+
+        planned_series = pd.Series(planned)
+        candidates: List[LinkCandidate] = []
+        for _, row in activities.iterrows():
+            score = self._compute_match_score(
+                _coerce_float(row.get("distanceKm")),
+                _coerce_int(row.get("movingSec") or row.get("elapsedSec")),
+                row.get("startTime"),
+                planned_series,
+                window_days,
+            )
+            if score <= 0:
+                continue
+            candidates.append(
+                LinkCandidate(
+                    activity_id=str(row["activityId"]),
+                    start_time=row.get("startTime"),
+                    distance_km=_coerce_float(row.get("distanceKm")),
+                    moving_sec=_coerce_int(row.get("movingSec")),
+                    ascent_m=_coerce_float(row.get("ascentM")),
+                    match_score=score,
+                )
+            )
+        candidates.sort(key=lambda item: item.match_score, reverse=True)
+        return candidates
 
     def create_link(
         self,

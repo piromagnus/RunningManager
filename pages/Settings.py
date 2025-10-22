@@ -9,10 +9,12 @@ from services.metrics_service import MetricsComputationService
 from services.strava_service import StravaService
 from utils.config import load_config
 from utils.formatting import set_locale
+from utils.styling import apply_theme
 from utils.ids import new_id
 
 
 st.set_page_config(page_title="Running Manager - Settings")
+apply_theme()
 st.title("Settings")
 
 cfg = load_config()

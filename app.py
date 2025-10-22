@@ -1,6 +1,7 @@
 import streamlit as st
 from utils.config import load_config, redact
 from utils.formatting import set_locale, fmt_km, fmt_speed_kmh
+from utils.styling import apply_theme
 from utils.auth_state import init_session_state
 
 
@@ -15,6 +16,7 @@ def main():
     cfg = load_config()
     set_locale("fr_FR")
     init_session_state()
+    apply_theme()
 
     st.title("Running Manager")
     st.caption("Use the sidebar to navigate between pages.")
@@ -31,4 +33,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

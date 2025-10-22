@@ -175,3 +175,65 @@ def test_linking_service_enriches_with_metrics(tmp_path):
     assert pytest.approx(float(linked_row["activityTrimp"]), rel=1e-6) == float(activity_row["activityTrimp"])
     assert pd.notna(linked_row["plannedMetricTrimp"])
     assert float(linked_row["plannedMetricDistanceEqKm"]) >= 0.0
+
+
+def test_linking_service_candidates_for_planned_session(tmp_path):
+    storage = CsvStorage(tmp_path)
+    link_service = LinkingService(storage)
+    activities_repo = link_service.activities
+    planned_repo = link_service.sessions
+    links_repo = link_service.links
+
+    planned_id = _create_planned(
+        planned_repo,
+        plannedSessionId="ps-plan",
+        date="2025-01-10",
+        plannedDistanceKm=12.0,
+        plannedDurationSec=3600,
+    )
+    _create_planned(
+        planned_repo,
+        plannedSessionId="ps-other",
+        date="2025-02-01",
+    )
+
+    inside_window = _create_activity(
+        activities_repo,
+        activityId="act-inside",
+        startTime="2025-01-12T07:00:00Z",
+        distanceKm=12.2,
+        movingSec=3620,
+    )
+    closer_inside = _create_activity(
+        activities_repo,
+        activityId="act-closer",
+        startTime="2025-01-09T07:00:00Z",
+        distanceKm=11.8,
+        movingSec=3500,
+    )
+    _create_activity(
+        activities_repo,
+        activityId="act-outside",
+        startTime="2025-02-15T07:00:00Z",
+        distanceKm=12.0,
+        movingSec=3600,
+    )
+
+    # Existing link should exclude the activity from candidates
+    links_repo.create(
+        {
+            "linkId": "link-existing",
+            "plannedSessionId": planned_id,
+            "activityId": inside_window,
+            "matchScore": 0.8,
+            "rpe(1-10)": "",
+            "comments": "",
+        }
+    )
+
+    candidates = link_service.suggest_for_planned_session("ath1", planned_id, window_days=14)
+    assert [candidate.activity_id for candidate in candidates] == ["act-closer"]
+    assert candidates[0].match_score is not None and candidates[0].match_score > 0.0
+    assert candidates[0].start_time.date() == pd.Timestamp("2025-01-09T07:00:00Z").tz_convert(
+        None
+    ).date()

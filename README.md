@@ -119,7 +119,21 @@ STRAVA_REDIRECT_URI=http://localhost:8501/callback
 
 # Encryption key for secure token storage
 ENCRYPTION_KEY=xspgAnxDFrRIrKQ0ZhywRV4hcAIYmjFQ7Aavn7EHt6M=
+
+# Mapbox (optional, required for premium basemaps in Activity map)
+MAPBOX_TOKEN=pk.your_mapbox_access_token_here
 ```
+
+#### Mapbox Basemap (Optional)
+
+To unlock additional background maps (Satellite, Outdoors, Light/Dark variations) on the Activity detail page, add a Mapbox access token to your `.env`:
+
+```bash
+MAPBOX_TOKEN=pk.your_mapbox_access_token_here
+```
+
+You can generate a token from the [Mapbox account dashboard](https://account.mapbox.com/access-tokens/).  
+If this value is omitted, the Activity map will fall back to the default OpenStreetMap style and the Mapbox options will be hidden.
 
 ## 🔐 Security Considerations
 

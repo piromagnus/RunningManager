@@ -26,6 +26,7 @@ def config(tmp_path: Path) -> Config:
         timeseries_dir=timeseries_dir,
         raw_strava_dir=raw_dir,
         laps_dir=laps_dir,
+        mapbox_token=None,
     )
 
 

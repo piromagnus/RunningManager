@@ -10,6 +10,7 @@
 - Get best activites in mSpeedEQ over duration and then get the speed law and critical speed curves equivalent to the power law and critical power. see docs
 - Time in HR range (either custom or via Mips) for each week
 - Ratio Funda vs Intense.
+- Score of the race (with a betrail/ITRA/UTMB like )
 
 
 # Activites analytics
