@@ -4,8 +4,9 @@ import altair as alt
 import pandas as pd
 import pydeck as pdk
 import streamlit as st
+from streamlit.logger import get_logger
 
-from utils.config import Config, load_config
+from utils.config import load_config, redact
 from utils.formatting import fmt_decimal, fmt_km, fmt_m, set_locale
 from utils.styling import apply_theme
 from persistence.csv_storage import CsvStorage
@@ -13,16 +14,47 @@ from services.activity_detail_service import ActivityDetail, ActivityDetailServi
 from services.timeseries_service import TimeseriesService
 
 
+logger = get_logger(__name__)
+
 st.set_page_config(page_title="Running Manager - Activité", layout="wide")
 apply_theme()
 
+CHART_WIDTH = 860
 
-MAP_STYLES = [
-    ("OpenStreetMap (sans clé)", "open-street-map", False),
-    ("Mapbox Light", "mapbox://styles/mapbox/light-v11", True),
-    ("Mapbox Dark", "mapbox://styles/mapbox/dark-v11", True),
-    ("Mapbox Outdoors", "mapbox://styles/mapbox/outdoors-v12", True),
-    ("Mapbox Satellite", "mapbox://styles/mapbox/satellite-streets-v12", True),
+BASE_MAP_STYLES = [
+    {
+        "label": "Carto clair (défaut)",
+        "provider": "carto",
+        "style": "light",
+    },
+    {
+        "label": "Carto sombre",
+        "provider": "carto",
+        "style": "dark",
+    },
+]
+
+MAPBOX_STYLES = [
+    {
+        "label": "Mapbox Light",
+        "provider": "mapbox",
+        "style": "mapbox://styles/mapbox/light-v11",
+    },
+    {
+        "label": "Mapbox Dark",
+        "provider": "mapbox",
+        "style": "mapbox://styles/mapbox/dark-v11",
+    },
+    {
+        "label": "Mapbox Outdoors",
+        "provider": "mapbox",
+        "style": "mapbox://styles/mapbox/outdoors-v12",
+    },
+    {
+        "label": "Mapbox Satellite",
+        "provider": "mapbox",
+        "style": "mapbox://styles/mapbox/satellite-streets-v12",
+    },
 ]
 
 
@@ -40,13 +72,19 @@ def _format_duration(seconds):
 
 
 def main() -> None:
-    cfg = load_config()
+    cfg = st.session_state.get("app_config")
+    if cfg is None:
+        cfg = load_config()
+        st.session_state["app_config"] = cfg
+    mapbox_token = st.session_state.get("mapbox_token")
+    if mapbox_token is None:
+        mapbox_token = cfg.mapbox_token
+        if mapbox_token:
+            st.session_state["mapbox_token"] = mapbox_token
     set_locale("fr_FR")
     storage = CsvStorage(cfg.data_dir)
     ts_service = TimeseriesService(cfg)
     detail_service = ActivityDetailService(storage, cfg, ts_service)
-    if cfg.mapbox_token:
-        pdk.settings.mapbox_api_key = cfg.mapbox_token
 
     params = st.query_params
 
@@ -81,8 +119,8 @@ def main() -> None:
     _render_timeseries(ts_service, detail.activity_id)
 
     st.subheader("Trace sur la carte")
-    map_style = _select_map_style(cfg)
-    _render_map(detail, map_style)
+    map_choice = _select_map_style(mapbox_token)
+    _render_map(detail, map_choice, mapbox_token)
 
 
 def _render_summary(detail: ActivityDetail) -> None:
@@ -104,9 +142,11 @@ def _render_summary(detail: ActivityDetail) -> None:
             st.metric(label, value)
 
 
-def _select_map_style(cfg: Config) -> str:
-    available_styles = [style for style in MAP_STYLES if cfg.mapbox_token or not style[2]]
-    labels = [style[0] for style in available_styles]
+def _select_map_style(mapbox_token: str | None) -> dict:
+    styles = list(BASE_MAP_STYLES)
+    if mapbox_token:
+        styles.extend(MAPBOX_STYLES)
+    labels = [style["label"] for style in styles]
     default_label = st.session_state.get("activity_map_style_label", labels[0])
     if default_label not in labels:
         default_label = labels[0]
@@ -114,10 +154,14 @@ def _select_map_style(cfg: Config) -> str:
         "Fond de carte",
         labels,
         index=labels.index(default_label),
-        help="Ajoutez MAPBOX_TOKEN dans `.env` pour débloquer les fonds Mapbox supplémentaires.",
+        help=(
+            "Ajoutez MAPBOX_TOKEN dans `.env` pour débloquer les fonds Mapbox supplémentaires."
+            if not mapbox_token
+            else ""
+        ),
     )
     st.session_state["activity_map_style_label"] = selection
-    return next(style for label, style, _ in available_styles if label == selection)
+    return next(style for style in styles if style["label"] == selection)
 
 
 def _render_link_panel(detail: ActivityDetail) -> None:
@@ -238,36 +282,111 @@ def _render_timeseries(ts_service: TimeseriesService, activity_id: str) -> None:
         st.caption("Pas de séries exploitables (FC, vitesse ou altitude).")
         return
     for chart in charts:
-        st.altair_chart(chart, use_container_width=True)
+        st.altair_chart(chart)
 
 
-def _render_map(detail: ActivityDetail, map_style: str) -> None:
-    if detail.map_path:
-        path_coords = [[point.lon, point.lat] for point in detail.map_path]
-        data = [{"path": path_coords}]
-        initial = pdk.ViewState(
-            latitude=detail.map_path[0].lat,
-            longitude=detail.map_path[0].lon,
-            zoom=13,
-            pitch=0,
-        )
-        layer = pdk.Layer(
-            "PathLayer",
-            data=data,
-            get_path="path",
-            get_color=[255, 99, 71],
-            width_scale=20,
-            width_min_pixels=3,
-        )
-        st.pydeck_chart(
-            pdk.Deck(
-                layers=[layer],
-                initial_view_state=initial,
-                map_style=map_style,
+def _build_map_deck(detail: ActivityDetail, map_choice: dict, mapbox_token: str | None) -> pdk.Deck | None:
+    logger.info("Building map deck for activity %s with map choice %s and mapbox token %s", detail.activity_id, map_choice, mapbox_token)
+    if not detail.map_path:
+        logger.debug("Skipping map render: no path for activity %s", detail.activity_id)
+        return None
+
+    path_coords = [[point.lon, point.lat] for point in detail.map_path]
+    if not path_coords:
+        logger.debug("Skipping map render: empty path for activity %s", detail.activity_id)
+        return None
+
+    data = [{"path": path_coords}]
+    initial = pdk.ViewState(
+        latitude=detail.map_path[0].lat,
+        longitude=detail.map_path[0].lon,
+        zoom=13,
+        pitch=0,
+    )
+    layer = pdk.Layer(
+        "PathLayer",
+        data=data,
+        get_path="path",
+        get_color=[255, 99, 71],
+        width_scale=20,
+        width_min_pixels=3,
+    )
+    provider = map_choice.get("provider", "carto")
+    style = map_choice.get("style", "light")
+    import os
+    logger.debug("MAPBOX_API_KEY: %s", os.getenv("MAPBOX_API_KEY"))
+    logger.debug(
+        "Building map deck for activity %s with provider=%s style=%s points=%d",
+        detail.activity_id,
+        provider,
+        style,
+        len(path_coords),
+    )
+    deck_kwargs: dict = {
+        "layers": [layer],
+        "initial_view_state": initial,
+        "map_provider": provider,
+        "map_style": style,
+        "tooltip": False,
+    }
+    if provider == "mapbox":
+        if not mapbox_token:
+            logger.warning(
+                "Mapbox style requested without token for activity %s (style=%s)",
+                detail.activity_id,
+                style,
             )
+            return None
+        redacted_token = redact(mapbox_token)
+        logger.debug(
+            "Applying Mapbox token for activity %s (style=%s, token=%s)",
+            detail.activity_id,
+            style,
+            redacted_token,
         )
+        # current_token = getattr(pdk.settings, "mapbox_api_key", None)
+        # if current_token != mapbox_token:
+        #     pdk.settings.mapbox_api_key = mapbox_token
+        #     logger.info(
+        #         "Updated pydeck Mapbox token for activity %s (token=%s)",
+        #         detail.activity_id,
+        #         redacted_token,
+        #     )
+        # deck_kwargs["api_keys"] = {"mapbox": mapbox_token}
+    deck = pdk.Deck(**deck_kwargs)
+    # if provider == "mapbox" and mapbox_token:
+    #     deck.mapbox_key = mapbox_token
+    #     logger.debug(
+    #         "Set deck.mapbox_key manually for activity %s (token=%s)",
+    #         detail.activity_id,
+    #         redact(mapbox_token),
+    #     )
+    return deck
+
+
+def _render_map(detail: ActivityDetail, map_choice: dict, mapbox_token: str | None) -> None:
+    provider = map_choice.get("provider")
+    if provider == "mapbox":
+        redacted = redact(mapbox_token)
+        st.caption(f"Fond de carte Mapbox : {map_choice.get('label')} (jeton {redacted or 'absent'})")
     else:
+        st.caption(f"Fond de carte Carto : {map_choice.get('label')}")
+    deck = _build_map_deck(detail, map_choice, mapbox_token)
+    if deck is None:
+        logger.debug(
+            "No deck generated for activity %s with provider %s",
+            detail.activity_id,
+            map_choice.get("provider"),
+        )
         st.caption(detail.map_notice or "Aucune donnée de trace disponible.")
+        return
+    deck_token = getattr(deck, "mapbox_key", None)
+    logger.debug(
+        "Deck mapbox key attribute for activity %s: %s",
+        detail.activity_id,
+        redact(deck_token),
+    )
+    st.pydeck_chart(deck)
 
-
-main()
+if __name__ == "__main__":
+    main()

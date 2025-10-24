@@ -18,7 +18,7 @@ st.set_page_config(page_title="Running Manager - Dashboard", layout="wide")
 apply_theme()
 st.title("Dashboard")
 
-DEFAULT_CHART_WIDTH = 900
+CHART_WIDTH = 1100
 
 cfg = load_config()
 set_locale("fr_FR")
@@ -103,7 +103,7 @@ def _training_load_chart(df: pd.DataFrame, metric_key: str, metric_cfg: dict) ->
             alt.Tooltip(planned_col, title="Charge chronique", format=".2f"),
             alt.Tooltip(acute_col, title="Charge aiguë", format=".2f"),
         ]
-    ).properties(height=340, width=DEFAULT_CHART_WIDTH)
+    ).properties(height=340)
 
 
 athlete_id = _select_athlete()
@@ -232,7 +232,8 @@ with tab_charge:
         acts_df_all = pd.DataFrame()
     if acts_df_all.empty:
         chart = _training_load_chart(daily_metrics, selected_metric, metric_definitions[selected_metric])
-        st.altair_chart(chart, use_container_width=True)
+        chart = chart.properties(width=CHART_WIDTH)
+        st.altair_chart(chart, use_container_width=False)
     else:
         acts_df = acts_df_all[acts_df_all.get("athleteId") == athlete_id].copy()
         # Apply categories filter
@@ -280,7 +281,8 @@ with tab_charge:
         working_for_chart[chronic_name] = series["chronic"].astype(float)
         working_for_chart[acute_name] = series["acute"].astype(float)
         chart = _training_load_chart(working_for_chart, selected_metric, metric_definitions[selected_metric])
-        st.altair_chart(chart, use_container_width=True)
+        chart = chart.properties(width=CHART_WIDTH)
+        st.altair_chart(chart, use_container_width=False)
 
 # --- Nuage d'activités: SpeedEq (km/h) vs Durée (h), couleur = FC moyenne ---
 with tab_speed:
@@ -368,6 +370,7 @@ with tab_speed:
                 alt.Tooltip("avgHr:Q", title="FC moy.", format=".0f"),
             ],
         )
-        .properties(height=360, width="container")
+        .properties(height=360)
     )
-    st.altair_chart(cloud_chart, use_container_width=True)
+    cloud_chart = cloud_chart.properties(width=CHART_WIDTH)
+    st.altair_chart(cloud_chart, use_container_width=False)

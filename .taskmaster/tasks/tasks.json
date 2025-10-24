@@ -693,7 +693,7 @@
         "description": "Replace the current Activities tab with a recent-activity feed and add a dedicated Activity detail page.",
         "details": "Scope\n- Replace pages/Activities.py list/selection with a scrollable feed of recent activities rendered as cards.\n- Card fields: name (Strava), distanceKm, ascentM, avgHr, start date (local), duration (movingSec/elapsedSec with friendly format), TRIMP, distanceEqKm.\n- Visual status: add a round green tick icon at the end of the card if linked; also set a red border for linked items (per request). Tooltip shows link score if available.\n- Above the feed, render a small horizontal list of unlinked planned sessions (cards). Each card shows: date, type, plannedDistanceKm/plannedDurationSec, target label.\n- Clicking a planned-session card opens a dialog/popup listing preloaded candidate activities (±14 days around planned date) with main info. Selecting one triggers link flow (reuses LinkingService), then refreshes.\n- Clicking any activity card (linked or not) navigates to a new Activity detail page (new file, e.g., pages/Activity.py) showing:\n  - Title: activity name; below: date; description from Strava raw JSON (if present).\n  - Summary KPIs (distance, duration, ascent, avgHR, TRIMP, DistEq).\n  - If linked: comparison panel plan vs actual (distance/time/trimp/ascent deltas); else message: \"no planned activities linked\".\n  - Timeseries charts (HR, speed, elevation) using existing TimeseriesService.\n  - Map section using pydeck: plot route polyline (from activities.csv summary polyline decoded) or, if missing, use timeseries lat/lon to render a PathLayer. Fallback gracefully if no geo.\n- Keep deep links (e.g., Feed → Activity page via query param activityId) compatible with Dashboard links.\n\nImplementation notes\n- Activity feed query: activities.csv join activities_metrics.csv and links.csv to compute link status and TRIMP/DistEq; order by startTime desc; paginate with st.button(\"Charger plus\") or simple slice.\n- Unlinked planned sessions: planned_sessions.csv left-join links.csv to find sessions without a link; sort by date (recent past → near future). Click opens st.dialog (or st.experimental_dialog fallback) to present candidate activities window ±14 days, sorted by match score using existing LinkingService or simplified sorting.\n- Activity detail page: accept activityId via st.experimental_get_query_params; re-use comparison/render helpers from Activities page; add pydeck map. Consider optional polyline decoding (polyline lib), otherwise build path from timeseries lat/lon.\n- Styling: use st.container() with border via st.markdown CSS, or st.columns to lay out icon at the end. Green tick icon: unicode ✅ or emoji; red border via CSS.\n- Do not change CSV schemas beyond UI needs; rely on repositories and services.\n\nUX\n- Top: small cards of unlinked planned sessions → dialog to pick an activity.\n- Below: infinite/scrollable feed (paged) of recent activities as cards.\n- Click any card → Activity detail page with maps + timeseries.\n\nDependencies\n- Prefer pydeck (already used by Streamlit) to render the map; no external network fetch required.\n\nAcceptance\n- Activities feed replaces Activities selection UI while preserving linking functionality through the dialog.\n- Activity detail page renders KPIs, comparison (if linked), timeseries, and map.\n- Dashboard deep-link continues to open Activity detail page.\n- Works for activities without timeseries/geo (map is hidden with a notice).\n",
         "testStrategy": "- Unit tests for feed query builders: ensure sorting, linking status, and metrics fields are computed correctly (pure helpers).\\n- Tests for candidate activity window (±14 days) selection given a planned date and verify filtering and ordering by score.\\n- Tests for detail page helpers: title/date/description extraction from raw JSON, comparison deltas, polyline decoding fallback.\\n- Manual UI verification: \\\"unlinked planned\\\" list displays; dialog opens and links; feed renders with green tick + red border for linked; detail page shows maps and timeseries; Dashboard deep-link navigates correctly.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "high",
         "subtasks": [
@@ -703,7 +703,7 @@
             "description": "Explore the codebase to locate the current Activities page, related services, repositories, and tests to understand existing implementations and patterns.",
             "dependencies": [],
             "details": "Use ripgrep to find `pages/Activities.py`, `services/linking_service.py`, `services/timeseries_service.py`, `persistence/repositories.py`, and any activity-related tests or helpers to reuse.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "None (discovery and mapping)."
           },
           {
@@ -714,7 +714,7 @@
               1
             ],
             "details": "Read `persistence/repositories.py` and inspect headers in `data/*.csv` for `activities.csv`, `activities_metrics.csv`, `links.csv`, `planned_sessions.csv`. Note any helper methods for joins or computed fields.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "None (analysis to inform implementation)."
           },
           {
@@ -725,7 +725,7 @@
               2
             ],
             "details": "Add a helper module (e.g., `services/activity_feed_service.py`) to load and join activity tables, map to card fields (name, distanceKm, ascentM, avgHr, local start, moving/elapsed, TRIMP, distanceEqKm), include linked flag and score, and support simple pagination.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Unit tests verifying sorting, field mapping, TRIMP/DistEq presence handling, and link status/score across edge cases."
           },
           {
@@ -736,7 +736,7 @@
               3
             ],
             "details": "Use Streamlit containers/columns for cards; add green tick icon for linked and red border styling; show tooltip with score when available; paginate with a 'Charger plus' button or slice.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Lightweight unit tests for any card-render helpers; manual UI smoke via Streamlit for pagination and visuals."
           },
           {
@@ -748,7 +748,7 @@
               4
             ],
             "details": "Implement left-join of `planned_sessions.csv` vs `links.csv` to filter unlinked; render compact cards with date, type, planned distance/duration, and target label.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Unit tests for unlinked filtering and recent past→near future ordering; UI smoke for rendering layout."
           },
           {
@@ -759,7 +759,7 @@
               5
             ],
             "details": "Use `st.dialog` (or `st.experimental_dialog`) to list candidates; reuse `LinkingService` to compute scores and create link on selection; refresh feed/strip after linking.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Unit tests for candidate window filtering and ordering by score; integration test with fakes ensuring a link is created and UI refreshes data."
           },
           {
@@ -770,7 +770,7 @@
               4
             ],
             "details": "Use `st.experimental_get_query_params` to read `activityId`; ensure feed cards and Dashboard can deep-link to this page; wire navigation from feed cards.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Unit test for query param parsing and routing helper; manual verification that Dashboard links open the detail page."
           },
           {
@@ -782,7 +782,7 @@
               3
             ],
             "details": "Reuse any existing comparison/render helpers from Activities; compute deltas when linked; format values via `utils/formatting` for fr-FR display; show message when no link exists.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Unit tests for comparison helpers on sample data; verify formatting outputs expected display strings."
           },
           {
@@ -793,7 +793,7 @@
               7
             ],
             "details": "Reuse `services/timeseries_service.py` to load series; conditionally render charts only if present; display a short notice when unavailable.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Unit tests for availability checks and data shaping; UI smoke with sample timeseries data."
           },
           {
@@ -805,26 +805,164 @@
               9
             ],
             "details": "Decode polyline from `activities.csv` (polyline lib) and plot; if absent, build coordinates from timeseries to render the path; ensure no external network fetch; hide map and show a notice when both sources are missing.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Unit tests for polyline decoding and path-building fallbacks; UI smoke to verify map visibility across scenarios."
           }
         ]
       },
       {
-      "id": 22,
-      "title": "Derive lap metrics from Strava raw JSON and surface in Activities page",
-      "description": "Parse stored Strava raw JSON to extract laps per activity, compute per-lap metrics mirroring config.py fields plus heart-rate aggregates, classify each lap as Run or Recovery, persist results under data/laps/{activity_id}.csv, and expose the interval breakdown on the Activities linked detail view. Implementation completed: lap metrics are extracted and labeled (Run/Recovery), CSVs are written to data/laps/*.csv, and the Activities linked view renders an intervals table sourced from these files.",
-      "status": "done",
-      "dependencies": [],
-      "priority": "high",
-      "details": "- Implemented lap extraction from stored Strava raw JSON and computation of per-lap metrics aligning with fields configured in config.py, including heart-rate aggregates (avg/max/min where available).\n- Lap classification implemented as Run vs Recovery; labeling persisted alongside per-lap metrics.\n- Output location standardized to data/laps/{activity_id}.csv (one CSV per activity); ensured idempotent writes during sync/update.\n- Activities page linked detail view loads the corresponding data/laps CSV and renders an intervals table with lap order, type (Run/Recovery), and key metrics.\n- Handled missing/partial HR data gracefully (metrics null where unavailable) and ensured unit consistency with existing metrics (distance meters, time seconds, etc.).\n- Wired the pipeline into the Strava sync flow so new/updated activities refresh their corresponding laps CSV and UI view.",
-      "testStrategy": "- Unit tests: lap extraction from representative Strava JSON fixtures; verification of computed per-lap metrics (distance, duration, pace proxies) and HR aggregates when present; classification logic yields expected Run/Recovery labeling on mixed-interval activities.\n- Integration tests: end-to-end pipeline from Strava JSON ingestion to data/laps/{activity_id}.csv creation; re-run on updated JSON verifies deterministic/idempotent outputs; Activities linked detail view renders intervals table populated from CSV.\n- Strava integration tests: validate parsing robustness against variations in Strava lap payloads (missing HR, partial laps) and ensure graceful fallbacks.\n- Regression guard: snapshot comparison of CSV headers and essential columns to prevent schema drift.",
-      "subtasks": []
-    }
+        "id": 22,
+        "title": "Derive lap metrics from Strava raw JSON and surface in Activities page",
+        "description": "Parse stored Strava raw JSON to extract laps per activity, compute per-lap metrics mirroring config.py fields plus heart-rate aggregates, classify each lap as Run or Recovery, persist results under data/laps/{activity_id}.csv, and expose the interval breakdown on the Activities linked detail view. Implementation completed: lap metrics are extracted and labeled (Run/Recovery), CSVs are written to data/laps/*.csv, and the Activities linked view renders an intervals table sourced from these files.",
+        "status": "done",
+        "dependencies": [],
+        "priority": "high",
+        "details": "- Implemented lap extraction from stored Strava raw JSON and computation of per-lap metrics aligning with fields configured in config.py, including heart-rate aggregates (avg/max/min where available).\n- Lap classification implemented as Run vs Recovery; labeling persisted alongside per-lap metrics.\n- Output location standardized to data/laps/{activity_id}.csv (one CSV per activity); ensured idempotent writes during sync/update.\n- Activities page linked detail view loads the corresponding data/laps CSV and renders an intervals table with lap order, type (Run/Recovery), and key metrics.\n- Handled missing/partial HR data gracefully (metrics null where unavailable) and ensured unit consistency with existing metrics (distance meters, time seconds, etc.).\n- Wired the pipeline into the Strava sync flow so new/updated activities refresh their corresponding laps CSV and UI view.",
+        "testStrategy": "- Unit tests: lap extraction from representative Strava JSON fixtures; verification of computed per-lap metrics (distance, duration, pace proxies) and HR aggregates when present; classification logic yields expected Run/Recovery labeling on mixed-interval activities.\n- Integration tests: end-to-end pipeline from Strava JSON ingestion to data/laps/{activity_id}.csv creation; re-run on updated JSON verifies deterministic/idempotent outputs; Activities linked detail view renders intervals table populated from CSV.\n- Strava integration tests: validate parsing robustness against variations in Strava lap payloads (missing HR, partial laps) and ensure graceful fallbacks.\n- Regression guard: snapshot comparison of CSV headers and essential columns to prevent schema drift.",
+        "subtasks": []
+      },
+      {
+        "id": 23,
+        "title": "Compact session cards and race session type",
+        "description": "Create a compact layout for planned sessions and templates that clearly displays loop segments, and add a new Race session type capturing distance, ascent, and target time.",
+        "details": "",
+        "testStrategy": "",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": 24,
+        "title": "Planner multi-week compact calendar",
+        "description": "Design a compact multi-week planner view with navigation controls, aggregated load metrics for the visible range, rich session cards (including unplanned completed activities), color-coded status, contextual add/delete actions, and integration with activity detail pages.",
+        "details": "",
+        "testStrategy": "",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Repository scan for planner components, services, and data stores",
+            "description": "Identify planner-related pages, services, models, and CSV storage used for week view and session details to align compact multi-week view with existing patterns.",
+            "dependencies": [],
+            "details": "Search codebase for Planner week view, Session details, PlannerService, SessionTemplatesService, CSV storage (planned_sessions.csv, metrics.csv), and routing/navigation utilities. Note file paths, UI component patterns, and data access helpers.",
+            "status": "pending",
+            "testStrategy": "None; exploratory code scan only."
+          },
+          {
+            "id": 2,
+            "title": "Define compact multi-week view data model and range handling",
+            "description": "Specify inputs/outputs and visible range semantics (start date, number of weeks, navigation) for the compact view while matching existing planner structures.",
+            "dependencies": [
+              1
+            ],
+            "details": "Create or update a view model structure to represent weeks, days, and sessions per day. Define navigation state for offsets and date-range. Ensure compatibility with existing PlannerService APIs for fetching planned and actual sessions.",
+            "status": "pending",
+            "testStrategy": "Unit tests for range math and offsets given a start date."
+          },
+          {
+            "id": 3,
+            "title": "Implement navigation controls for multi-week view",
+            "description": "Add previous/next/today controls and week range selector wired to the compact planner state and routing.",
+            "dependencies": [
+              2
+            ],
+            "details": "Add UI controls consistent with existing icon styles; wire to state updates or URL query params. Persist selection across refresh via route params or storage; ensure 'Today' jumps to current week inside the visible range.",
+            "status": "pending",
+            "testStrategy": "UI tests or unit tests for state transitions given control clicks."
+          },
+          {
+            "id": 4,
+            "title": "Fetch planned sessions and merge actual activities for visible range",
+            "description": "Retrieve planned sessions from CSV for the visible dates and merge with any completed but unplanned activities for inclusion in cards.",
+            "dependencies": [
+              2
+            ],
+            "details": "Use PlannerService to load planned sessions in date range. Use Activities service/log to query completed activities and mark those without a planned entry as unplanned-completed. Normalize fields for unified rendering.",
+            "status": "pending",
+            "testStrategy": "Service unit tests validating merged list, de-dup logic, and date filtering."
+          },
+          {
+            "id": 5,
+            "title": "Aggregate load metrics for visible range",
+            "description": "Compute total planned and actual metrics (time, distance, ascent) across the visible multi-week range and expose to the view.",
+            "dependencies": [
+              4
+            ],
+            "details": "Extend or reuse PlannerService aggregation helpers to compute sums of planned vs actual within the selected start/end dates. Return both raw totals and formatted strings for UI badges.",
+            "status": "pending",
+            "testStrategy": "PlannerService unit tests with fixtures spanning multiple weeks validating totals and formatting."
+          },
+          {
+            "id": 6,
+            "title": "Render compact grid with days and session cards",
+            "description": "Build compact multi-week grid layout (weeks x days) and render session cards per day following existing card styles and performance patterns.",
+            "dependencies": [
+              3,
+              4
+            ],
+            "details": "Reuse existing card components/styles from week view, adjusting for compact size. Ensure virtualization or light DOM for performance. Show key fields (type, duration, estimated km, target) respecting style conventions.",
+            "status": "pending",
+            "testStrategy": "Visual smoke tests; snapshot tests for DOM structure if framework supports it."
+          },
+          {
+            "id": 7,
+            "title": "Status color-coding and badges for session cards",
+            "description": "Apply color-coded indicators for planned, completed, missed, and unplanned-completed sessions and display compact badges.",
+            "dependencies": [
+              6
+            ],
+            "details": "Define status mapping logic (planned, completed on date, missed past date without actual, unplanned completed) and attach CSS classes/tokens consistent with existing theme. Add badges for target type and end mode where present.",
+            "status": "pending",
+            "testStrategy": "Unit tests for status mapping logic; visual checks for class application."
+          },
+          {
+            "id": 8,
+            "title": "Contextual add-session modal with race option",
+            "description": "Add contextual add button per day in compact view opening the streamlined add-session modal, including a race session option and integration with session templates.",
+            "dependencies": [
+              6
+            ],
+            "details": "Wire day-level add action to open existing add-session flow prefilled with selected date. Include race session type/flag. Integrate with SessionTemplatesService for quick apply.",
+            "status": "pending",
+            "testStrategy": "UI tests for modal open/prefill; service stubs to verify created CSV rows."
+          },
+          {
+            "id": 9,
+            "title": "Delete actions and session linking to detail/edit pages",
+            "description": "Provide delete icon on cards with confirmation and link cards to details and edit pages using existing routes.",
+            "dependencies": [
+              6
+            ],
+            "details": "Reuse delete flow from week view with confirmation and reload range after deletion. Card click opens details page; gear icon navigates to edit page. Preserve date-range state on return using route params.",
+            "status": "pending",
+            "testStrategy": "Interaction tests for delete and navigation; confirm data reload occurs."
+          },
+          {
+            "id": 10,
+            "title": "Automated tests and docs for multi-week compact planner",
+            "description": "Add targeted unit tests for range logic, merging, aggregations, and status mapping, plus light end-to-end coverage; update README/docs.",
+            "dependencies": [
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            "details": "Add tests close to PlannerService and view state. Write a short usage note in docs on navigation and metrics. Ensure tests run with existing harness and do not alter CSV schemas.",
+            "status": "pending",
+            "testStrategy": "Run unit tests in CI; optional snapshot tests for view output."
+          }
+        ]
+      }
     ],
     "metadata": {
       "created": "2025-10-06T19:00:14.797Z",
-      "updated": "2025-10-19T21:18:18.861Z",
+      "updated": "2025-10-22T12:23:02.240Z",
       "description": "Tasks for master context"
     }
   }

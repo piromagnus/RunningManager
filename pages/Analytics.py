@@ -22,6 +22,8 @@ st.set_page_config(page_title="Running Manager - Analytics", layout="wide")
 apply_theme()
 st.title("Analytics")
 
+CHART_WIDTH = 860
+
 cfg = load_config()
 set_locale("fr_FR")
 storage = CsvStorage(base_dir=Path(cfg.data_dir))
@@ -361,10 +363,10 @@ chart = (
             alt.Tooltip("maxValue:Q", title="Max", format=".2f"),
         ],
     )
-    .properties(height=400, width="container")
+    .properties(height=400, width=CHART_WIDTH)
 )
 
-st.altair_chart(chart, use_container_width=True)
+st.altair_chart(chart, use_container_width=False)
 
 st.caption(
     "Le segment 'Réalisé' représente la partie communément couverte. "
@@ -463,9 +465,9 @@ if not day_stack_df.empty:
                 alt.Tooltip("activity_names:N", title="Activités"),
             ],
         )
-        .properties(height=300, width="container")
+        .properties(height=300, width=CHART_WIDTH)
     )
-    st.altair_chart(day_chart, use_container_width=True)
+    st.altair_chart(day_chart, use_container_width=False)
 else:
     st.info("Aucune donnée quotidienne à afficher pour ce filtre.")
     st.dataframe(

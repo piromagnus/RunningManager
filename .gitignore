@@ -9,6 +9,8 @@ __pycache__/
 data/tokens*
 data/raw/
 data/timeseries/
+data/laps/
+data/
 .python-version
 .venv/
 uv.lock

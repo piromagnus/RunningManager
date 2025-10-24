@@ -12,8 +12,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-from dotenv import load_dotenv
+from dotenv import load_dotenv, find_dotenv
+from streamlit.logger import get_logger
 
+logger = get_logger(__name__)
 
 @dataclass(frozen=True)
 class Config:
@@ -34,7 +36,9 @@ def _ensure_dir(path: Path) -> None:
 
 def load_config() -> Config:
     """Load configuration from environment and provision directories."""
-    load_dotenv(override=False)
+    # project_root = Path(__file__).resolve().parents[1]
+    load_dotenv(find_dotenv(),override=True)
+    # load_dotenv(project_root / ".env.local", override=False)
 
     data_dir_str = os.getenv("DATA_DIR", "./data")
     data_dir = Path(data_dir_str).expanduser().resolve()
@@ -42,8 +46,10 @@ def load_config() -> Config:
     strava_client_id = os.getenv("STRAVA_CLIENT_ID")
     strava_client_secret = os.getenv("STRAVA_CLIENT_SECRET")
     strava_redirect_uri = os.getenv("STRAVA_REDIRECT_URI")
+    logger.debug("STRAVA_CLIENT_ID: %s", strava_client_id)
     encryption_key = os.getenv("ENCRYPTION_KEY")
-    mapbox_token = os.getenv("MAPBOX_TOKEN") or os.getenv("MAPBOX_API_KEY")
+    mapbox_token = os.getenv("MAPBOX_API_KEY")
+    logger.debug("MAPBOX_API_KEY: %s", mapbox_token)
 
     timeseries_dir = data_dir / "timeseries"
     raw_strava_dir = data_dir / "raw" / "strava"

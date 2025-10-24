@@ -59,6 +59,29 @@ label, legend {
     border-radius: 12px;
 }
 
+.stSelectbox div[data-baseweb="select"] > div,
+.stSelectbox div[data-baseweb="select"] input {
+    color: var(--rm-text-primary) !important;
+}
+
+.stSelectbox ul[role="listbox"],
+.stMultiSelect ul[role="listbox"] {
+    background-color: rgba(33, 51, 74, 0.95);
+    border: 1px solid rgba(228, 204, 160, 0.25);
+}
+
+.stSelectbox li[role="option"],
+.stMultiSelect li[role="option"] {
+    color: var(--rm-text-primary) !important;
+    background-color: rgba(33, 51, 74, 0.85);
+}
+
+.stSelectbox li[role="option"]:hover,
+.stMultiSelect li[role="option"]:hover {
+    background-color: rgba(96, 172, 132, 0.2);
+    color: var(--rm-text-primary) !important;
+}
+
 .stSelectbox > div[data-baseweb="select"]:focus-within,
 .stMultiSelect > div[data-baseweb="select"]:focus-within,
 .stTextInput > div > div:focus-within,
@@ -168,17 +191,21 @@ label, legend {
 .stPlotlyChart, .stVegaLiteChart, .stAltairChart {
     background: rgba(18, 28, 41, 0.72);
     border-radius: 22px;
-    padding: 1.4rem 2.6rem 1.6rem 2.0rem;
+    padding: 1.0rem 1.0rem 1.2rem;
     border: 1px solid rgba(228, 204, 160, 0.24);
     box-shadow: 0 18px 36px rgba(8, 14, 24, 0.35);
-    overflow: visible !important;
+    margin: 1.2rem 0rem;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .stPlotlyChart > div,
 .stVegaLiteChart > div,
 .stAltairChart > div {
-    width: 100% !important;
-    overflow: visible !important;
+    width: 100%;
+    max-width: 100%;
+    margin: 0 auto;
+    overflow: visible;
     box-sizing: border-box;
 }
 
@@ -189,12 +216,32 @@ label, legend {
 .stVegaLiteChart canvas {
     border-radius: 16px;
     box-sizing: border-box;
+    max-width: 100%;
     width: 100% !important;
-    height: 100% !important;
+    height: auto !important;
     border: none !important;
     margin: 0 !important;
     display: block !important;
     overflow: visible !important;
+}
+
+.rm-chart-shell {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    box-sizing: border-box;
+}
+
+.rm-chart-shell .stAltairChart {
+    width: 100%;
+    max-width: 100%;
+    margin: 0 auto;
+    box-sizing: border-box;
+}
+
+.rm-chart-shell .stAltairChart > div {
+    width: 100% !important;
+    box-sizing: border-box;
 }
 
 .block-container {
@@ -214,7 +261,7 @@ def _enable_altair_theme() -> None:
     def _theme() -> dict:
         return {
             "config": {
-                "padding": {"top": 28, "right": 100, "bottom": 28, "left": 56},
+                "padding": 10,
                 "autosize": {"type": "fit", "contains": "padding"},
                 "background": "rgba(18, 28, 41, 0.01)",
                 "view": {
@@ -233,11 +280,13 @@ def _enable_altair_theme() -> None:
                 "legend": {
                     "labelColor": "#f4f7fb",
                     "titleColor": "#e4cca0",
-                    "padding": 12,
-                    "offset": 16,
-                    "titlePadding": 6,
-                    "labelLimit": 220,
+                    "padding": 4,
+                    "offset": 5,
+                    "titlePadding": 2,
+                    "labelLimit": 120,
                     "orient": "right",
+                    "direction": "vertical",
+                    "titleLimit": 120,
                 },
                 "title": {
                     "color": "#e4cca0",

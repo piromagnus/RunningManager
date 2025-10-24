@@ -14,6 +14,7 @@ from persistence.repositories import (
     PlannedSessionsRepo,
 )
 from services.activity_detail_service import ActivityDetailService
+from pages.Activity import BASE_MAP_STYLES, MAPBOX_STYLES, _build_map_deck
 from services.timeseries_service import TimeseriesService
 from utils.config import Config
 
@@ -313,3 +314,58 @@ def test_activity_detail_no_geo_returns_none(detail_service, storage, cfg):
     detail = detail_service.get_detail("ath1", activity_id)
     assert detail.map_path is None
     assert detail.map_notice == "Aucune donnée de trace disponible."
+
+
+def _setup_activity_with_polyline(activities_repo, metrics_repo, raw_path: Path, activity_id: str) -> None:
+    raw_path.write_text(json.dumps({"name": "Map activity"}), encoding="utf-8")
+    _create_activity(
+        activities_repo,
+        raw_path=raw_path,
+        activityId=activity_id,
+        polyline="_p~iF~ps|U_ulLnnqC_mqNvxq`@",
+    )
+    metrics_repo.create(
+        {
+            "activityId": activity_id,
+            "athleteId": "ath1",
+            "startDate": "2025-01-05",
+            "sportType": "Run",
+            "category": "EASY",
+            "source": "strava",
+            "distanceKm": 10.0,
+            "timeSec": 3600,
+            "ascentM": 120,
+            "distanceEqKm": 10.2,
+            "trimp": 100.0,
+            "avgHr": 142,
+        }
+    )
+
+
+def test_build_map_deck_with_carto(detail_service, storage, cfg):
+    activities_repo = ActivitiesRepo(storage)
+    metrics_repo = ActivitiesMetricsRepo(storage)
+    raw_path = cfg.raw_strava_dir / "act-map-carto.json"
+    _setup_activity_with_polyline(activities_repo, metrics_repo, raw_path, "act-map-carto")
+    detail = detail_service.get_detail("ath1", "act-map-carto")
+    deck = _build_map_deck(detail, BASE_MAP_STYLES[0], mapbox_token=None)
+    assert deck is not None
+    deck_dict = json.loads(deck.to_json())
+    assert deck_dict.get("mapProvider") == "carto"
+    style_value = deck_dict.get("mapStyle", "")
+    assert "cartocdn" in style_value or style_value == "light"
+
+
+def test_build_map_deck_requires_mapbox_token(detail_service, storage, cfg):
+    activities_repo = ActivitiesRepo(storage)
+    metrics_repo = ActivitiesMetricsRepo(storage)
+    raw_path = cfg.raw_strava_dir / "act-map-mapbox.json"
+    _setup_activity_with_polyline(activities_repo, metrics_repo, raw_path, "act-map-mapbox")
+    detail = detail_service.get_detail("ath1", "act-map-mapbox")
+    deck_without_token = _build_map_deck(detail, MAPBOX_STYLES[0], mapbox_token=None)
+    assert deck_without_token is None
+    deck_with_token = _build_map_deck(detail, MAPBOX_STYLES[0], mapbox_token="token123")
+    assert deck_with_token is not None
+    deck_dict = json.loads(deck_with_token.to_json())
+    assert deck_dict.get("mapProvider") == "mapbox"
+    assert deck_dict.get("mapStyle") == MAPBOX_STYLES[0]["style"]

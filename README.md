@@ -124,9 +124,9 @@ ENCRYPTION_KEY=xspgAnxDFrRIrKQ0ZhywRV4hcAIYmjFQ7Aavn7EHt6M=
 MAPBOX_TOKEN=pk.your_mapbox_access_token_here
 ```
 
-#### Mapbox Basemap (Optional)
+#### Basemap Configuration
 
-To unlock additional background maps (Satellite, Outdoors, Light/Dark variations) on the Activity detail page, add a Mapbox access token to your `.env`:
+By default the Activity map renders using **Carto** tiles (light and dark variants) and requires no extra configuration. To unlock additional backgrounds (Mapbox Light/Dark, Outdoors, Satellite), add a Mapbox access token to your `.env`:
 
 ```bash
 MAPBOX_TOKEN=pk.your_mapbox_access_token_here
