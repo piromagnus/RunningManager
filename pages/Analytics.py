@@ -346,8 +346,39 @@ color_scale = alt.Scale(
     range=["#3b82f6", "#16a34a", "#f97316"],
 )
 
+weekly_actual_metrics = pd.DataFrame(columns=["weekLabel", "actualTimeHours", "actualDistanceKm", "actualDistanceEqKm", "actualTrimp"])
+if not activities_metrics_df.empty:
+    weekly_metrics = activities_metrics_df.copy()
+    if not weekly_metrics.empty:
+        weekly_metrics["date"] = weekly_metrics["date"].dt.normalize()
+        weekly_group = weekly_metrics.groupby(["isoYear", "isoWeek"], as_index=False).agg(
+            timeSec=("timeSec", "sum"),
+            distanceKm=("distanceKm", "sum"),
+            distanceEqKm=("distanceEqKm", "sum"),
+            trimp=("trimp", "sum"),
+            weekDate=("date", "min"),
+        )
+        weekly_group["weekLabel"] = weekly_group["weekDate"].dt.strftime("%Y-%m-%d")
+        weekly_actual_metrics = weekly_group[["weekLabel", "timeSec", "distanceKm", "distanceEqKm", "trimp"]].rename(
+            columns={
+                "timeSec": "actualTimeHours",
+                "distanceKm": "actualDistanceKm",
+                "distanceEqKm": "actualDistanceEqKm",
+                "trimp": "actualTrimp",
+            }
+        )
+        weekly_actual_metrics["actualTimeHours"] = weekly_actual_metrics["actualTimeHours"].apply(
+            lambda v: float(analytics.seconds_to_hours(float(v)))
+        )
+        for col in ("actualDistanceKm", "actualDistanceEqKm", "actualTrimp"):
+            weekly_actual_metrics[col] = pd.to_numeric(weekly_actual_metrics[col], errors="coerce").fillna(0.0)
+
+stack_with_actuals = stack_df.merge(weekly_actual_metrics, on="weekLabel", how="left")
+for col in ("actualTimeHours", "actualDistanceKm", "actualDistanceEqKm", "actualTrimp"):
+    stack_with_actuals[col] = pd.to_numeric(stack_with_actuals.get(col), errors="coerce").fillna(0.0)
+
 chart = (
-    alt.Chart(stack_df)
+    alt.Chart(stack_with_actuals)
     .mark_bar()
     .encode(
         x=alt.X("weekLabel:N", title="Semaine"),
@@ -356,11 +387,12 @@ chart = (
         order=alt.Order("order:Q"),
         tooltip=[
             alt.Tooltip("weekLabel:N", title="Semaine"),
-            alt.Tooltip("segment:N", title="Segment"),
-            alt.Tooltip("value:Q", title="Valeur", format=".2f"),
-            alt.Tooltip("planned:Q", title="Planifié", format=".2f"),
-            alt.Tooltip("actual:Q", title="Réalisé", format=".2f"),
-            alt.Tooltip("maxValue:Q", title="Max", format=".2f"),
+            alt.Tooltip("actual:Q", title=f"Réalisé ({metric_cfg['unit']})", format=".2f"),
+            alt.Tooltip("planned:Q", title=f"Planifié ({metric_cfg['unit']})", format=".2f"),
+            alt.Tooltip("actualTimeHours:Q", title="Durée (h)", format=".2f"),
+            alt.Tooltip("actualDistanceKm:Q", title="Distance (km)", format=".2f"),
+            alt.Tooltip("actualDistanceEqKm:Q", title="Dist. équiv. (km)", format=".2f"),
+            alt.Tooltip("actualTrimp:Q", title="TRIMP", format=".2f"),
         ],
     )
     .properties(height=400, width=CHART_WIDTH)
