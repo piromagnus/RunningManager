@@ -13,6 +13,7 @@ from persistence.repositories import (
     PlannedSessionsRepo,
     SettingsRepo,
 )
+from services.interval_utils import normalize_steps
 
 
 @dataclass
@@ -113,88 +114,72 @@ class PlannerService:
             return None
         return None
 
+    def _action_distance_km(self, athlete_id: str, action: Dict[str, Any]) -> float:
+        seconds = int(action.get("sec") or 0)
+        if seconds <= 0:
+            return 0.0
+        pace = self._fundamental_pace_kmh(athlete_id)
+        kind = (action.get("kind") or "recovery").lower()
+        if kind == "run":
+            target_type = action.get("targetType")
+            target_label = action.get("targetLabel")
+            if target_type in ("pace", "hr"):
+                pace = self._threshold_pace_kmh(athlete_id, target_label) or pace
+        return (seconds / 3600.0) * pace
+
     def estimate_interval_duration_sec(self, steps: Dict[str, Any]) -> int:
-        warm = int(steps.get("warmupSec") or 0)
-        cool = int(steps.get("cooldownSec") or 0)
-        # Back-compat simple repeats
-        if "repeats" in steps:
-            reps = steps.get("repeats") or []
-            total_rep = 0
-            for rep in reps:
-                total_rep += int(rep.get("workSec") or 0) + int(rep.get("recoverSec") or 0)
-            return warm + total_rep + cool
-        # New loops structure
-        loops = steps.get("loops") or []
-        between = int(steps.get("betweenLoopRecoverSec") or 0)
-        total = warm + cool
-        for loop in loops:
-            actions = loop.get("actions") or []
+        normalised = normalize_steps(steps)
+        total = 0
+        total += sum(int(block.get("sec") or 0) for block in normalised["preBlocks"])
+        between = normalised.get("betweenBlock")
+        between_sec = int((between or {}).get("sec") or 0)
+        loops = normalised["loops"] or []
+        loop_count = len(loops)
+        for index, loop in enumerate(loops):
             repeats = int(loop.get("repeats") or 1)
-            one_loop = 0
-            for act in actions:
-                one_loop += int(act.get("sec") or 0)
-            total += repeats * one_loop
-            total += max(0, repeats - 1) * between
-        return total
+            actions = loop.get("actions") or []
+            loop_total = sum(int(act.get("sec") or 0) for act in actions)
+            total += repeats * loop_total
+            if between_sec > 0 and loop_count > 1 and index < loop_count - 1:
+                total += between_sec
+        total += sum(int(block.get("sec") or 0) for block in normalised["postBlocks"])
+        return int(total)
 
     def estimate_interval_distance_km(self, athlete_id: str, steps: Dict[str, Any]) -> float:
-        fundamental_pace = self._fundamental_pace_kmh(athlete_id)
-        dist_km = 0.0
-        # Warmup
-        warm = int(steps.get("warmupSec") or 0)
-        dist_km += (warm / 3600.0) * fundamental_pace
-        # Back-compat simple repeats
-        if "repeats" in steps:
-            reps = steps.get("repeats") or []
-            for rep in reps:
-                work = int(rep.get("workSec") or 0)
-                rec = int(rep.get("recoverSec") or 0)
-                tt = rep.get("targetType")
-                tl = rep.get("targetLabel")
-                pace_for_work = None
-                if tt in ("pace", "hr"):
-                    pace_for_work = self._threshold_pace_kmh(athlete_id, tl)
-                if pace_for_work is None:
-                    pace_for_work = fundamental_pace
-                dist_km += (work / 3600.0) * pace_for_work
-                dist_km += (rec / 3600.0) * fundamental_pace
-        else:
-            # New loops structure
-            loops = steps.get("loops") or []
-            between = int(steps.get("betweenLoopRecoverSec") or 0)
-            for loop in loops:
-                actions = loop.get("actions") or []
-                repeats = int(loop.get("repeats") or 1)
-                one_loop_km = 0.0
-                for act in actions:
-                    sec = int(act.get("sec") or 0)
-                    kind = (act.get("kind") or "recovery").lower()
-                    tt = act.get("targetType")
-                    tl = act.get("targetLabel")
-                    pace = fundamental_pace
-                    if kind == "run" and tt in ("pace", "hr"):
-                        pace = self._threshold_pace_kmh(athlete_id, tl) or fundamental_pace
-                    # asc/desc targets are informational; distance estimate still based on pace
-                    one_loop_km += (sec / 3600.0) * pace
-                # add between-loop recovery (at fundamental)
-                dist_km += repeats * one_loop_km
-                dist_km += max(0, repeats - 1) * ((between / 3600.0) * fundamental_pace)
-        # Cooldown
-        cool = int(steps.get("cooldownSec") or 0)
-        dist_km += (cool / 3600.0) * fundamental_pace
-        return dist_km
-
-    def estimate_interval_ascent_m(self, steps: Dict[str, Any]) -> int:
-        # Only loops/actions currently carry explicit ascend targets
-        total = 0
-        loops = steps.get("loops") or []
-        for loop in loops:
+        normalised = normalize_steps(steps)
+        total = 0.0
+        for block in normalised["preBlocks"]:
+            total += self._action_distance_km(athlete_id, block)
+        between = normalised.get("betweenBlock")
+        loops = normalised["loops"] or []
+        loop_count = len(loops)
+        for index, loop in enumerate(loops):
             repeats = int(loop.get("repeats") or 1)
             actions = loop.get("actions") or []
-            loop_asc = 0
-            for act in actions:
-                loop_asc += int(act.get("ascendM") or 0)
+            loop_distance = sum(self._action_distance_km(athlete_id, action) for action in actions)
+            total += repeats * loop_distance
+            if between and loop_count > 1 and index < loop_count - 1:
+                total += self._action_distance_km(athlete_id, between)
+        for block in normalised["postBlocks"]:
+            total += self._action_distance_km(athlete_id, block)
+        return total
+
+    def estimate_interval_ascent_m(self, steps: Dict[str, Any]) -> int:
+        normalised = normalize_steps(steps)
+        total = 0
+        total += sum(int(block.get("ascendM") or 0) for block in normalised["preBlocks"])
+        between = normalised.get("betweenBlock")
+        between_asc = int((between or {}).get("ascendM") or 0)
+        loops = normalised["loops"] or []
+        loop_count = len(loops)
+        for index, loop in enumerate(loops):
+            repeats = int(loop.get("repeats") or 1)
+            actions = loop.get("actions") or []
+            loop_asc = sum(int(action.get("ascendM") or 0) for action in actions)
             total += repeats * loop_asc
+            if between_asc > 0 and loop_count > 1 and index < loop_count - 1:
+                total += between_asc
+        total += sum(int(block.get("ascendM") or 0) for block in normalised["postBlocks"])
         return int(total)
 
     def _parse_steps(self, steps_json: Any) -> Optional[Dict[str, Any]]:
@@ -255,6 +240,7 @@ class PlannerService:
         total_time = 0
         total_dist = 0.0
         total_ascent = 0
+        total_eq = 0.0
         for sess in sessions:
             duration = sess.get("plannedDurationSec")
             try:
@@ -266,10 +252,14 @@ class PlannerService:
             if est_dist is not None:
                 total_dist += est_dist
             total_ascent += self.estimate_session_ascent_m(athlete_id, sess)
+            eq = self.compute_session_distance_eq(athlete_id, sess)
+            if eq is not None:
+                total_eq += eq
         return {
             "timeSec": int(total_time),
             "distanceKm": float(total_dist),
             "ascentM": int(total_ascent),
+            "distanceEqKm": float(total_eq),
         }
 
     # --- Distance equivalent helpers ---

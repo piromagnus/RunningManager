@@ -15,11 +15,32 @@ from persistence.csv_storage import CsvStorage
 from persistence.repositories import AthletesRepo, PlannedSessionsRepo
 from services.planner_service import PlannerService
 from services.session_templates_service import SessionTemplatesService
+from ui.interval_editor import render_interval_editor
 
 
 st.set_page_config(page_title="Running Manager - Session Creator", layout="wide")
 apply_theme()
 st.title("Session Template Creator")
+
+st.markdown(
+    """
+    <style>
+    .rm-card {
+      padding: 10px 12px;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 8px;
+      margin-bottom: 10px;
+      background: rgba(0,0,0,0.15);
+    }
+    .rm-loop-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 8px 10px; margin-bottom: 10px; }
+    .rm-interval-action { background: rgba(255,255,255,0.02); border-radius: 6px; padding: 6px 8px; margin-bottom: 6px; }
+    .rm-interval-editor .stNumberInput label,
+    .rm-interval-editor .stSelectbox label,
+    .rm-interval-editor .stTextInput label { font-size: 0.75rem; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 cfg = load_config()
 set_locale("fr_FR")
@@ -69,7 +90,6 @@ def list_sessions(athlete_id: Optional[str]) -> List[Dict[str, Any]]:
     df = sessions_repo.list(athleteId=athlete_id)
     if df.empty:
         return []
-    # sort most recent first
     df = df.sort_values("date", ascending=False)
     return df.head(50).to_dict(orient="records")
 
@@ -277,211 +297,83 @@ def _render_long_run_form(
     return result, distance_eq_preview
 
 
+def _render_race_form(
+    athlete_id: Optional[str],
+    payload: Dict[str, Any],
+) -> Tuple[Dict[str, Any], Optional[float]]:
+    planned_distance_km = _coerce_float(payload.get("plannedDistanceKm"), 0.0)
+    planned_duration_sec = _coerce_int(payload.get("plannedDurationSec"), 0)
+    planned_ascent_m = _coerce_int(payload.get("plannedAscentM"), 0)
+
+    distance_input = st.number_input(
+        "Distance (km)",
+        min_value=0.0,
+        value=planned_distance_km,
+        step=0.1,
+        key="creator-race-distance",
+    )
+    ascent_input = st.number_input(
+        "Ascension (m)",
+        min_value=0,
+        value=planned_ascent_m,
+        step=50,
+        key="creator-race-ascent",
+    )
+    target_time_input = st.number_input(
+        "Temps cible (sec)",
+        min_value=0,
+        value=planned_duration_sec,
+        step=60,
+        key="creator-race-duration",
+    )
+
+    result = {
+        "plannedDistanceKm": float(distance_input),
+        "plannedAscentM": int(ascent_input),
+        "plannedDurationSec": int(target_time_input),
+        "targetType": "race",
+        "targetLabel": None,
+    }
+    distance_eq_preview = planner.compute_distance_eq_km(result["plannedDistanceKm"], result["plannedAscentM"])
+    st.caption(
+        f"Distance-eq ≈ {fmt_decimal(distance_eq_preview, 1)} km • "
+        f"Temps cible ≈ {_format_duration(result['plannedDurationSec'])}"
+    )
+    return result, distance_eq_preview
+
+
 def _render_interval_form(
     athlete_id: Optional[str],
     payload: Dict[str, Any],
 ) -> Dict[str, Any]:
-    result: Dict[str, Any] = {}
     thr_names = planner.list_threshold_names(str(athlete_id or "")) if athlete_id else ["Threshold 60", "Threshold 30", "Fundamental", "MVA", "Max speed"]
-    steps_json = payload.get("stepsJson")
-    parsed: Dict[str, Any] = {}
-    if steps_json:
-        if isinstance(steps_json, dict):
-            parsed = steps_json
-        else:
-            try:
-                parsed = json.loads(steps_json)
-            except Exception:
-                parsed = {}
-    warmup_default = int(parsed.get("warmupSec") or 600)
-    warmup = int(st.number_input("Warm-up (sec)", min_value=0, value=warmup_default, step=60, key="creator-interval-warmup"))
-    cooldown_default = int(parsed.get("cooldownSec") or 600)
-    cooldown = int(
-        st.number_input("Cool-down (sec)", min_value=0, value=cooldown_default, step=60, key="creator-interval-cooldown")
-    )
-    mode = st.radio(
-        "Interval build mode",
-        ["Simple repeats", "Loops"],
-        index=(0 if "repeats" in parsed else 1 if "loops" in parsed else 0),
-        horizontal=True,
-        key="creator-interval-mode",
-    )
-    if mode == "Simple repeats":
-        repeats = parsed.get("repeats", [])
-        num_rep = st.number_input("Repeats", min_value=1, value=max(1, len(repeats) or 6), step=1, key="creator-interval-repeats")
-        rows = []
-        for idx in range(int(num_rep)):
-            st.markdown(f"Repeat {idx + 1}")
-            cur = repeats[idx] if idx < len(repeats) else {}
-            w = int(
-                st.number_input(
-                    f"Work (sec) #{idx + 1}",
-                    min_value=10,
-                    value=int(cur.get("workSec") or 60),
-                    step=10,
-                    key=f"creator-interval-work-{idx}",
-                )
-            )
-            r = int(
-                st.number_input(
-                    f"Recovery (sec) #{idx + 1}",
-                    min_value=10,
-                    value=int(cur.get("recoverSec") or 60),
-                    step=10,
-                    key=f"creator-interval-recover-{idx}",
-                )
-            )
-            tt_default = cur.get("targetType") or "hr"
-            tt = st.selectbox(
-                f"Target type #{idx + 1}",
-                ["hr", "pace", "sensation"],
-                index=(["hr", "pace", "sensation"].index(tt_default)),
-                key=f"creator-interval-target-type-{idx}",
-            )
-            if tt in ("hr", "pace"):
-                tl_index = (
-                    thr_names.index(cur.get("targetLabel", thr_names[0]))
-                    if cur.get("targetLabel") in thr_names
-                    else 0
-                )
-                tl = st.selectbox(
-                    f"Target label #{idx + 1}",
-                    thr_names,
-                    index=tl_index,
-                    key=f"creator-interval-target-label-{idx}",
-                )
-            else:
-                tl = st.text_input(
-                    f"Sensation label #{idx + 1}",
-                    value=str(cur.get("targetLabel") or ""),
-                    key=f"creator-interval-sensation-{idx}",
-                )
-            rows.append({"workSec": w, "recoverSec": r, "targetType": tt, "targetLabel": tl})
-        steps = {"warmupSec": warmup, "repeats": rows}
-    else:
-        loops = parsed.get("loops", [])
-        loop_count = st.number_input(
-            "Number of loops",
-            min_value=1,
-            value=max(1, len(loops) or 1),
-            key="creator-interval-loops-count",
-        )
-        between = int(
-            st.number_input(
-                "Between-loop recovery (sec)",
-                min_value=0,
-                value=int(parsed.get("betweenLoopRecoverSec") or 0),
-                step=10,
-                key="creator-interval-between",
-            )
-        )
-        built_loops = []
-        for li in range(int(loop_count)):
-            st.markdown(f"Loop {li + 1}")
-            cur_loop = loops[li] if li < len(loops) else {}
-            actions = cur_loop.get("actions") or []
-            repeats = int(
-                st.number_input(
-                    f"Loop repeats #{li + 1}",
-                    min_value=1,
-                    value=int(cur_loop.get("repeats") or 1),
-                    key=f"creator-interval-loop-repeats-{li}",
-                )
-            )
-            act_count = st.number_input(
-                f"Actions in loop #{li + 1}",
-                min_value=1,
-                value=max(1, len(actions) or 2),
-                key=f"creator-interval-actions-{li}",
-            )
-            built_actions = []
-            for ai in range(int(act_count)):
-                st.markdown(f"- Action {ai + 1}")
-                cur_act = actions[ai] if ai < len(actions) else {}
-                kind = st.selectbox(
-                    f"Kind #{li + 1}.{ai + 1}",
-                    ["run", "recovery"],
-                    index=(0 if (cur_act.get("kind") or "run") == "run" else 1),
-                    key=f"creator-interval-kind-{li}-{ai}",
-                )
-                sec = int(
-                    st.number_input(
-                        f"Seconds #{li + 1}.{ai + 1}",
-                        min_value=5,
-                        value=int(cur_act.get("sec") or 60),
-                        step=5,
-                        key=f"creator-interval-sec-{li}-{ai}",
-                    )
-                )
-                tt_default = cur_act.get("targetType") or "hr"
-                tt = st.selectbox(
-                    f"Target type #{li + 1}.{ai + 1}",
-                    ["hr", "pace", "sensation"],
-                    index=(["hr", "pace", "sensation"].index(tt_default)),
-                    key=f"creator-interval-target-type-{li}-{ai}",
-                )
-                if tt in ("hr", "pace"):
-                    tl_index = (
-                        thr_names.index(cur_act.get("targetLabel", thr_names[0]))
-                        if cur_act.get("targetLabel") in thr_names
-                        else 0
-                    )
-                    tl = st.selectbox(
-                        f"Target label #{li + 1}.{ai + 1}",
-                        thr_names,
-                        index=tl_index,
-                        key=f"creator-interval-target-label-{li}-{ai}",
-                    )
-                else:
-                    tl = st.text_input(
-                        f"Sensation label #{li + 1}.{ai + 1}",
-                        value=str(cur_act.get("targetLabel") or ""),
-                        key=f"creator-interval-sensation-{li}-{ai}",
-                    )
-                ascend = int(
-                    st.number_input(
-                        f"Ascend gain (m) #{li + 1}.{ai + 1} (opt)",
-                        min_value=0,
-                        value=int(cur_act.get("ascendM") or 0),
-                        step=10,
-                        key=f"creator-interval-asc-{li}-{ai}",
-                    )
-                )
-                descend = int(
-                    st.number_input(
-                        f"Descent loss (m) #{li + 1}.{ai + 1} (opt)",
-                        min_value=0,
-                        value=int(cur_act.get("descendM") or 0),
-                        step=10,
-                        key=f"creator-interval-desc-{li}-{ai}",
-                    )
-                )
-                built_actions.append(
-                    {
-                        "kind": kind,
-                        "sec": sec,
-                        "targetType": tt,
-                        "targetLabel": tl,
-                        "ascendM": ascend,
-                        "descendM": descend,
-                    }
-                )
-            built_loops.append({"repeats": repeats, "actions": built_actions})
-        steps = {"warmupSec": warmup, "loops": built_loops, "betweenLoopRecoverSec": between}
-    result["stepsJson"] = json.dumps({**steps, "cooldownSec": cooldown})
-    step_end_mode = payload.get("stepEndMode") or "auto"
-    result["stepEndMode"] = st.selectbox(
-        "Interval end mode",
+    serialized_steps = render_interval_editor("creator", payload.get("stepsJson"), thr_names)
+    step_end_mode_default = payload.get("stepEndMode") or "auto"
+    step_end_mode = st.selectbox(
+        "Mode de fin",
         ["auto", "lap"],
-        index=(["auto", "lap"].index(step_end_mode) if step_end_mode in ("auto", "lap") else 0),
+        index=(["auto", "lap"].index(step_end_mode_default) if step_end_mode_default in ("auto", "lap") else 0),
         key="creator-interval-end-mode",
     )
-    result["plannedDurationSec"] = planner.estimate_interval_duration_sec(json.loads(result["stepsJson"]))
-    result["plannedDistanceKm"] = planner.estimate_interval_distance_km(str(athlete_id or ""), json.loads(result["stepsJson"]))
-    result["plannedAscentM"] = planner.estimate_interval_ascent_m(json.loads(result["stepsJson"]))
-    result["targetType"] = None
-    result["targetLabel"] = None
-    return result
+    planned_duration_sec = planner.estimate_interval_duration_sec(serialized_steps)
+    planned_distance_km = planner.estimate_interval_distance_km(str(athlete_id or ""), serialized_steps)
+    planned_ascent_m = planner.estimate_interval_ascent_m(serialized_steps)
+    distance_eq_preview = planner.compute_distance_eq_km(planned_distance_km, planned_ascent_m)
+    st.caption(
+        f"Durée ≈ {_format_duration(planned_duration_sec)} • "
+        f"Distance ≈ {fmt_decimal(planned_distance_km, 1)} km • "
+        f"D+ ≈ {fmt_m(planned_ascent_m)} • "
+        f"Distance-eq ≈ {fmt_decimal(distance_eq_preview, 1)} km"
+    )
+    return {
+        "stepsJson": json.dumps(serialized_steps, ensure_ascii=False, separators=(",", ":")),
+        "stepEndMode": step_end_mode,
+        "plannedDurationSec": planned_duration_sec,
+        "plannedDistanceKm": planned_distance_km,
+        "plannedAscentM": planned_ascent_m,
+        "targetType": None,
+        "targetLabel": None,
+    }
 
 
 def _render_session_form(
@@ -494,6 +386,8 @@ def _render_session_form(
         return _render_fundamental_form(athlete_id, payload)
     if session_type == "LONG_RUN":
         return _render_long_run_form(athlete_id, payload)
+    if session_type == "RACE":
+        return _render_race_form(athlete_id, payload)
     if session_type == "INTERVAL_SIMPLE":
         interval_result = _render_interval_form(athlete_id, payload)
         return interval_result, None
@@ -517,6 +411,11 @@ def _session_payload_for_save(session_type: str, form_data: Dict[str, Any], note
 
 
 state = st.session_state.setdefault("session_creator_state", {})
+state.setdefault("templateTitleSource", "auto")
+if "sessionPayload" not in state:
+    base_type_default = state.get("baseType") or "FUNDAMENTAL_ENDURANCE"
+    state["sessionPayload"] = {"type": base_type_default}
+
 prefill = st.session_state.pop("session_creator_prefill", None)
 if prefill:
     if isinstance(prefill.get("date"), str):
@@ -613,7 +512,7 @@ if selected_session_label != "Aucune":
 
 session_payload = state.get("sessionPayload") or {}
 session_type = (session_payload.get("type") or state.get("baseType") or "FUNDAMENTAL_ENDURANCE").upper()
-base_type_options = ["FUNDAMENTAL_ENDURANCE", "LONG_RUN", "INTERVAL_SIMPLE"]
+base_type_options = ["FUNDAMENTAL_ENDURANCE", "LONG_RUN", "RACE", "INTERVAL_SIMPLE"]
 session_type = st.selectbox(
     "Type de session",
     base_type_options,
@@ -636,12 +535,6 @@ form_result, distance_eq_preview = _render_session_form(athlete_id, session_type
 
 if distance_eq_preview is not None:
     st.caption(f"Distance-eq courante ≈ {fmt_decimal(distance_eq_preview, 1)} km")
-elif session_type == "INTERVAL_SIMPLE":
-    st.caption(
-        f"Durée estimée ≈ {_format_duration(form_result.get('plannedDurationSec', 0))} • "
-        f"Distance estimée ≈ {fmt_decimal(form_result.get('plannedDistanceKm'), 1)} km • "
-        f"Ascent ≈ {fmt_m(form_result.get('plannedAscentM'))}"
-    )
 
 payload_for_save = _session_payload_for_save(session_type, form_result, session_notes)
 

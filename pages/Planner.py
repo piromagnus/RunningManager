@@ -6,7 +6,7 @@ from pathlib import Path
 import math
 
 import streamlit as st
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from utils.config import load_config
 from utils.formatting import set_locale, fmt_decimal, fmt_m
@@ -18,6 +18,7 @@ from services.templates_service import TemplatesService
 from services.planner_service import PlannerService
 from services.planner_presenter import build_card_view_model, build_empty_state_placeholder
 from services.session_templates_service import SessionTemplatesService
+from ui.interval_editor import render_interval_editor
 
 
 st.set_page_config(page_title="Running Manager - Planner", layout="wide")
@@ -75,10 +76,93 @@ def _default_template_title(session: Dict[str, Any]) -> str:
     date_part = str(session.get("date") or "")
     return f"{title_part} {date_part}".strip()
 
-# Caching helpers
+
+def _clean_optional(value: Any) -> str:
+    if value in (None, ""):
+        return ""
+    if isinstance(value, float) and math.isnan(value):
+        return ""
+    return str(value)
+
+
+def _reset_planner_state() -> None:
+    planner_state = st.session_state.setdefault("planner_state", {"form": {}, "source": None})
+    planner_state["form"] = {}
+    planner_state["source"] = None
+    for key in list(st.session_state.keys()):
+        if key.startswith("planner-interval-editor-"):
+            st.session_state.pop(key, None)
+
+
+def _apply_planner_prefill(
+    planner_state: Dict[str, Any],
+    source: str,
+    *,
+    date_value: dt.date,
+    session_type: str,
+    payload: Dict[str, Any],
+    force: bool = False,
+) -> None:
+    if not force and planner_state.get("source") == source and planner_state.get("form"):
+        return
+
+    planned_distance = float(_coerce_float(payload.get("plannedDistanceKm"), 0.0))
+    planned_duration = int(_coerce_int(payload.get("plannedDurationSec"), 0))
+    planned_ascent = int(_coerce_int(payload.get("plannedAscentM"), 0))
+    target_type = str(payload.get("targetType") or "").lower()
+    if target_type not in ("hr", "pace"):
+        target_type = "none"
+
+    form = {
+        "date": date_value,
+        "type": session_type,
+        "notes": _clean_optional(payload.get("notes")),
+        "plannedDistanceKm": planned_distance,
+        "plannedDurationSec": planned_duration,
+        "plannedAscentM": planned_ascent,
+        "targetType": target_type,
+        "targetLabel": _clean_optional(payload.get("targetLabel")) if target_type in ("hr", "pace") else None,
+        "mode": "distance" if planned_distance > 0 or planned_duration <= 0 else "duration",
+        "stepEndMode": payload.get("stepEndMode") or ("auto" if session_type == "INTERVAL_SIMPLE" else None),
+        "stepsJson": payload.get("stepsJson") or "",
+    }
+    planner_state["form"] = form
+    planner_state["source"] = source
+
+
+def build_session_row(
+    form: Dict[str, Any],
+    athlete_id: str,
+    *,
+    overrides: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    date_value = form.get("date")
+    if isinstance(date_value, dt.date):
+        date_str = date_value.isoformat()
+    else:
+        date_str = _clean_optional(date_value)
+    row = {
+        "athleteId": athlete_id,
+        "date": date_str,
+        "type": form.get("type"),
+        "plannedDistanceKm": form.get("plannedDistanceKm"),
+        "plannedDurationSec": form.get("plannedDurationSec"),
+        "plannedAscentM": form.get("plannedAscentM"),
+        "targetType": None if form.get("targetType") in (None, "", "none") else form.get("targetType"),
+        "targetLabel": form.get("targetLabel"),
+        "notes": _clean_optional(form.get("notes")),
+        "stepEndMode": form.get("stepEndMode"),
+        "stepsJson": form.get("stepsJson"),
+    }
+    if overrides:
+        row.update(overrides)
+    return row
+
+
 @st.cache_data(ttl=5)
 def get_sessions_df_cached(athlete_id: str):
     return sessions_repo.list(athleteId=athlete_id)
+
 
 @st.cache_data(ttl=60)
 def get_threshold_names_cached(athlete_id: str):
@@ -89,32 +173,43 @@ def get_threshold_names_cached(athlete_id: str):
 def get_session_templates_cached(athlete_id: str):
     return session_templates.list(athlete_id=athlete_id)
 
+
 if st.session_state.pop("planner_templates_refresh", False):
     get_session_templates_cached.clear()
 
-# Simple CSS widening and card styling
+planner_state = st.session_state.setdefault("planner_state", {"form": {}, "source": None})
+
 st.markdown(
     """
     <style>
     .rm-card {
-      padding: 8px 10px;
-      border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 6px;
-      margin-bottom: 8px;
+      padding: 10px 12px;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 8px;
+      margin-bottom: 10px;
+      background: rgba(0,0,0,0.15);
     }
-    .rm-top { font-size: 0.9rem; line-height: 1.2; }
-    .rm-actions { display: flex; gap: 6px; }
+    .rm-card-header { font-size: 0.95rem; font-weight: 600; margin-bottom: 4px; }
+    .rm-card-meta { font-size: 0.8rem; color: rgba(255,255,255,0.7); margin-bottom: 4px; }
+    .rm-card-section { background: rgba(255,255,255,0.04); border-radius: 6px; padding: 6px 8px; margin-top: 6px; }
+    .rm-card-section-title { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; margin-bottom: 2px; }
+    .rm-card-section-body { font-size: 0.8rem; line-height: 1.3; }
+    .rm-card-actions { display: flex; gap: 6px; margin-top: 6px; }
+    .rm-loop-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 8px 10px; margin-bottom: 10px; }
+    .rm-interval-action { background: rgba(255,255,255,0.02); border-radius: 6px; padding: 6px 8px; margin-bottom: 6px; }
+    .rm-interval-editor .stNumberInput label,
+    .rm-interval-editor .stSelectbox label,
+    .rm-interval-editor .stTextInput label { font-size: 0.75rem; }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
-
 st.subheader("Select Athlete and Week")
 ath_df = ath_repo.list()
 athlete_options = (
     {
-        f"{r.get('name') or 'Unnamed'} ({r.get('athleteId')})": r.get('athleteId')
+        f"{r.get('name') or 'Unnamed'} ({r.get('athleteId')})": r.get("athleteId")
         for _, r in ath_df.iterrows()
     }
     if not ath_df.empty
@@ -167,36 +262,35 @@ with st.expander("Create/Edit session", expanded=bool(edit_ctx)):
     mode = (edit_ctx or {}).get("mode")
     existing = None
     default_date = week_start.date()
+    payload_source = "planner:default"
+    base_payload: Dict[str, Any] = {}
+    typ = "FUNDAMENTAL_ENDURANCE"
+
     if mode == "edit":
         sid = (edit_ctx or {}).get("plannedSessionId")
         existing = sessions_repo.get(sid) if sid else None
         if existing:
-            default_date = dt.date.fromisoformat(existing.get("date"))
-    elif mode == "create":
-        d = (edit_ctx or {}).get("date")
-        if d:
             try:
-                default_date = dt.date.fromisoformat(d)
+                default_date = dt.date.fromisoformat(existing.get("date"))
+            except Exception:
+                default_date = week_start.date()
+            typ = (existing.get("type") or "FUNDAMENTAL_ENDURANCE").upper()
+            base_payload = existing
+            payload_source = f"edit:{sid}"
+    elif mode == "create":
+        requested_date = (edit_ctx or {}).get("date")
+        if requested_date:
+            try:
+                default_date = dt.date.fromisoformat(requested_date)
             except Exception:
                 default_date = week_start.date()
 
-    date = st.date_input("Date", value=default_date)
-    if existing:
-        typ = (existing.get("type") or "FUNDAMENTAL_ENDURANCE").upper()
-        type_options = ["FUNDAMENTAL_ENDURANCE", "LONG_RUN", "INTERVAL_SIMPLE"]
-        if typ not in type_options:
-            type_options.append(typ)
-        typ = st.selectbox(
-            "Type",
-            type_options,
-            index=type_options.index(typ),
-        )
-        base_payload = existing
-    else:
+    if not existing:
         template_records = get_session_templates_cached(athlete_id) if athlete_id else []
         base_options: List[Dict[str, Any]] = [
             {"kind": "type", "value": "FUNDAMENTAL_ENDURANCE", "label": "Endurance fondamentale"},
             {"kind": "type", "value": "LONG_RUN", "label": "Sortie longue"},
+            {"kind": "type", "value": "RACE", "label": "Course"},
         ]
         for tpl in template_records:
             label = tpl.get("title") or tpl.get("templateId")
@@ -208,81 +302,105 @@ with st.expander("Create/Edit session", expanded=bool(edit_ctx)):
                     "template": tpl,
                 }
             )
-        if not base_options:
-            base_options = [{"kind": "type", "value": "FUNDAMENTAL_ENDURANCE", "label": "Endurance fondamentale"}]
-        option_keys = list(range(len(base_options)))
-        default_index = option_keys[0]
         base_choice = st.selectbox(
             "Type ou modèle",
-            option_keys,
-            index=default_index,
+            list(range(len(base_options))),
+            index=0,
             format_func=lambda idx: base_options[idx]["label"],
             key="planner_base_selector",
         )
         chosen = base_options[base_choice]
+        if hasattr(default_date, "isoformat"):
+            source_date_token = default_date.isoformat()
+        else:
+            source_date_token = str(default_date)
+
         if chosen["kind"] == "type":
             typ = str(chosen["value"]).upper()
             base_payload = {}
+            payload_source = f"create:type:{typ}:{source_date_token}"
         else:
             tpl_record = chosen.get("template") or session_templates.get(str(chosen.get("value") or ""))
-            payload_source = (tpl_record or {}).get("payload") or {}
-            payload = dict(payload_source)
+            payload = dict((tpl_record or {}).get("payload") or {})
             payload["type"] = (payload.get("type") or (tpl_record or {}).get("baseType") or "FUNDAMENTAL_ENDURANCE").upper()
             base_payload = payload
             typ = payload.get("type")
+            payload_source = f"create:template:{chosen.get('value')}:{source_date_token}"
         col_template_btn, _ = st.columns([1, 3])
         with col_template_btn:
             if st.button("Créer un modèle", key="planner-create-template"):
                 st.session_state["session_creator_prefill"] = {
-                    "date": str(date),
+                    "date": str(default_date),
                     "athleteId": athlete_id,
                 }
                 st.switch_page("pages/SessionCreator.py")
 
-    notes_default = base_payload.get("notes") if base_payload else ""
-    if isinstance(notes_default, float) and math.isnan(notes_default):
-        notes_default = ""
-    notes = st.text_area("Notes", value=notes_default or "")
+    _apply_planner_prefill(
+        planner_state,
+        payload_source,
+        date_value=default_date,
+        session_type=typ,
+        payload=base_payload or {},
+        force=mode == "edit",
+    )
 
-    target_type = base_payload.get("targetType") if base_payload else None
-    target_label = base_payload.get("targetLabel") if base_payload else None
-    planned_distance_km = base_payload.get("plannedDistanceKm") if base_payload else None
-    planned_duration_sec = base_payload.get("plannedDurationSec") if base_payload else None
-    planned_ascent_m = base_payload.get("plannedAscentM") if base_payload else None
-    step_end_mode = base_payload.get("stepEndMode") if base_payload else None
-    steps_json = base_payload.get("stepsJson") if base_payload else None
-    if isinstance(target_type, float) and math.isnan(target_type):
-        target_type = None
-    if isinstance(target_label, float) and math.isnan(target_label):
-        target_label = None
+    form = planner_state.setdefault("form", {})
+
+    date_value = st.date_input("Date", value=form.get("date", default_date))
+    form["date"] = date_value
+
+    if existing:
+        type_options = ["FUNDAMENTAL_ENDURANCE", "LONG_RUN", "RACE", "INTERVAL_SIMPLE"]
+        if typ not in type_options:
+            type_options.append(typ)
+        typ = st.selectbox(
+            "Type",
+            type_options,
+            index=type_options.index(form.get("type", typ)),
+        )
+        form["type"] = typ
+    else:
+        form["type"] = typ
+
+    notes = st.text_area("Notes", value=form.get("notes", ""))
+    form["notes"] = notes
+
+    planned_distance_km = float(form.get("plannedDistanceKm", 0.0))
+    planned_duration_sec = int(form.get("plannedDurationSec", 0))
+    planned_ascent_m = int(form.get("plannedAscentM", 0))
+    target_type = form.get("targetType", "none")
+    target_label = form.get("targetLabel")
+    step_end_mode = form.get("stepEndMode")
+    steps_json = form.get("stepsJson") or ""
 
     if typ == "FUNDAMENTAL_ENDURANCE":
         step_end_mode = None
         steps_json = None
         mode_options = ["distance", "duration"]
-        distance_present = _coerce_float(planned_distance_km, 0.0) > 0
-        duration_present = _coerce_int(planned_duration_sec, 0) > 0
-        default_index = 0 if distance_present or not duration_present else 1
+        current_mode = form.get("mode", "distance")
+        if current_mode not in mode_options:
+            current_mode = "distance"
         mode_choice = st.radio(
             "Mode de saisie",
             mode_options,
-            index=default_index,
+            index=mode_options.index(current_mode),
             format_func=lambda x: "Distance + D+" if x == "distance" else "Durée + D+ mini",
             horizontal=True,
         )
+        form["mode"] = mode_choice
         distance_eq_preview = None
 
         if mode_choice == "distance":
             distance_input = st.number_input(
                 "Distance planifiée (km)",
                 min_value=0.0,
-                value=_coerce_float(planned_distance_km, 0.0),
+                value=float(planned_distance_km),
                 step=0.1,
             )
             ascent_input = st.number_input(
                 "Ascension planifiée (m)",
                 min_value=0,
-                value=_coerce_int(planned_ascent_m, 0),
+                value=int(planned_ascent_m),
                 step=50,
             )
             derived = planner.derive_from_distance(str(athlete_id or ""), distance_input, ascent_input)
@@ -297,13 +415,13 @@ with st.expander("Create/Edit session", expanded=bool(edit_ctx)):
             duration_input = st.number_input(
                 "Durée planifiée (sec)",
                 min_value=0,
-                value=_coerce_int(planned_duration_sec, 3600),
+                value=int(planned_duration_sec) if planned_duration_sec else 3600,
                 step=300,
             )
             ascent_input = st.number_input(
                 "Ascension minimale (m)",
                 min_value=0,
-                value=_coerce_int(planned_ascent_m, 0),
+                value=int(planned_ascent_m),
                 step=50,
             )
             derived = planner.derive_from_duration(str(athlete_id or ""), int(duration_input), ascent_input)
@@ -316,7 +434,7 @@ with st.expander("Create/Edit session", expanded=bool(edit_ctx)):
             )
 
         target_options = ["none", "hr", "pace"]
-        current_target = target_type if target_type in target_options else "pace"
+        current_target = target_type if target_type in target_options else "none"
         target_type = st.selectbox(
             "Cible",
             target_options,
@@ -327,34 +445,37 @@ with st.expander("Create/Edit session", expanded=bool(edit_ctx)):
         else:
             target_label = "Fundamental"
             st.caption("Seuil fixé automatiquement sur Fundamental.")
+        form["targetType"] = target_type
+        form["targetLabel"] = target_label
 
     elif typ == "LONG_RUN":
         step_end_mode = None
         steps_json = None
         mode_options = ["distance", "duration"]
-        distance_present = _coerce_float(planned_distance_km, 0.0) > 0
-        duration_present = _coerce_int(planned_duration_sec, 0) > 0
-        default_index = 0 if distance_present or not duration_present else 1
+        current_mode = form.get("mode", "distance")
+        if current_mode not in mode_options:
+            current_mode = "distance"
         mode_choice = st.radio(
             "Mode de saisie",
             mode_options,
-            index=default_index,
+            index=mode_options.index(current_mode),
             format_func=lambda x: "Distance + D+" if x == "distance" else "Durée + D+ mini",
             horizontal=True,
         )
+        form["mode"] = mode_choice
         distance_eq_preview = None
 
         if mode_choice == "distance":
             distance_input = st.number_input(
                 "Distance planifiée (km)",
                 min_value=0.0,
-                value=_coerce_float(planned_distance_km, 0.0),
+                value=float(planned_distance_km),
                 step=0.5,
             )
             ascent_input = st.number_input(
                 "Ascension planifiée (m)",
                 min_value=0,
-                value=_coerce_int(planned_ascent_m, 500),
+                value=int(planned_ascent_m) if planned_ascent_m else 500,
                 step=50,
             )
             derived = planner.derive_from_distance(str(athlete_id or ""), distance_input, ascent_input)
@@ -369,13 +490,13 @@ with st.expander("Create/Edit session", expanded=bool(edit_ctx)):
             duration_input = st.number_input(
                 "Durée planifiée (sec)",
                 min_value=0,
-                value=_coerce_int(planned_duration_sec, 7200),
+                value=int(planned_duration_sec) if planned_duration_sec else 7200,
                 step=300,
             )
             ascent_input = st.number_input(
                 "Ascension minimale (m)",
                 min_value=0,
-                value=_coerce_int(planned_ascent_m, 500),
+                value=int(planned_ascent_m) if planned_ascent_m else 500,
                 step=50,
             )
             derived = planner.derive_from_duration(str(athlete_id or ""), int(duration_input), ascent_input)
@@ -390,7 +511,7 @@ with st.expander("Create/Edit session", expanded=bool(edit_ctx)):
         target_type = st.selectbox(
             "Cible",
             ["none", "hr", "pace"],
-            index=(0 if not target_type else ["none", "hr", "pace"].index(target_type)),
+            index=(0 if target_type not in ["none", "hr", "pace"] else ["none", "hr", "pace"].index(target_type)),
         )
         if target_type in ("hr", "pace"):
             names = (
@@ -400,132 +521,83 @@ with st.expander("Create/Edit session", expanded=bool(edit_ctx)):
             )
             idx = names.index(target_label) if target_label in names else 0
             target_label = st.selectbox("Seuil", names, index=idx)
+        else:
+            target_label = None
+        form["targetType"] = target_type
+        form["targetLabel"] = target_label
+
+    elif typ == "RACE":
+        form["mode"] = None
+        step_end_mode = None
+        steps_json = None
+        distance_input = st.number_input(
+            "Distance (km)",
+            min_value=0.0,
+            value=float(planned_distance_km),
+            step=0.1,
+        )
+        ascent_input = st.number_input(
+            "Ascension (m)",
+            min_value=0,
+            value=int(planned_ascent_m),
+            step=50,
+        )
+        target_time = st.number_input(
+            "Temps cible (sec)",
+            min_value=0,
+            value=int(planned_duration_sec),
+            step=60,
+        )
+        planned_distance_km = float(distance_input)
+        planned_ascent_m = int(ascent_input)
+        planned_duration_sec = int(target_time)
+        distance_eq_preview = planner.compute_distance_eq_km(planned_distance_km, planned_ascent_m)
+        st.caption(
+            f"Distance-eq ≈ {fmt_decimal(distance_eq_preview, 1)} km • "
+            f"Temps cible ≈ {_format_session_duration(planned_duration_sec)}"
+        )
+        target_type = "race"
+        target_label = None
+        form["targetType"] = target_type
+        form["targetLabel"] = target_label
 
     elif typ == "INTERVAL_SIMPLE":
-        warmup = 600
-        cooldown = 600
-        mode = st.radio("Interval build mode", ["Simple repeats", "Loops"], index=0, horizontal=True)
-        thr_names = get_threshold_names_cached(athlete_id) if athlete_id else ["Threshold 60", "Threshold 30", "Fundamental", "MVA", "Max speed"]
-        parsed = {}
-        if steps_json:
-            try:
-                parsed = json.loads(steps_json)
-            except Exception:
-                parsed = {}
-        warmup = int(st.number_input("Warm-up (sec)", min_value=0, value=int(parsed.get("warmupSec", warmup)), step=60))
-        cooldown = int(
-            st.number_input(
-                "Cool-down (sec)",
-                min_value=0,
-                value=int(parsed.get("cooldownSec", cooldown)),
-                step=60,
-            )
+        form["targetType"] = None
+        form["targetLabel"] = None
+        thr_names = get_threshold_names_cached(athlete_id) if athlete_id else [
+            "Threshold 60",
+            "Threshold 30",
+            "Fundamental",
+            "MVA",
+            "Max speed",
+        ]
+        serialized_steps = render_interval_editor("planner", steps_json, thr_names)
+        step_end_mode = st.selectbox(
+            "Mode de fin",
+            ["auto", "lap"],
+            index=(["auto", "lap"].index(form.get("stepEndMode") or "auto")),
         )
-        if mode == "Simple repeats":
-            repeats = parsed.get("repeats", [])
-            num_rep = st.number_input("Repeats", min_value=1, value=max(1, len(repeats) or 6), step=1)
-            rows = []
-            for idx in range(int(num_rep)):
-                st.markdown(f"Repeat {idx+1}")
-                cur = repeats[idx] if idx < len(repeats) else {}
-                w = int(st.number_input(f"Work (sec) #{idx+1}", min_value=10, value=int(cur.get("workSec", 60)), step=10))
-                r = int(st.number_input(f"Recovery (sec) #{idx+1}", min_value=10, value=int(cur.get("recoverSec", 60)), step=10))
-                tt = st.selectbox(
-                    f"Target type #{idx+1}",
-                    ["hr", "pace", "sensation"],
-                    index=( ["hr", "pace", "sensation"].index(cur.get("targetType", "hr")) ),
-                )
-                if tt in ("hr", "pace"):
-                    tl_index = (
-                        thr_names.index(cur.get("targetLabel", thr_names[0]))
-                        if cur.get("targetLabel") in thr_names
-                        else 0
-                    )
-                    tl = st.selectbox(
-                        f"Target label #{idx+1}",
-                        thr_names,
-                        index=tl_index,
-                    )
-                else:
-                    tl = st.text_input(f"Sensation label #{idx+1}", value=str(cur.get("targetLabel") or ""))
-                rows.append({"workSec": w, "recoverSec": r, "targetType": tt, "targetLabel": tl})
-            steps = {"warmupSec": warmup, "repeats": rows}
-        else:
-            # Loops mode
-            loops = parsed.get("loops", [])
-            loop_count = st.number_input("Number of loops", min_value=1, value=max(1, len(loops) or 1))
-            between = int(st.number_input("Between-loop recovery (sec)", min_value=0, value=int(parsed.get("betweenLoopRecoverSec") or 0), step=10))
-            built_loops = []
-            for li in range(int(loop_count)):
-                st.markdown(f"Loop {li+1}")
-                cur_loop = loops[li] if li < len(loops) else {}
-                actions = cur_loop.get("actions", [])
-                repeats = int(
-                    st.number_input(
-                        f"Loop repeats #{li+1}",
-                        min_value=1,
-                        value=int(cur_loop.get("repeats") or 1),
-                        key=f"lrep-{li}",
-                    )
-                )
-                act_count = st.number_input(
-                    f"Actions in loop #{li+1}",
-                    min_value=1,
-                    value=max(1, len(actions) or 2),
-                    key=f"lacts-{li}",
-                )
-                built_actions = []
-                for ai in range(int(act_count)):
-                    st.markdown(f"- Action {ai+1}")
-                    cur_act = actions[ai] if ai < len(actions) else {}
-                    kind = st.selectbox(f"Kind #{li+1}.{ai+1}", ["run", "recovery"], index=(0 if (cur_act.get("kind") or "run") == "run" else 1), key=f"k-{li}-{ai}")
-                    sec = int(st.number_input(f"Seconds #{li+1}.{ai+1}", min_value=5, value=int(cur_act.get("sec") or 60), step=5, key=f"s-{li}-{ai}"))
-                    tt = st.selectbox(
-                        f"Target type #{li+1}.{ai+1}",
-                        ["hr", "pace", "sensation"],
-                        index=( ["hr", "pace", "sensation"].index(cur_act.get("targetType") or "hr") ),
-                        key=f"tt-{li}-{ai}",
-                    )
-                    if tt in ("hr", "pace"):
-                        tl_index = (
-                            thr_names.index(cur_act.get("targetLabel", thr_names[0]))
-                            if cur_act.get("targetLabel") in thr_names
-                            else 0
-                        )
-                        tl = st.selectbox(
-                            f"Target label #{li+1}.{ai+1}",
-                            thr_names,
-                            index=tl_index,
-                            key=f"tl-{li}-{ai}",
-                        )
-                    else:
-                        tl = st.text_input(f"Sensation label #{li+1}.{ai+1}", value=str(cur_act.get("targetLabel") or ""), key=f"tls-{li}-{ai}")
-                    ascend = int(
-                        st.number_input(
-                            f"Ascend gain (m) #{li+1}.{ai+1} (opt)",
-                            min_value=0,
-                            value=int(cur_act.get("ascendM") or 0),
-                            step=10,
-                            key=f"asc-{li}-{ai}",
-                        )
-                    )
-                    descend = int(
-                        st.number_input(
-                            f"Descent loss (m) #{li+1}.{ai+1} (opt)",
-                            min_value=0,
-                            value=int(cur_act.get("descendM") or 0),
-                            step=10,
-                            key=f"des-{li}-{ai}",
-                        )
-                    )
-                    built_actions.append({"kind": kind, "sec": sec, "targetType": tt, "targetLabel": tl, "ascendM": ascend, "descendM": descend})
-                built_loops.append({"repeats": repeats, "actions": built_actions})
-            steps = {"warmupSec": warmup, "loops": built_loops, "betweenLoopRecoverSec": between}
-        step_end_mode = st.selectbox("Interval end mode", ["auto", "lap"], index=( ["auto","lap"].index(step_end_mode or "auto") ))
-        steps["cooldownSec"] = cooldown
-        steps_json = json.dumps(steps)
-        planned_duration_sec = planner.estimate_interval_duration_sec(steps)
-        planned_distance_km = planner.estimate_interval_distance_km(athlete_id, steps) if athlete_id else None
+        planned_duration_sec = planner.estimate_interval_duration_sec(serialized_steps)
+        planned_distance_km = planner.estimate_interval_distance_km(str(athlete_id or ""), serialized_steps)
+        planned_ascent_m = planner.estimate_interval_ascent_m(serialized_steps)
+        distance_eq_preview = planner.compute_distance_eq_km(planned_distance_km, planned_ascent_m)
+        st.caption(
+            f"Durée ≈ {_format_session_duration(planned_duration_sec)} • "
+            f"Distance ≈ {fmt_decimal(planned_distance_km, 1)} km • "
+            f"D+ ≈ {fmt_m(planned_ascent_m)} • "
+            f"Distance-eq ≈ {fmt_decimal(distance_eq_preview, 1)} km"
+        )
+        steps_json = json.dumps(serialized_steps, ensure_ascii=False, separators=(",", ":"))
+    else:
+        form["mode"] = None
+
+    form["plannedDistanceKm"] = planned_distance_km
+    form["plannedDurationSec"] = planned_duration_sec
+    form["plannedAscentM"] = planned_ascent_m
+    form["targetType"] = target_type
+    form["targetLabel"] = target_label
+    form["stepEndMode"] = step_end_mode
+    form["stepsJson"] = steps_json
 
     col_save, col_cancel, col_delete = st.columns(3)
     with col_save:
@@ -533,19 +605,7 @@ with st.expander("Create/Edit session", expanded=bool(edit_ctx)):
             if not athlete_id:
                 st.error("Please select an athlete")
             else:
-                row = {
-                    "athleteId": athlete_id,
-                    "date": str(date),
-                    "type": typ,
-                    "plannedDistanceKm": planned_distance_km,
-                    "plannedDurationSec": planned_duration_sec,
-                    "plannedAscentM": planned_ascent_m,
-                    "targetType": None if target_type == "none" else target_type,
-                    "targetLabel": target_label,
-                    "notes": notes,
-                    "stepEndMode": step_end_mode,
-                    "stepsJson": steps_json,
-                }
+                row = build_session_row(form, athlete_id)
                 if existing:
                     sessions_repo.update(existing["plannedSessionId"], row)
                     st.success("Session updated")
@@ -554,16 +614,19 @@ with st.expander("Create/Edit session", expanded=bool(edit_ctx)):
                     st.success(f"Session added: {sid}")
                 get_sessions_df_cached.clear()
                 st.session_state["planner_edit"] = None
+                _reset_planner_state()
                 st.rerun()
     with col_cancel:
         if st.button("✖️ Cancel", help="Cancel editing"):
             st.session_state["planner_edit"] = None
+            _reset_planner_state()
             st.rerun()
     with col_delete:
         if existing and st.button("🗑️ Delete", help="Delete session"):
             sessions_repo.delete(existing["plannedSessionId"])
             get_sessions_df_cached.clear()
             st.session_state["planner_edit"] = None
+            _reset_planner_state()
             st.rerun()
 
 
@@ -622,21 +685,33 @@ if athlete_id:
                             "type": session_type,
                             "plannedDurationSec": duration,
                             "plannedDistanceKm": distance,
+                            "plannedAscentM": ascent,
                             "targetType": target_type,
                             "targetLabel": target_label,
                             "stepEndMode": step_mode,
+                            "stepsJson": record.get("stepsJson"),
                         },
                         estimated_distance_km=estimated_distance,
                         distance_eq_km=distance_eq,
                     )
                     st.markdown("<div class='rm-card'>", unsafe_allow_html=True)
-                    badges = " | ".join(model["badges"])
-                    suffix = f" | {badges}" if badges else ""
-                    st.markdown(
-                        f"<div class='rm-top'>{model['header']}{suffix}</div>",
-                        unsafe_allow_html=True,
-                    )
-                    action_cols = st.columns([1] * len(model["actions"]))
+                    st.markdown(f"<div class='rm-card-header'>{model['header']}</div>", unsafe_allow_html=True)
+                    meta = model.get("meta") or []
+                    if meta:
+                        st.markdown(
+                            f"<div class='rm-card-meta'>{' • '.join(meta)}</div>",
+                            unsafe_allow_html=True,
+                        )
+                    for section in model.get("sections", []):
+                        lines_html = "<br/>".join(section.lines)
+                        st.markdown(
+                            "<div class='rm-card-section'>"
+                            f"<div class='rm-card-section-title'>{section.title}</div>"
+                            f"<div class='rm-card-section-body'>{lines_html}</div>"
+                            "</div>",
+                            unsafe_allow_html=True,
+                        )
+                    action_cols = st.columns([1] * len(model["actions"])) if model["actions"] else []
                     for col, action in zip(action_cols, model["actions"]):
                         key = f"{action.action}-{action.session_id}"
                         with col:
@@ -683,7 +758,11 @@ if athlete_id:
 
     totals = planner.compute_weekly_totals(athlete_id, week_records)
     totals_caption = (
-        f"Totals — {_format_week_duration(totals['timeSec'])} • {fmt_decimal(totals['distanceKm'], 1)} km • {fmt_m(totals['ascentM'])}"
+        "Totals — "
+        f"{_format_week_duration(totals['timeSec'])} • "
+        f"{fmt_decimal(totals['distanceKm'], 1)} km • "
+        f"DEQ {fmt_decimal(totals.get('distanceEqKm', 0.0), 1)} km • "
+        f"{fmt_m(totals['ascentM'])}"
     )
     st.caption(totals_caption)
     flash = st.session_state.pop("planner_flash", None)
@@ -712,7 +791,7 @@ if athlete_id:
     with col2:
         templates = tmpl.list(athlete_id=athlete_id)
         options = {
-            f"{t.get('name')} ({t.get('templateId')})": t.get('templateId')
+            f"{t.get('name')} ({t.get('templateId')})": t.get("templateId")
             for t in templates
         }
         if options:

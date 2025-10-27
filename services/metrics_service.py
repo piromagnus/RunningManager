@@ -22,6 +22,7 @@ from persistence.repositories import (
     SettingsRepo,
     WeeklyMetricsRepo,
 )
+from services.interval_utils import normalize_steps
 from services.planner_service import PlannerService
 from utils.time import iso_week_start
 
@@ -631,50 +632,46 @@ class MetricsComputationService:
                 segments.append((duration, fundamental_hr))
             return segments
 
-        warmup_sec = _safe_int(steps.get("warmupSec"))
-        cooldown_sec = _safe_int(steps.get("cooldownSec"))
-        if warmup_sec > 0:
-            segments.append((warmup_sec, fundamental_hr))
+        normalised = normalize_steps(steps)
 
-        if "repeats" in steps:
-            repeats = steps.get("repeats") or []
-            for rep in repeats:
-                work_sec = _safe_int(rep.get("workSec"))
-                recover_sec = _safe_int(rep.get("recoverSec"))
-                work_hr = self._avg_hr_for_target(
+        def _segment_hr(block: Dict[str, Any]) -> float:
+            kind = (block.get("kind") or "recovery").lower()
+            if kind == "run":
+                return self._avg_hr_for_target(
                     athlete_id,
-                    rep.get("targetType"),
-                    rep.get("targetLabel"),
+                    block.get("targetType"),
+                    block.get("targetLabel"),
                     hr_profile,
                 )
-                if work_sec > 0:
-                    segments.append((work_sec, work_hr))
-                if recover_sec > 0:
-                    segments.append((recover_sec, fundamental_hr))
-        else:
-            loops = steps.get("loops") or []
-            between_loop_sec = _safe_int(steps.get("betweenLoopRecoverSec"))
-            for loop in loops:
-                actions = loop.get("actions") or []
-                repeats = max(1, _safe_int(loop.get("repeats")) or 1)
-                for rep_index in range(repeats):
-                    for action in actions:
-                        sec = _safe_int(action.get("sec"))
-                        kind = (action.get("kind") or "recovery").lower()
-                        target_hr = self._avg_hr_for_target(
-                            athlete_id,
-                            action.get("targetType"),
-                            action.get("targetLabel"),
-                            hr_profile,
-                        )
-                        hr = target_hr if kind == "run" else fundamental_hr
-                        if sec > 0:
-                            segments.append((sec, hr))
-                    if between_loop_sec > 0 and rep_index < repeats - 1:
-                        segments.append((between_loop_sec, fundamental_hr))
+            return fundamental_hr
 
-        if cooldown_sec > 0:
-            segments.append((cooldown_sec, fundamental_hr))
+        for block in normalised["preBlocks"]:
+            sec = _safe_int(block.get("sec"))
+            if sec > 0:
+                segments.append((sec, _segment_hr(block)))
+
+        between = normalised.get("betweenBlock")
+        between_sec = _safe_int((between or {}).get("sec"))
+        between_hr = _segment_hr(between) if between and between_sec > 0 else fundamental_hr
+
+        loops = normalised["loops"] or []
+        loop_count = len(loops)
+        for loop_index, loop in enumerate(loops):
+            actions = loop.get("actions") or []
+            repeats = max(1, _safe_int(loop.get("repeats")) or 1)
+            for rep_index in range(repeats):
+                for action in actions:
+                    sec = _safe_int(action.get("sec"))
+                    if sec <= 0:
+                        continue
+                    segments.append((sec, _segment_hr(action)))
+            if between_sec > 0 and loop_count > 1 and loop_index < loop_count - 1:
+                segments.append((between_sec, between_hr))
+
+        for block in normalised["postBlocks"]:
+            sec = _safe_int(block.get("sec"))
+            if sec > 0:
+                segments.append((sec, _segment_hr(block)))
         return segments
 
     def _avg_hr_for_target(

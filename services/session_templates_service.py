@@ -166,7 +166,7 @@ class SessionTemplatesService:
     # Internal utilities ----------------------------------------------
     @staticmethod
     def _validate_base_type(base_type: str) -> None:
-        allowed = {"FUNDAMENTAL_ENDURANCE", "LONG_RUN", "INTERVAL_SIMPLE"}
+        allowed = {"FUNDAMENTAL_ENDURANCE", "LONG_RUN", "INTERVAL_SIMPLE", "RACE"}
         norm = (base_type or "").upper()
         if norm not in allowed:
             raise ValueError(f"Unsupported base type '{base_type}'. Expected one of {sorted(allowed)}.")

@@ -21,10 +21,28 @@ st.title("Flux d'activités")
 _CARD_STYLES = """
 <style>
 .planned-strip {display:flex; gap:0.75rem; overflow-x:auto; padding-bottom:0.5rem;}
-.planned-card {min-width:220px; border:1px solid rgba(228,204,160,0.35); border-radius:12px; padding:0.75rem; background-color:rgba(41,61,86,0.85);}
-.planned-card h4 {font-size:0.95rem; margin:0 0 0.35rem 0; color:#e4cca0;}
-.planned-card .secondary {color:#60ac84; font-size:0.8rem;}
-.planned-card .metrics {margin-top:0.25rem; font-size:0.85rem; color:#f8fafc;}
+.planned-card {min-width:220px; border-radius:12px; padding:0.85rem; box-shadow:0 6px 14px rgba(8,47,73,0.28); border:1px solid transparent;}
+.planned-card h4 {font-size:0.98rem; margin:0 0 0.35rem 0; color:#f8fafc;}
+.planned-card .secondary {font-size:0.82rem;}
+.planned-card .metrics {margin-top:0.35rem; font-size:0.88rem; color:#f8fafc;}
+.planned-card.status-future {background:linear-gradient(135deg, rgba(14,116,144,0.95), rgba(8,47,73,0.95)); border-color:rgba(14,165,233,0.5);}
+.planned-card.status-future .secondary {color:#a5f3fc;}
+.planned-card.status-today {background:linear-gradient(135deg, rgba(22,163,74,0.95), rgba(5,46,22,0.95)); border-color:rgba(34,197,94,0.6);}
+.planned-card.status-today .secondary {color:#bbf7d0;}
+.planned-card.status-week {background:linear-gradient(135deg, rgba(249,115,22,0.95), rgba(124,45,18,0.95)); border-color:rgba(251,146,60,0.6);}
+.planned-card.status-week .secondary {color:#fed7aa;}
+.planned-card.status-past {background:linear-gradient(135deg, rgba(220,38,38,0.95), rgba(127,29,29,0.95)); border-color:rgba(248,113,113,0.6);}
+.planned-card.status-past .secondary {color:#fecaca;}
+.planned-card-button {margin-top:0.55rem;}
+.planned-card-button button {width:100%; font-weight:600; border-width:1px;}
+.planned-card-button.status-future button {background:#22d3ee; color:#082f49; border-color:#0ea5e9;}
+.planned-card-button.status-future button:hover {background:#0ea5e9; color:#f8fafc;}
+.planned-card-button.status-today button {background:#22c55e; color:#052e16; border-color:#16a34a;}
+.planned-card-button.status-today button:hover {background:#16a34a; color:#f0fdf4;}
+.planned-card-button.status-week button {background:#fb923c; color:#451a03; border-color:#f97316;}
+.planned-card-button.status-week button:hover {background:#f97316; color:#fff7ed;}
+.planned-card-button.status-past button {background:#ef4444; color:#450a0a; border-color:#dc2626;}
+.planned-card-button.status-past button:hover {background:#dc2626; color:#fef2f2;}
 .activity-card {border:1px solid rgba(228,204,160,0.25); border-radius:12px; padding:1rem 1rem 0.75rem 1rem; margin-bottom:0.9rem; background:rgba(41,61,86,0.88);}
 .activity-card.linked {border:2px solid #60ac84; box-shadow:0 0 0 1px rgba(96,172,132,0.35);}
 .activity-card .header {display:flex; justify-content:space-between; align-items:flex-start; gap:0.75rem;}
@@ -78,6 +96,27 @@ def _format_sport_type(raw: str) -> str:
         return "-"
     normalized = raw.replace("_", " ").replace("-", " ").strip()
     return normalized.capitalize()
+
+
+def _planned_card_status(session_date: object) -> str:
+    if isinstance(session_date, dt.datetime):
+        session_date = session_date.date()
+    elif isinstance(session_date, str):
+        try:
+            session_date = dt.date.fromisoformat(session_date)
+        except Exception:
+            session_date = dt.date.today()
+    elif not isinstance(session_date, dt.date):
+        session_date = dt.date.today()
+    today = dt.date.today()
+    if session_date > today:
+        return "future"
+    if session_date == today:
+        return "today"
+    week_start = today - dt.timedelta(days=today.weekday())
+    if session_date >= week_start:
+        return "week"
+    return "past"
 
 
 def _dialog_factory() -> Optional[Callable]:
@@ -203,9 +242,10 @@ def _render_planned_strip(
                 if card.planned_ascent_m is not None:
                     metrics_parts.append(fmt_m(card.planned_ascent_m))
                 metrics = " • ".join(metrics_parts) if metrics_parts else "—"
+                status = _planned_card_status(card.date)
                 st.markdown(
                     (
-                        '<div class="planned-card">'
+                        f'<div class="planned-card status-{status}">'
                         f"<h4>{card.date.strftime('%d/%m/%Y')} · {card.session_type or ''}</h4>"
                         f'<div class="secondary">{card.target_label or "Sans cible"}</div>'
                         f'<div class="metrics">{metrics}</div>'
@@ -213,11 +253,14 @@ def _render_planned_strip(
                     ),
                     unsafe_allow_html=True,
                 )
-                if st.button(
+                st.markdown(f'<div class="planned-card-button status-{status}">', unsafe_allow_html=True)
+                clicked = st.button(
                     "Associer",
                     key=f"link-{card.planned_session_id}",
                     use_container_width=True,
-                ):
+                )
+                st.markdown("</div>", unsafe_allow_html=True)
+                if clicked:
                     _open_link_dialog(card, athlete_id, link_service)
 
 

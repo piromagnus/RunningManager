@@ -23,7 +23,12 @@
 - Metrics for each activities over time.
 - Get Best up speed (SpeedEq, ascent speed in mean over with respect to the segment lenght) same for descent.
 
-
-
 # Tools
 - Pacing of a race with gpx / TCX / FIT
+
+
+
+# Keep updating
+In the activities feed, use the name of the template instead of the type as the main title. You will pu the type of it just below in smaller. If it is none you write a nice version of it like : FUNDAMENTAL_ENDURANCE -> Endurance Fondamentale
+
+In the race add also a field for the name of it.

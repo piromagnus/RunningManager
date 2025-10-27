@@ -6,11 +6,12 @@ from pathlib import Path
 import streamlit as st
 
 from utils.config import load_config
-from utils.formatting import set_locale
+from utils.formatting import fmt_decimal, fmt_m, set_locale
 from utils.styling import apply_theme
 from persistence.csv_storage import CsvStorage
 from persistence.repositories import PlannedSessionsRepo
 from services.planner_service import PlannerService
+from services.interval_utils import describe_action, normalize_steps
 
 
 st.set_page_config(page_title="Running Manager - Session")
@@ -52,27 +53,35 @@ if row.get("stepsJson"):
     st.subheader("Interval steps")
     try:
         data = json.loads(row.get("stepsJson"))
-        # Derived totals
         try:
             est_dur = planner.estimate_interval_duration_sec(data)
             est_km = planner.estimate_interval_distance_km(row.get("athleteId"), data)
-            h = est_dur // 3600
-            m = (est_dur % 3600) // 60
-            st.caption(f"Interval totals: {h}h{m:02d} • est≈{est_km:.1f} km")
+            est_asc = planner.estimate_interval_ascent_m(data)
+            st.caption(
+                f"Durée ≈ {_format_session_duration(est_dur)} • "
+                f"Distance ≈ {fmt_decimal(est_km, 1)} km • "
+                f"D+ ≈ {fmt_m(est_asc)}"
+            )
         except Exception:
             pass
-        # Readable breakdown
-        if "repeats" in data:
-            reps = data.get("repeats") or []
-            for i, rep in enumerate(reps, 1):
-                st.write(f"Repeat {i}: work={rep.get('workSec')}s, rec={rep.get('recoverSec')}s, target={rep.get('targetType')} {rep.get('targetLabel')}")
-        else:
-            loops = data.get("loops") or []
-            between = int(data.get("betweenLoopRecoverSec") or 0)
-            for li, loop in enumerate(loops, 1):
-                st.write(f"Loop {li} ×{int(loop.get('repeats') or 1)} (between {between}s)")
-                for ai, act in enumerate(loop.get("actions") or [], 1):
-                    st.write(f"- Action {ai}: {act.get('kind')} {int(act.get('sec') or 0)}s, target={act.get('targetType')} {act.get('targetLabel')}, asc={int(act.get('ascendM') or 0)}m, desc={int(act.get('descendM') or 0)}m")
+        steps = normalize_steps(data)
+        if steps["preBlocks"]:
+            st.markdown("**Avant**")
+            for block in steps["preBlocks"]:
+                st.markdown(f"- {describe_action(block)}")
+        for li, loop in enumerate(steps["loops"], 1):
+            repeats = int(loop.get("repeats") or 1)
+            st.markdown(f"**Boucle {li} ×{repeats}**")
+            for action in loop.get("actions") or []:
+                st.markdown(f"- {describe_action(action)}")
+        between = steps.get("betweenBlock")
+        if between and int(between.get("sec") or 0) > 0:
+            st.markdown("**Entre boucles**")
+            st.markdown(f"- {describe_action(between)}")
+        if steps["postBlocks"]:
+            st.markdown("**Après**")
+            for block in steps["postBlocks"]:
+                st.markdown(f"- {describe_action(block)}")
         st.expander("Raw steps JSON").json(data)
     except Exception:
         st.text(row.get("stepsJson"))

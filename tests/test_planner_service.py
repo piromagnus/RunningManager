@@ -37,7 +37,7 @@ def test_estimate_km_falls_back_to_recent_easy_pace(planner):
 
 
 def test_interval_duration_supports_loops_structure(planner, interval_steps_loops):
-    assert planner.estimate_interval_duration_sec(interval_steps_loops) == 300 + 180 + (2 * (120 + 60) + 45)
+    assert planner.estimate_interval_duration_sec(interval_steps_loops) == 300 + 180 + (2 * (120 + 60))
 
 
 def test_between_loop_recoveries_counted_once(planner, interval_steps_loops):
@@ -45,18 +45,53 @@ def test_between_loop_recoveries_counted_once(planner, interval_steps_loops):
     loops["loops"][0]["repeats"] = 3
     loops["betweenLoopRecoverSec"] = 90
     duration = planner.estimate_interval_duration_sec(loops)
-    # warmup + cooldown + repeats + two gaps of 90s (repeats-1)
-    expected = 300 + 180 + (3 * (120 + 60)) + (2 * 90)
+    # warmup + cooldown + repeats (no between since single loop definition)
+    expected = 300 + 180 + (3 * (120 + 60))
     assert duration == expected
+
+
+def test_between_loop_recovery_between_distinct_loops(planner):
+    steps = {
+        "warmupSec": 0,
+        "cooldownSec": 0,
+        "betweenLoopRecoverSec": 30,
+        "preBlocks": [],
+        "postBlocks": [],
+        "loops": [
+            {"repeats": 1, "actions": [{"kind": "run", "sec": 60, "targetType": "hr", "targetLabel": "Threshold 30"}]},
+            {"repeats": 1, "actions": [{"kind": "run", "sec": 90, "targetType": "hr", "targetLabel": "Threshold 60"}]},
+        ],
+    }
+    duration = planner.estimate_interval_duration_sec(steps)
+    # 60 + between 30 + 90
+    assert duration == 60 + 30 + 90
 
 
 def test_interval_distance_loops_use_threshold_pace(planner, interval_steps_loops):
     km = planner.estimate_interval_distance_km("ath-1", interval_steps_loops)
     warm = (300 / 3600) * 10.0
     loops = 2 * ((120 / 3600) * 14.0 + (60 / 3600) * 10.0)
-    between = (1 * ((45 / 3600) * 10.0))
     cool = (180 / 3600) * 10.0
-    assert km == pytest.approx(warm + loops + between + cool, rel=1e-3)
+    assert km == pytest.approx(warm + loops + cool, rel=1e-3)
+
+
+def test_interval_distance_between_distinct_loops(planner):
+    steps = {
+        "warmupSec": 0,
+        "cooldownSec": 0,
+        "betweenLoopRecoverSec": 60,
+        "preBlocks": [],
+        "postBlocks": [],
+        "loops": [
+            {"repeats": 1, "actions": [{"kind": "run", "sec": 120, "targetType": "pace", "targetLabel": "Threshold 60"}]},
+            {"repeats": 1, "actions": [{"kind": "run", "sec": 60, "targetType": "hr", "targetLabel": "Fundamental"}]},
+        ],
+    }
+    km = planner.estimate_interval_distance_km("ath-1", steps)
+    loop1 = (120 / 3600) * 14.0
+    loop2 = (60 / 3600) * 10.0
+    between = (60 / 3600) * 10.0
+    assert km == pytest.approx(loop1 + between + loop2, rel=1e-3)
 
 
 def test_interval_distance_backcompat_repeats(planner, interval_steps_legacy):
@@ -136,11 +171,17 @@ def test_compute_weekly_totals(planner, week_sessions):
     expected_distance = 20.0 + fundamental_est + interval_est
     expected_time = 3600 + 7200 + 1800
     expected_ascent = 600 + planner.estimate_session_ascent_m("ath-1", week_sessions[2])
+    expected_eq = 0.0
+    for session in week_sessions:
+        eq = planner.compute_session_distance_eq("ath-1", session)
+        if eq is not None:
+            expected_eq += eq
     assert totals["timeSec"] == expected_time
     assert totals["distanceKm"] == pytest.approx(expected_distance, rel=1e-6)
     assert totals["ascentM"] == expected_ascent
+    assert totals["distanceEqKm"] == pytest.approx(expected_eq, rel=1e-6)
 
 
 def test_compute_weekly_totals_empty(planner):
     totals = planner.compute_weekly_totals("ath-1", [])
-    assert totals == {"timeSec": 0, "distanceKm": 0.0, "ascentM": 0}
+    assert totals == {"timeSec": 0, "distanceKm": 0.0, "ascentM": 0, "distanceEqKm": 0.0}
