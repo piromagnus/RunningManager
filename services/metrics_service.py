@@ -7,7 +7,7 @@ import json
 import math
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple, Any
 
 import pandas as pd
 
@@ -367,6 +367,7 @@ class MetricsComputationService:
     def _compute_trimp(
         avg_hr: float, time_sec: float, hr_profile: Optional[Tuple[float, float]]
     ) -> float:
+        # TODO : Add a gender based TRIMP formula if needed
         if not hr_profile or avg_hr <= 0 or time_sec <= 0:
             return 0.0
         hr_rest, hr_max = hr_profile
