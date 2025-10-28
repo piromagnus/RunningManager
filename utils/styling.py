@@ -197,6 +197,7 @@ label, legend {
     margin: 1.2rem 0rem;
     width: 100%;
     box-sizing: border-box;
+    overflow: visible !important;
 }
 
 .stPlotlyChart > div,
@@ -242,6 +243,7 @@ label, legend {
 .rm-chart-shell .stAltairChart > div {
     width: 100% !important;
     box-sizing: border-box;
+    overflow: visible !important;
 }
 
 .block-container {

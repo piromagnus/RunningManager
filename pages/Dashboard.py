@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import altair as alt
+import numpy as np
 import pandas as pd
 import streamlit as st
 
@@ -12,6 +13,7 @@ from utils.formatting import set_locale
 from utils.styling import apply_theme
 from persistence.csv_storage import CsvStorage
 from persistence.repositories import AthletesRepo
+from services.analytics_service import AnalyticsService
 
 
 st.set_page_config(page_title="Running Manager - Dashboard", layout="wide")
@@ -24,6 +26,7 @@ cfg = load_config()
 set_locale("fr_FR")
 storage = CsvStorage(base_dir=Path(cfg.data_dir))
 ath_repo = AthletesRepo(storage)
+analytics = AnalyticsService(storage)
 
 
 def _select_athlete() -> str | None:
@@ -116,8 +119,17 @@ if daily_metrics.empty:
     st.stop()
 
 # --- Date range controls (same behavior as Analytics) ---
-min_date = daily_metrics["date"].min().date()
-max_date = max(daily_metrics["date"].max().date(), pd.Timestamp.today().date())
+min_plan, max_plan = analytics.planned_date_bounds(athlete_id)
+
+min_candidates = [daily_metrics["date"].min().date()]
+if min_plan:
+    min_candidates.append(min_plan)
+min_date = min(min_candidates)
+
+max_candidates = [daily_metrics["date"].max().date(), pd.Timestamp.today().date()]
+if max_plan:
+    max_candidates.append(max_plan)
+max_date = max(max_candidates)
 
 default_end = max_date
 default_start = max(min_date, default_end - pd.Timedelta(days=28).to_pytimedelta())
@@ -224,65 +236,204 @@ with tab_charge:
         index=available_metrics.index("DistEq") if "DistEq" in available_metrics else 0,
         help="Sélectionne la métrique pour le graphique de charge."
     )
-    # Recompute acute/chronic from activities for selected categories
-    acts_path = storage.base_dir / "activities_metrics.csv"
-    if acts_path.exists():
-        acts_df_all = pd.read_csv(acts_path)
-    else:
-        acts_df_all = pd.DataFrame()
-    if acts_df_all.empty:
+    # Recompute acute/chronic including planned values
+    col_names = {
+        "Time": ("chronicTimeSec", "acuteTimeSec"),
+        "Distance": ("chronicDistanceKm", "acuteDistanceKm"),
+        "DistEq": ("chronicDistanceEqKm", "acuteDistanceEqKm"),
+        "Trimp": ("chronicTrimp", "acuteTrimp"),
+        "Ascent": ("chronicAscentM", "acuteAscentM"),
+    }
+
+    if selected_metric not in col_names:
         chart = _training_load_chart(daily_metrics, selected_metric, metric_definitions[selected_metric])
         chart = chart.properties(width=CHART_WIDTH)
         st.altair_chart(chart, use_container_width=False)
     else:
-        acts_df = acts_df_all[acts_df_all.get("athleteId") == athlete_id].copy()
-        # Apply categories filter
-        if selected_cats:
-            acts_df["category"] = acts_df.get("category", pd.Series(dtype=str)).astype(str).str.upper()
-            acts_df = acts_df[acts_df["category"].isin([c.upper() for c in selected_cats])]
-        # Build per-day values for selected metric
-        col_map = {
-            "Time": "timeSec",
-            "Distance": "distanceKm",
-            "DistEq": "distanceEqKm",
-            "Trimp": "trimp",
-            "Ascent": "ascentM",
-        }
-        value_col = col_map.get(selected_metric, "distanceEqKm")
-        acts_df["date"] = pd.to_datetime(acts_df.get("startDate"), errors="coerce").dt.normalize()
-        # Include a buffer window before start_date to stabilize rolling windows
-        buffer_start = pd.Timestamp(start_date) - pd.Timedelta(days=50)
-        acts_df = acts_df[(acts_df["date"] >= buffer_start) & (acts_df["date"] <= pd.Timestamp(end_date))]
-        per_day = (
-            acts_df.groupby("date", as_index=False)[value_col].sum().rename(columns={value_col: "value"})
-            if value_col in acts_df.columns
-            else pd.DataFrame(columns=["date", "value"])
-        )
-        # Ensure continuous date index
-        all_days = pd.DataFrame({
-            "date": pd.date_range(start=buffer_start, end=pd.Timestamp(end_date), freq="D")
-        })
-        series = all_days.merge(per_day, on="date", how="left").fillna({"value": 0.0})
-        # Rolling sums (acute: 7d, chronic: 42d)
-        series["acute"] = series["value"].rolling(window=7, min_periods=1).mean()
-        series["chronic"] = series["value"].rolling(window=28, min_periods=1).mean()
-        # Slice to selected range only
-        series = series[(series["date"] >= pd.Timestamp(start_date)) & (series["date"] <= pd.Timestamp(end_date))]
-        # Build a minimal df with expected columns for the selected metric
-        working_for_chart = pd.DataFrame({"date": series["date"]})
-        col_names = {
-            "Time": ("chronicTimeSec", "acuteTimeSec"),
-            "Distance": ("chronicDistanceKm", "acuteDistanceKm"),
-            "DistEq": ("chronicDistanceEqKm", "acuteDistanceEqKm"),
-            "Trimp": ("chronicTrimp", "acuteTrimp"),
-            "Ascent": ("chronicAscentM", "acuteAscentM"),
-        }
         chronic_name, acute_name = col_names[selected_metric]
-        working_for_chart[chronic_name] = series["chronic"].astype(float)
-        working_for_chart[acute_name] = series["acute"].astype(float)
-        chart = _training_load_chart(working_for_chart, selected_metric, metric_definitions[selected_metric])
-        chart = chart.properties(width=CHART_WIDTH)
-        st.altair_chart(chart, use_container_width=False)
+
+        buffer_start_date = (pd.Timestamp(start_date) - pd.Timedelta(days=50)).date()
+        if buffer_start_date < min_date:
+            buffer_start_date = min_date
+        range_end_date = max(end_date, max_plan or end_date)
+
+        daily_range_df = analytics.daily_range(
+            athlete_id=athlete_id,
+            metric_label=selected_metric,
+            selected_types=selected_cats or None,
+            start_date=buffer_start_date,
+            end_date=range_end_date,
+        )
+
+        if daily_range_df.empty:
+            chart = _training_load_chart(daily_metrics, selected_metric, metric_definitions[selected_metric])
+            chart = chart.properties(width=CHART_WIDTH)
+            st.altair_chart(chart, use_container_width=False)
+        else:
+            daily_range_df = daily_range_df.copy()
+            daily_range_df["date"] = pd.to_datetime(daily_range_df["date"], errors="coerce")
+            daily_range_df = daily_range_df.dropna(subset=["date"])
+            daily_range_df = daily_range_df.sort_values("date")
+            daily_range_df["actual_value"] = pd.to_numeric(daily_range_df.get("actual_value"), errors="coerce").fillna(0.0)
+            daily_range_df["planned_value"] = pd.to_numeric(daily_range_df.get("planned_value"), errors="coerce").fillna(0.0)
+
+            start_ts = pd.Timestamp(start_date)
+            range_end_ts = pd.Timestamp(range_end_date)
+            today_ts = pd.Timestamp.today().normalize()
+
+            daily_range_df["actual_acute"] = daily_range_df["actual_value"].rolling(window=7, min_periods=1).mean()
+            daily_range_df["actual_chronic"] = daily_range_df["actual_value"].rolling(window=28, min_periods=1).mean()
+
+            combined_for_plan = np.where(
+                daily_range_df["date"] <= today_ts,
+                daily_range_df["actual_value"],
+                daily_range_df["planned_value"],
+            )
+            combined_for_plan = pd.to_numeric(combined_for_plan, errors="coerce")
+            daily_range_df["planned_acute"] = (
+                pd.Series(combined_for_plan)
+                .rolling(window=7, min_periods=1)
+                .mean()
+                .to_numpy()
+            )
+            daily_range_df["planned_chronic"] = (
+                pd.Series(combined_for_plan)
+                .rolling(window=28, min_periods=1)
+                .mean()
+                .to_numpy()
+            )
+
+            daily_range_df.loc[daily_range_df["date"] <= today_ts, ["planned_chronic", "planned_acute"]] = np.nan
+
+            plot_df_base = daily_range_df[(daily_range_df["date"] >= start_ts) & (daily_range_df["date"] <= range_end_ts)].copy()
+            plot_df_base.loc[plot_df_base["date"] > today_ts, ["actual_chronic", "actual_acute"]] = np.nan
+
+            band_df = plot_df_base.dropna(subset=["actual_chronic"]).copy()
+            band_df["lower"] = 0.75 * band_df["actual_chronic"]
+            band_df["upper"] = 1.5 * band_df["actual_chronic"]
+
+            planned_band_df = plot_df_base[(plot_df_base["date"] > today_ts) & plot_df_base["planned_chronic"].notna()].copy()
+            if not planned_band_df.empty:
+                planned_band_df["lower"] = 0.75 * planned_band_df["planned_chronic"]
+                planned_band_df["upper"] = 1.5 * planned_band_df["planned_chronic"]
+
+            plot_rows: list[dict] = []
+            for _, row in plot_df_base.iterrows():
+                date_val = row["date"]
+                is_future = bool(date_val > today_ts)
+                actual_chronic_val = row.get("actual_chronic")
+                actual_acute_val = row.get("actual_acute")
+                planned_chronic_val = row.get("planned_chronic")
+                planned_acute_val = row.get("planned_acute")
+
+                if pd.notna(actual_chronic_val):
+                    plot_rows.append(
+                        {
+                            "date": date_val,
+                            "value": float(actual_chronic_val),
+                            "series": "Charge chronique (réalisé)",
+                            "is_planned": 0,
+                            "is_future": int(is_future),
+                        }
+                    )
+                if pd.notna(actual_acute_val):
+                    plot_rows.append(
+                        {
+                            "date": date_val,
+                            "value": float(actual_acute_val),
+                            "series": "Charge aiguë (réalisé)",
+                            "is_planned": 0,
+                            "is_future": int(is_future),
+                        }
+                    )
+                if pd.notna(planned_chronic_val):
+                    plot_rows.append(
+                        {
+                            "date": date_val,
+                            "value": float(planned_chronic_val),
+                            "series": "Charge chronique (planifié)",
+                            "is_planned": 1,
+                            "is_future": int(is_future),
+                        }
+                    )
+                if pd.notna(planned_acute_val):
+                    plot_rows.append(
+                        {
+                            "date": date_val,
+                            "value": float(planned_acute_val),
+                            "series": "Charge aiguë (planifié)",
+                            "is_planned": 1,
+                            "is_future": int(is_future),
+                        }
+                    )
+
+            plot_df = pd.DataFrame(plot_rows)
+
+            if plot_df.empty:
+                chart = _training_load_chart(daily_metrics, selected_metric, metric_definitions[selected_metric])
+                st.altair_chart(chart, use_container_width=True)
+            else:
+                color_scale = alt.Scale(
+                    domain=[
+                        "Charge chronique (réalisé)",
+                        "Charge aiguë (réalisé)",
+                        "Charge chronique (planifié)",
+                        "Charge aiguë (planifié)",
+                    ],
+                    range=["#1d4ed8", "#f97316", "#60a5fa", "#fb923c"],
+                )
+
+                stroke_dash = alt.condition(
+                    (alt.datum.is_planned == 1) & (alt.datum.is_future == 1),
+                    alt.value([6, 3]),
+                    alt.value([1, 0]),
+                )
+
+                line_chart = (
+                    alt.Chart(plot_df)
+                    .mark_line(strokeWidth=2)
+                    .encode(
+                        x=alt.X("date:T", title="Date"),
+                        y=alt.Y("value:Q", title=metric_definitions[selected_metric]["label"]),
+                        color=alt.Color("series:N", scale=color_scale, title=""),
+                        strokeDash=stroke_dash,
+                        detail=["series", "is_future"],
+                        tooltip=[
+                            alt.Tooltip("date:T", title="Date"),
+                            alt.Tooltip("series:N", title="Série"),
+                            alt.Tooltip("value:Q", title="Valeur", format=".2f"),
+                        ],
+                    )
+                )
+
+                layers: list[alt.Chart] = []
+                if not band_df.empty:
+                    actual_fill = (
+                        alt.Chart(band_df)
+                        .mark_area(opacity=0.18, color="#2563eb")
+                        .encode(
+                            x=alt.X("date:T", title="Date"),
+                            y=alt.Y("lower:Q", title=metric_definitions[selected_metric]["label"]),
+                            y2="upper:Q",
+                        )
+                    )
+                    layers.append(actual_fill)
+                if 'planned_band_df' in locals() and not planned_band_df.empty:
+                    planned_fill = (
+                        alt.Chart(planned_band_df)
+                        .mark_area(opacity=0.18, color="#93c5fd")
+                        .encode(
+                            x=alt.X("date:T", title="Date"),
+                            y=alt.Y("lower:Q", title=metric_definitions[selected_metric]["label"]),
+                            y2="upper:Q",
+                        )
+                    )
+                    layers.append(planned_fill)
+
+                layers.append(line_chart)
+                chart = alt.layer(*layers).properties(height=340)
+
+                st.altair_chart(chart, use_container_width=True)
 
 # --- Nuage d'activités: SpeedEq (km/h) vs Durée (h), couleur = FC moyenne ---
 with tab_speed:
@@ -372,5 +523,4 @@ with tab_speed:
         )
         .properties(height=360)
     )
-    cloud_chart = cloud_chart.properties(width=CHART_WIDTH)
-    st.altair_chart(cloud_chart, use_container_width=False)
+    st.altair_chart(cloud_chart, use_container_width=True)
