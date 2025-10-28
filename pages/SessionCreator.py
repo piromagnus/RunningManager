@@ -304,6 +304,7 @@ def _render_race_form(
     planned_distance_km = _coerce_float(payload.get("plannedDistanceKm"), 0.0)
     planned_duration_sec = _coerce_int(payload.get("plannedDurationSec"), 0)
     planned_ascent_m = _coerce_int(payload.get("plannedAscentM"), 0)
+    race_name = payload.get("raceName") or ""
 
     distance_input = st.number_input(
         "Distance (km)",
@@ -319,6 +320,11 @@ def _render_race_form(
         step=50,
         key="creator-race-ascent",
     )
+    race_name_input = st.text_input(
+        "Nom de la course",
+        value=str(race_name),
+        key="creator-race-name",
+    )
     target_time_input = st.number_input(
         "Temps cible (sec)",
         min_value=0,
@@ -333,6 +339,7 @@ def _render_race_form(
         "plannedDurationSec": int(target_time_input),
         "targetType": "race",
         "targetLabel": None,
+        "raceName": race_name_input.strip(),
     }
     distance_eq_preview = planner.compute_distance_eq_km(result["plannedDistanceKm"], result["plannedAscentM"])
     st.caption(
@@ -403,6 +410,7 @@ def _session_payload_for_save(session_type: str, form_data: Dict[str, Any], note
         "plannedAscentM": form_data.get("plannedAscentM"),
         "targetType": form_data.get("targetType"),
         "targetLabel": form_data.get("targetLabel"),
+        "raceName": form_data.get("raceName"),
         "notes": notes,
         "stepEndMode": form_data.get("stepEndMode"),
         "stepsJson": form_data.get("stepsJson"),

@@ -137,6 +137,8 @@ class PlannedSessionsRepo(BaseRepo):
                 "targetType",
                 "targetLabel",
                 "notes",
+                "templateTitle",
+                "raceName",
                 "stepEndMode",
                 "stepsJson",
             ],

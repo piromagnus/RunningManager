@@ -15,6 +15,19 @@ from persistence.repositories import (
 )
 
 
+def _coerce_str(value: object) -> Optional[str]:
+    try:
+        if value in (None, "", "NaN"):
+            return None
+        if isinstance(value, float) and pd.isna(value):
+            return None
+        if pd.isna(value):
+            return None
+    except Exception:
+        pass
+    return str(value)
+
+
 def _coerce_float(value: object) -> Optional[float]:
     try:
         if value in (None, "", "NaN"):
@@ -70,6 +83,10 @@ class ActivityFeedItem:
     linked: bool
     match_score: Optional[float]
     planned_session_id: Optional[str]
+    planned_session_type: Optional[str]
+    planned_session_template_title: Optional[str]
+    planned_session_race_name: Optional[str]
+    planned_session_notes: Optional[str]
 
 
 @dataclass(frozen=True)
@@ -77,6 +94,9 @@ class PlannedSessionCard:
     planned_session_id: str
     date: dt.date
     session_type: str
+    template_title: str
+    race_name: Optional[str]
+    notes: Optional[str]
     planned_distance_km: Optional[float]
     planned_duration_sec: Optional[int]
     planned_ascent_m: Optional[float]
@@ -143,6 +163,26 @@ class ActivityFeedService:
                 how="left",
             )
 
+        planned_lookup = self.planned_sessions.list()
+        if not planned_lookup.empty:
+            planned_lookup = planned_lookup[[
+                "plannedSessionId",
+                "type",
+                "templateTitle",
+                "raceName",
+                "notes",
+            ]].copy()
+            planned_lookup["plannedSessionId"] = planned_lookup["plannedSessionId"].astype(str)
+            planned_lookup = planned_lookup.rename(
+                columns={
+                    "type": "plannedType",
+                    "templateTitle": "plannedTemplateTitle",
+                    "raceName": "plannedRaceName",
+                    "notes": "plannedNotes",
+                }
+            )
+            merged = merged.merge(planned_lookup, on="plannedSessionId", how="left")
+
         merged = merged.sort_values("startTime", ascending=False, na_position="last")
         if offset:
             merged = merged.iloc[offset:]
@@ -173,6 +213,10 @@ class ActivityFeedService:
                     planned_session_id=str(row.get("plannedSessionId"))
                     if not pd.isna(row.get("plannedSessionId"))
                     else None,
+                    planned_session_type=str(row.get("plannedType") or "") if not pd.isna(row.get("plannedType")) else None,
+                    planned_session_template_title=_coerce_str(row.get("plannedTemplateTitle")),
+                    planned_session_race_name=_coerce_str(row.get("plannedRaceName")),
+                    planned_session_notes=_coerce_str(row.get("plannedNotes")),
                 )
             )
         return feed
@@ -238,6 +282,9 @@ class ActivityFeedService:
                     planned_session_id=str(row["plannedSessionId"]),
                     date=row["date"],
                     session_type=str(row.get("type") or ""),
+                    template_title=str(row.get("templateTitle") or ""),
+                    race_name=_coerce_str(row.get("raceName")),
+                    notes=_coerce_str(row.get("notes")),
                     planned_distance_km=_coerce_float(row.get("plannedDistanceKm")),
                     planned_duration_sec=_coerce_int(row.get("plannedDurationSec")),
                     planned_ascent_m=_coerce_float(row.get("plannedAscentM")),

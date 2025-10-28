@@ -154,6 +154,7 @@ class SessionTemplatesService:
                 "notes": notes if notes is not None else payload.get("notes") or template.get("notes") or "",
             }
         )
+        payload["templateTitle"] = template.get("title") or payload.get("templateTitle") or ""
         planned_session_id = self.sessions_repo.create(payload)
         self.repo.update(
             template_id,
@@ -181,6 +182,8 @@ class SessionTemplatesService:
             "targetType",
             "targetLabel",
             "notes",
+            "templateTitle",
+            "raceName",
             "stepEndMode",
             "stepsJson",
         ]

@@ -36,6 +36,7 @@ See `.taskmaster/docs/prd.txt` for full requirements and domain rules.
 Run the app: `uv run streamlit run app.py`
 
 ## Commands
+
 - Use uv command to replace python. Eg : "uv run" instead of "python3".
 - Tests: `pytest`
 - Lint (Ruff configured): run ruff if available; line length 100, rules E,F,I
@@ -115,4 +116,94 @@ Run the app: `uv run streamlit run app.py`
 - Logging raw secrets or storing tokens without `ENCRYPTION_KEY`
 - Bypassing locking on CSV writes; always go through `CsvStorage`
 
+## Module Map & Responsibilities
 
+- `utils/`
+  - `config.py`: `.env` loading, directory provisioning, config dataclass, `redact()` helper. Reads `DATA_DIR`, Strava vars, `ENCRYPTION_KEY`, and `MAPBOX_API_KEY`.
+  - `formatting.py`: fr-FR display helpers for numbers and units; storage must always keep `.` decimals.
+  - `crypto.py`: Fernet helpers and safe decrypt errors; used for token-at-rest encryption.
+  - `ids.py`: UUID-based `new_id()`.
+  - `time.py`: ISO week helpers and `today_local()`.
+  - `styling.py`: theme application utilities for Streamlit pages.
+  - `auth_state.py`: session state bootstrap utilities.
+
+- `persistence/`
+  - `csv_storage.py`: pandas-based CSV IO with `portalocker` (shared/exclusive). Ensures parent dirs, header handling, and upsert/append semantics.
+  - `repositories.py`: thin repos per table (headers, id column, migration pattern for header additions).
+
+- `services/`
+  - `planner_service.py`: core planning estimations (fundamental pace, intervals duration/distance/ascent, distance-equivalent), weekly totals.
+  - `interval_utils.py`: interval steps normalisation, description and serialisation for editor/preview.
+  - `analytics_service.py`: load/shape weekly data, compute stacked planned vs actual segments, daily/weekly range APIs.
+  - `metrics_service.py`: full metrics pipeline recomputation (activities, planned, daily, weekly), TRIMP, category normalisation, bike DistEq rules.
+  - `timeseries_service.py`: load per-activity timeseries CSV.
+  - `strava_service.py`: OAuth flow, token storage (encrypted), raw JSON + streams caching, rate-limit logging, incremental sync and cache rebuild.
+  - `lap_metrics_service.py`, `linking_service.py`, `activity_feed_service.py`, `templates_service.py`, `session_templates_service.py`, `serialization.py`: domain utilities for laps, linking, feed building and templates.
+  - `garmin_import_service.py`: stub placeholder for future ingestion.
+
+- `pages/`
+  - `Planner.py`: week editor (sessions CRUD, template apply/save), interval editor integration, cached lookups (`st.cache_data`).
+  - `Dashboard.py`: training load (acute/chronic) time series and SpeedEq scatter; Altair charts.
+  - `Analytics.py`: planned vs actual (weekly/daily) with category filters and persisted preferences.
+  - `Activities.py`: activity feed, planned-unlinked strip, link dialog and navigation to details.
+  - `Activity.py`, `Athlete.py`, `Goals.py`, `Session.py`, `SessionCreator.py`, `Settings.py`: supporting pages (settings include Strava OAuth and metrics recompute).
+
+- `ui/`
+  - `interval_editor.py`: interval step editor rendering and state wiring (used by Planner and creator flows).
+
+- Root
+  - `app.py`: entrypoint, page config, theme and locale setup, safe env preview.
+  - `config.py` (root): global constants like `METRICS` for page configs.
+
+## CSV Tables & Repositories (headers and IDs)
+
+-
+- Activities: `activities.csv` (id: `activityId`) — core fields: athlete, source, sportType, name, startTime, distanceKm, elapsedSec, movingSec, ascentM, avgHr, hasTimeseries, polyline, rawJsonPath.
+- Planned sessions: `planned_sessions.csv` (id: `plannedSessionId`) — athlete, date, type, plannedDistanceKm, plannedDurationSec, plannedAscentM, targetType/Label, notes, stepEndMode, stepsJson.
+- Linking: `links.csv` (id: `linkId`) — plannedSessionId, activityId, matchScore, rpe(1-10), comments.
+- Activities metrics: `activities_metrics.csv` (id: `activityId`) — per-activity aggregates + DistEq and TRIMP.
+- Planned metrics: `planned_metrics.csv` (id: `plannedSessionId`) — per-session planned aggregates incl. DistEq and TRIMP.
+- Weekly metrics: `weekly_metrics.csv` (id: `weekStartDate`) — week bounds, planned/actual aggregates, adherence, counters.
+- Daily metrics: `daily_metrics.csv` (id: `dailyId`) — per-day sums plus rolling acute/chronic windows.
+- Thresholds: `thresholds.csv` (id: `thresholdId`) — named HR/pace zones.
+- Goals: `goals.csv` (id: `goalId`).
+- Templates: `templates.csv` (id: `templateId`).
+- Session templates: `session_templates.csv` (id: `templateId`) — JSON payloads for interval/simple sessions.
+- Athletes: `athlete.csv` (id: `athleteId`).
+- Settings: `settings.csv` (id: `coachId`) — units, distanceEqFactor, Strava sync window, analytics activity types, bike DistEq factors.
+- Tokens: `tokens.csv` (id: `athleteId`, composite with `provider`) — encrypted tokens and expiry.
+
+- Timeseries: `data/timeseries/{activityId}.csv` — sampled streams: timestamp, hr, paceKmh, elevationM, cadence, lat, lon.
+- Raw Strava: `data/raw/strava/{activityId}.json` — full activity payloads.
+
+## UI Patterns & Caching
+
+- Use `utils.styling.apply_theme()` and `set_page_config` at page top.
+- Locale: call `set_locale("fr_FR")` for display; never mix display formatting into persistence.
+- Prefer `st.cache_data` with explicit TTL for DataFrame-loading helpers; use `st.cache_resource` for long-lived clients (repos, services) when appropriate.
+- Maintain state keys under a consistent prefix per page (e.g., `planner_*`, `analytics_*`). Clear cache/state after writes to keep UI reactive.
+- CSS customisations are injected via `st.markdown(..., unsafe_allow_html=True)`; centralise reusable styles in `utils/styling.py` when possible.
+
+## Analytics & Metrics (domain)
+
+- Distance-equivalent: `distanceEqKm = distanceKm + ascentM * distanceEqFactor`, default factor from `settings.csv` (`distanceEqFactor`, default 0.01).
+- TRIMP: computed using HR reserve weighting with exponential factor; planned TRIMP estimated from session targets/steps; actual TRIMP computed per-activity.
+- Bike DistEq: when metric is DistEq and category is RIDE, override per-activity using bike factors from settings; optional descent contribution from timeseries.
+- Weekly/Daily aggregation: use `MetricsComputationService` to recompute for specific athletes or all; dashboards and analytics pages read from these tables.
+
+## Strava Integration (key constraints)
+
+- OAuth: `authorization_url(state)` and `exchange_code` require `STRAVA_CLIENT_ID/SECRET/REDIRECT_URI` and `ENCRYPTION_KEY`.
+- Tokens are encrypted with Fernet and stored in `tokens.csv`; never log raw values; use `redact()` for any previews.
+- Sync windows: listing with pagination (200/page), detail+streams for cache-misses; caches raw JSON and streams to CSV; maintains simple rate-limit log and status with short/daily windows.
+- Incremental recompute: after creating new `activities.csv` rows, recompute metrics only for affected athletes or activities.
+
+## Data directories & environment
+
+- Data dir: `DATA_DIR` (default `./data`) — created on boot; includes `timeseries/`, `raw/strava/`, `laps/`.
+- Map tiles: optional `MAPBOX_API_KEY` for enhanced backgrounds on Activity maps; safe to omit (fallback to default styles).
+
+## Additional Testing Notes
+
+- Pytest suite under `tests/` with focused coverage on services, persistence, and presenters. Use fakes in `tests/conftest.py` for portalocker and Babel.
+- Keep tests deterministic; avoid network calls; inject fakes for time and external sessions where needed.

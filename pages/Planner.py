@@ -6,7 +6,7 @@ from pathlib import Path
 import math
 
 import streamlit as st
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from utils.config import load_config
 from utils.formatting import set_locale, fmt_decimal, fmt_m
@@ -86,9 +86,12 @@ def _clean_optional(value: Any) -> str:
 
 
 def _reset_planner_state() -> None:
-    planner_state = st.session_state.setdefault("planner_state", {"form": {}, "source": None})
+    planner_state = st.session_state.setdefault(
+        "planner_state", {"form": {}, "source": None, "template_context": {}}
+    )
     planner_state["form"] = {}
     planner_state["source"] = None
+    planner_state["template_context"] = {}
     for key in list(st.session_state.keys()):
         if key.startswith("planner-interval-editor-"):
             st.session_state.pop(key, None)
@@ -102,6 +105,7 @@ def _apply_planner_prefill(
     session_type: str,
     payload: Dict[str, Any],
     force: bool = False,
+    template_context: Optional[Dict[str, Any]] = None,
 ) -> None:
     if not force and planner_state.get("source") == source and planner_state.get("form"):
         return
@@ -125,10 +129,84 @@ def _apply_planner_prefill(
         "mode": "distance" if planned_distance > 0 or planned_duration <= 0 else "duration",
         "stepEndMode": payload.get("stepEndMode") or ("auto" if session_type == "INTERVAL_SIMPLE" else None),
         "stepsJson": payload.get("stepsJson") or "",
+        "templateTitle": _clean_optional(payload.get("templateTitle")),
+        "raceName": _clean_optional(payload.get("raceName")),
     }
     planner_state["form"] = form
     planner_state["source"] = source
+    context = dict(template_context or {})
+    if "original_title" in context:
+        context["original_title"] = _clean_optional(context.get("original_title"))
+    context.setdefault("prompt_ack", False)
+    planner_state["template_context"] = context
 
+
+def _get_dialog_factory() -> Optional[Callable]:
+    if hasattr(st, "dialog"):
+        return getattr(st, "dialog")
+    if hasattr(st, "experimental_dialog"):
+        return getattr(st, "experimental_dialog")
+    return None
+
+
+def _should_prompt_template_save(form: Dict[str, Any], planner_state: Dict[str, Any]) -> bool:
+    context = (planner_state or {}).get("template_context") or {}
+    if not context or context.get("prompt_ack"):
+        return False
+    kind = context.get("kind")
+    if kind not in {"template", "edit"}:
+        return False
+    original = _clean_optional(context.get("original_title"))
+    current = _clean_optional(form.get("templateTitle"))
+    if not original or not current:
+        return False
+    return original != current
+
+
+def _render_template_prompt_if_needed() -> None:
+    prompt_open = st.session_state.get("planner_template_prompt_open")
+    prompt_data = st.session_state.get("planner_template_prompt_data")
+    if not prompt_open or not prompt_data:
+        return
+
+    factory = _get_dialog_factory()
+    if not factory:
+        st.info(
+            "La séance a été renommée. Utilisez l'onglet Session Creator pour créer un modèle si besoin.",
+            icon="ℹ️",
+        )
+        st.session_state.pop("planner_template_prompt_open", None)
+        st.session_state.pop("planner_template_prompt_data", None)
+        return
+
+    title = prompt_data.get("template_title") or "Nouvelle séance"
+
+    @factory("Enregistrer comme modèle ?")
+    def _dialog() -> None:
+        st.write(
+            (
+                "Vous avez renommé la séance en **{name}**. Souhaitez-vous enregistrer ce contenu comme modèle ?"
+            ).format(name=title)
+        )
+        actions = st.columns(2)
+        with actions[0]:
+            if st.button("Créer un modèle", type="primary", key="planner-prompt-create-template"):
+                prefill = {
+                    "athleteId": prompt_data.get("athlete_id"),
+                    "date": prompt_data.get("date"),
+                    "templateTitle": prompt_data.get("template_title"),
+                    "templateNotes": prompt_data.get("template_notes"),
+                    "templateTitleSource": "manual",
+                    "sessionPayload": prompt_data.get("session_payload") or {},
+                }
+                st.session_state["session_creator_prefill"] = prefill
+                st.session_state.pop("planner_template_prompt_open", None)
+                st.session_state.pop("planner_template_prompt_data", None)
+                st.switch_page("pages/SessionCreator.py")
+        with actions[1]:
+            if st.button("Continuer", key="planner-prompt-continue"):
+                st.session_state.pop("planner_template_prompt_open", None)
+                st.session_state.pop("planner_template_prompt_data", None)
 
 def build_session_row(
     form: Dict[str, Any],
@@ -151,6 +229,8 @@ def build_session_row(
         "targetType": None if form.get("targetType") in (None, "", "none") else form.get("targetType"),
         "targetLabel": form.get("targetLabel"),
         "notes": _clean_optional(form.get("notes")),
+        "templateTitle": _clean_optional(form.get("templateTitle")),
+        "raceName": _clean_optional(form.get("raceName")),
         "stepEndMode": form.get("stepEndMode"),
         "stepsJson": form.get("stepsJson"),
     }
@@ -177,7 +257,12 @@ def get_session_templates_cached(athlete_id: str):
 if st.session_state.pop("planner_templates_refresh", False):
     get_session_templates_cached.clear()
 
-planner_state = st.session_state.setdefault("planner_state", {"form": {}, "source": None})
+planner_state = st.session_state.setdefault(
+    "planner_state", {"form": {}, "source": None, "template_context": {}}
+)
+planner_state.setdefault("template_context", {})
+
+_render_template_prompt_if_needed()
 
 st.markdown(
     """
@@ -265,6 +350,7 @@ with st.expander("Create/Edit session", expanded=bool(edit_ctx)):
     payload_source = "planner:default"
     base_payload: Dict[str, Any] = {}
     typ = "FUNDAMENTAL_ENDURANCE"
+    template_context: Dict[str, Any] = {}
 
     if mode == "edit":
         sid = (edit_ctx or {}).get("plannedSessionId")
@@ -277,6 +363,10 @@ with st.expander("Create/Edit session", expanded=bool(edit_ctx)):
             typ = (existing.get("type") or "FUNDAMENTAL_ENDURANCE").upper()
             base_payload = existing
             payload_source = f"edit:{sid}"
+            template_context = {
+                "kind": "edit",
+                "original_title": existing.get("templateTitle"),
+            }
     elif mode == "create":
         requested_date = (edit_ctx or {}).get("date")
         if requested_date:
@@ -319,13 +409,21 @@ with st.expander("Create/Edit session", expanded=bool(edit_ctx)):
             typ = str(chosen["value"]).upper()
             base_payload = {}
             payload_source = f"create:type:{typ}:{source_date_token}"
+            template_context = {}
         else:
             tpl_record = chosen.get("template") or session_templates.get(str(chosen.get("value") or ""))
             payload = dict((tpl_record or {}).get("payload") or {})
             payload["type"] = (payload.get("type") or (tpl_record or {}).get("baseType") or "FUNDAMENTAL_ENDURANCE").upper()
+            if tpl_record:
+                payload.setdefault("templateTitle", tpl_record.get("title") or "")
             base_payload = payload
             typ = payload.get("type")
             payload_source = f"create:template:{chosen.get('value')}:{source_date_token}"
+            template_context = {
+                "kind": "template",
+                "template_id": chosen.get("value"),
+                "original_title": payload.get("templateTitle") or (tpl_record or {}).get("title"),
+            }
         col_template_btn, _ = st.columns([1, 3])
         with col_template_btn:
             if st.button("Créer un modèle", key="planner-create-template"):
@@ -342,6 +440,7 @@ with st.expander("Create/Edit session", expanded=bool(edit_ctx)):
         session_type=typ,
         payload=base_payload or {},
         force=mode == "edit",
+        template_context=template_context,
     )
 
     form = planner_state.setdefault("form", {})
@@ -361,6 +460,14 @@ with st.expander("Create/Edit session", expanded=bool(edit_ctx)):
         form["type"] = typ
     else:
         form["type"] = typ
+
+    title_placeholder = _default_template_title({"type": typ, "date": date_value})
+    session_title = st.text_input(
+        "Titre de la séance",
+        value=str(form.get("templateTitle") or ""),
+        placeholder=title_placeholder,
+    )
+    form["templateTitle"] = session_title
 
     notes = st.text_area("Notes", value=form.get("notes", ""))
     form["notes"] = notes
@@ -542,6 +649,10 @@ with st.expander("Create/Edit session", expanded=bool(edit_ctx)):
             value=int(planned_ascent_m),
             step=50,
         )
+        race_name_input = st.text_input(
+            "Nom de la course",
+            value=form.get("raceName", ""),
+        )
         target_time = st.number_input(
             "Temps cible (sec)",
             min_value=0,
@@ -551,6 +662,7 @@ with st.expander("Create/Edit session", expanded=bool(edit_ctx)):
         planned_distance_km = float(distance_input)
         planned_ascent_m = int(ascent_input)
         planned_duration_sec = int(target_time)
+        form["raceName"] = race_name_input
         distance_eq_preview = planner.compute_distance_eq_km(planned_distance_km, planned_ascent_m)
         st.caption(
             f"Distance-eq ≈ {fmt_decimal(distance_eq_preview, 1)} km • "
@@ -598,6 +710,8 @@ with st.expander("Create/Edit session", expanded=bool(edit_ctx)):
     form["targetLabel"] = target_label
     form["stepEndMode"] = step_end_mode
     form["stepsJson"] = steps_json
+    if typ != "RACE":
+        form["raceName"] = ""
 
     col_save, col_cancel, col_delete = st.columns(3)
     with col_save:
@@ -605,13 +719,38 @@ with st.expander("Create/Edit session", expanded=bool(edit_ctx)):
             if not athlete_id:
                 st.error("Please select an athlete")
             else:
+                should_prompt = _should_prompt_template_save(form, planner_state)
                 row = build_session_row(form, athlete_id)
+                session_payload = {
+                    "type": row.get("type"),
+                    "plannedDistanceKm": row.get("plannedDistanceKm"),
+                    "plannedDurationSec": row.get("plannedDurationSec"),
+                    "plannedAscentM": row.get("plannedAscentM"),
+                    "targetType": row.get("targetType"),
+                    "targetLabel": row.get("targetLabel"),
+                    "notes": row.get("notes"),
+                    "raceName": row.get("raceName"),
+                    "stepEndMode": row.get("stepEndMode"),
+                    "stepsJson": row.get("stepsJson"),
+                }
+                sid = existing["plannedSessionId"] if existing else None
                 if existing:
                     sessions_repo.update(existing["plannedSessionId"], row)
                     st.success("Session updated")
                 else:
                     sid = sessions_repo.create(row)
                     st.success(f"Session added: {sid}")
+                if should_prompt:
+                    planner_state.get("template_context", {})["prompt_ack"] = True
+                    st.session_state["planner_template_prompt_data"] = {
+                        "athlete_id": athlete_id,
+                        "date": row.get("date"),
+                        "template_title": _clean_optional(form.get("templateTitle")),
+                        "template_notes": _clean_optional(form.get("notes")),
+                        "session_payload": session_payload,
+                        "planned_session_id": str(sid) if sid else None,
+                    }
+                    st.session_state["planner_template_prompt_open"] = True
                 get_sessions_df_cached.clear()
                 st.session_state["planner_edit"] = None
                 _reset_planner_state()

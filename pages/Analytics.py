@@ -129,17 +129,19 @@ with st.expander("Filtrer les activités incluses"):
         st.success("Préférence sauvegardée.")
 
 # --- Date range controls ---
-# Determine bounds from activities; fallback to today if missing
-min_act, max_act = analytics.activity_date_bounds(athlete_id)
 today = pd.Timestamp.today().normalize().date()
-if min_act is None:
-    min_act = today
-if max_act is None:
-    max_act = today
+min_act, max_act = analytics.activity_date_bounds(athlete_id)
+min_plan, max_plan = analytics.planned_date_bounds(athlete_id)
 
-default_end = max_act
+min_candidates = [d for d in (min_act, min_plan) if d]
+max_candidates = [d for d in (max_act, max_plan) if d]
+
+min_date = min(min_candidates) if min_candidates else today
+max_date = max(max_candidates) if max_candidates else today
+
+default_end = max_date
 # Default to last 28 days within available bounds
-default_start = max(min_act, (default_end - dt.timedelta(days=28)))
+default_start = max(min_date, (default_end - dt.timedelta(days=90)))
 
 # Maintain selection in session state
 if "analytics_range" not in st.session_state:
@@ -150,29 +152,29 @@ if "analytics_range" not in st.session_state:
 col_btn1, col_btn2, col_btn3, col_btn4 = st.columns(4)
 if col_btn1.button("7 jours"):
     st.session_state["analytics_range"] = (
-        (pd.Timestamp(max_act) - pd.Timedelta(days=7)).to_pydatetime(),
-        pd.Timestamp(max_act).to_pydatetime(),
+        (pd.Timestamp(max_date) - pd.Timedelta(days=7)).to_pydatetime(),
+        pd.Timestamp(max_date).to_pydatetime(),
     )
 if col_btn2.button("28 jours"):
     st.session_state["analytics_range"] = (
-        (pd.Timestamp(max_act) - pd.Timedelta(days=28)).to_pydatetime(),
-        pd.Timestamp(max_act).to_pydatetime(),
+        (pd.Timestamp(max_date) - pd.Timedelta(days=28)).to_pydatetime(),
+        pd.Timestamp(max_date).to_pydatetime(),
     )
 if col_btn3.button("3 mois"):
     st.session_state["analytics_range"] = (
-        (pd.Timestamp(max_act) - pd.DateOffset(months=3)).to_pydatetime(),
-        pd.Timestamp(max_act).to_pydatetime(),
+        (pd.Timestamp(max_date) - pd.DateOffset(months=3)).to_pydatetime(),
+        pd.Timestamp(max_date).to_pydatetime(),
     )
 if col_btn4.button("1 an"):
     st.session_state["analytics_range"] = (
-        (pd.Timestamp(max_act) - pd.DateOffset(years=1)).to_pydatetime(),
-        pd.Timestamp(max_act).to_pydatetime(),
+        (pd.Timestamp(max_date) - pd.DateOffset(years=1)).to_pydatetime(),
+        pd.Timestamp(max_date).to_pydatetime(),
     )
 
 start_dt, end_dt = st.slider(
     "Période",
-    min_value=pd.Timestamp(min_act).to_pydatetime(),
-    max_value=pd.Timestamp(max_act).to_pydatetime(),
+    min_value=pd.Timestamp(min_date).to_pydatetime(),
+    max_value=pd.Timestamp(max_date).to_pydatetime(),
     value=(
         pd.to_datetime(st.session_state["analytics_range"][0]).to_pydatetime(),
         pd.to_datetime(st.session_state["analytics_range"][1]).to_pydatetime(),
@@ -183,8 +185,11 @@ st.session_state["analytics_range"] = (start_dt, end_dt)
 
 start_date = pd.Timestamp(start_dt).date()
 end_date = pd.Timestamp(end_dt).date()
+plan_range_end = end_date
+if max_plan and max_plan > plan_range_end:
+    plan_range_end = max_plan
 
-metric_label_default = CONFIG_METRICS.index("Distance") if "Distance" in CONFIG_METRICS else 0
+metric_label_default = CONFIG_METRICS.index("DistEq") if "DistEq" in CONFIG_METRICS else 0
 metric_label = st.selectbox("Métrique", CONFIG_METRICS, index=metric_label_default)
 metric_cfg = METRIC_CONFIG[metric_label]
 
@@ -200,7 +205,7 @@ daily_df = analytics.daily_range(
     metric_label=metric_label,
     selected_types=selected_types,
     start_date=start_date,
-    end_date=end_date,
+    end_date=plan_range_end,
 )
 if metric_cfg["transform"]:
     daily_df["planned_metric"] = daily_df["planned_value"].apply(metric_cfg["transform"])  # type: ignore[index]
@@ -220,7 +225,7 @@ weekly_df = analytics.weekly_range(
     metric_label=metric_label,
     selected_types=selected_types,
     start_date=start_date,
-    end_date=end_date,
+    end_date=plan_range_end,
 )
 weeks_df = weekly_df[["weekStart", "isoYear", "isoWeek"]].rename(columns={"weekStart": "weekStartDate"})
 planned_raw = pd.to_numeric(weekly_df.get("planned_value"), errors="coerce").fillna(0.0)
@@ -341,9 +346,15 @@ if stack_df.empty:
     st.info("Pas encore de données à comparer.")
     st.stop()
 
+today_ts = pd.Timestamp.today().normalize()
+stack_df["weekDate"] = pd.to_datetime(stack_df["weekLabel"], errors="coerce")
+stack_df["segment_display"] = stack_df["segment"]
+future_week_mask = (stack_df["segment"] == "Plan manquant") & (stack_df["weekDate"] > today_ts)
+stack_df.loc[future_week_mask, "segment_display"] = "Plan à venir"
+
 color_scale = alt.Scale(
-    domain=["Réalisé", "Au-dessus du plan", "Plan manquant"],
-    range=["#3b82f6", "#16a34a", "#f97316"],
+    domain=["Réalisé", "Au-dessus du plan", "Plan manquant", "Plan à venir"],
+    range=["#3b82f6", "#16a34a", "#f97316", "#facc15"],
 )
 
 weekly_actual_metrics = pd.DataFrame(columns=["weekLabel", "actualTimeHours", "actualDistanceKm", "actualDistanceEqKm", "actualTrimp"])
@@ -383,7 +394,7 @@ chart = (
     .encode(
         x=alt.X("weekLabel:N", title="Semaine"),
         y=alt.Y("value:Q", title=f"{metric_label} ({metric_cfg['unit']})"),
-        color=alt.Color("segment:N", scale=color_scale, title=""),
+        color=alt.Color("segment_display:N", scale=color_scale, title=""),
         order=alt.Order("order:Q"),
         tooltip=[
             alt.Tooltip("weekLabel:N", title="Semaine"),
@@ -473,6 +484,12 @@ if not daily_df.empty:
         actual_segments = day_stack_df["segment"].isin(["Réalisé", "Au-dessus du plan"])
         day_stack_df.loc[~actual_segments, "activity_names"] = ""
         day_stack_df["activity_names"] = day_stack_df["activity_names"].fillna("")
+
+    if not day_stack_df.empty:
+        day_stack_df["date_dt"] = pd.to_datetime(day_stack_df["weekLabel"], errors="coerce")
+        day_stack_df["segment_display"] = day_stack_df["segment"]
+        future_day_mask = (day_stack_df["segment"] == "Plan manquant") & (day_stack_df["date_dt"] > today_ts)
+        day_stack_df.loc[future_day_mask, "segment_display"] = "Plan à venir"
 else:
     day_stack_df = pd.DataFrame(
         columns=["weekLabel", "segment", "value", "planned", "actual", "maxValue", "order", "activity_names"]
@@ -485,11 +502,11 @@ if not day_stack_df.empty:
         .encode(
             x=alt.X("weekLabel:N", title="Jour"),
             y=alt.Y("value:Q", title=f"{metric_label} ({metric_cfg['unit']})"),
-            color=alt.Color("segment:N", scale=color_scale, title=""),
+            color=alt.Color("segment_display:N", scale=color_scale, title=""),
             order=alt.Order("order:Q"),
             tooltip=[
                 alt.Tooltip("weekLabel:N", title="Jour"),
-                alt.Tooltip("segment:N", title="Segment"),
+                alt.Tooltip("segment_display:N", title="Segment"),
                 alt.Tooltip("value:Q", title="Valeur", format=".2f"),
                 alt.Tooltip("planned:Q", title="Planifié", format=".2f"),
                 alt.Tooltip("actual:Q", title="Réalisé", format=".2f"),

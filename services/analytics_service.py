@@ -170,6 +170,21 @@ class AnalyticsService:
             return None, None
         return dates.min().date(), dates.max().date()
 
+    def planned_date_bounds(self, athlete_id: str) -> Tuple[Optional[dt.date], Optional[dt.date]]:
+        path = self.storage.base_dir / "planned_metrics.csv"
+        if not path.exists():
+            return None, None
+        df = pd.read_csv(path)
+        if df.empty:
+            return None, None
+        df = df[df.get("athleteId") == athlete_id]
+        if df.empty:
+            return None, None
+        dates = pd.to_datetime(df.get("date"), errors="coerce").dropna().dt.normalize()
+        if dates.empty:
+            return None, None
+        return dates.min().date(), dates.max().date()
+
     def daily_range(
         self,
         *,
@@ -232,9 +247,9 @@ class AnalyticsService:
 
             if "activity_name" in acts_df.columns:
                 activity_names_by_date = (
-                    acts_df.groupby("date", as_index=False)["activity_name"]
+                    acts_df.groupby("date")["activity_name"]
                     .agg(lambda values: "\n".join(dict.fromkeys(str(v).strip() for v in values if str(v).strip())))
-                    .rename(columns={"activity_name": "activity_names"})
+                    .reset_index(name="activity_names")
                 )
         else:
             actual_daily = pd.DataFrame(columns=["date", "actual_value"])
