@@ -27,3 +27,7 @@
 - Pacing of a race with gpx / TCX / FIT : with values for each segment based on the values of recent segments in activities. (HR, Speed, Pace, etc. ascend, speedEq, etc.)
 - In the future refine it with evaluation of previous load in the current activity.
 
+# Small fix
+- Open the card to be linked in the feed.
+- Improve the UI of the planner -> less button, click on the card directly
+
