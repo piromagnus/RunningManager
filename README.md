@@ -132,6 +132,18 @@ uv run streamlit run app.py
 - **Athlete**: Athlete profile management
 - **Goals**: Set and track race/performance goals
 
+#### Planner Page
+![Session Summary](docs/images/session_summary.png)
+
+#### Dashboard - Training Load
+![Training Load](docs/images/training_load.png)
+
+#### Dashboard - Speed & Effort Analysis
+![Speed Equivalent Over Time](docs/images/speedeq_time.png)
+
+#### Analytics - Weekly Comparison
+![Weekly Analytics](docs/images/weeks_analytics.png)
+
 ### Testing
 
 ```bash
