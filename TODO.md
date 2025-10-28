@@ -11,7 +11,7 @@
 - Time in HR range (either custom or via Mips) for each week
 - Ratio Funda vs Intense.
 - Score of the race (with a betrail/ITRA/UTMB like )
-
+- 
 
 # Activites analytics
 - Compute automatic split ascend, flat and descent with metrics in each one of them, segment fusion easy in UI 
@@ -24,5 +24,6 @@
 - Get Best up speed (SpeedEq, ascent speed in mean over with respect to the segment lenght) same for descent.
 
 # Tools
-- Pacing of a race with gpx / TCX / FIT
+- Pacing of a race with gpx / TCX / FIT : with values for each segment based on the values of recent segments in activities. (HR, Speed, Pace, etc. ascend, speedEq, etc.)
+- In the future refine it with evaluation of previous load in the current activity.
 
