@@ -14,5 +14,3 @@ def deserialize_steps(s: Optional[str]) -> Optional[Dict[str, Any]]:
     if not s:
         return None
     return json.loads(s)
-
-

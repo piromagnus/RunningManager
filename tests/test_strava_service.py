@@ -16,7 +16,9 @@ from utils.crypto import decrypt_text, get_fernet
 
 
 class FakeResponse:
-    def __init__(self, status_code: int, payload: Any = None, headers: Optional[Dict[str, str]] = None):
+    def __init__(
+        self, status_code: int, payload: Any = None, headers: Optional[Dict[str, str]] = None
+    ):
         self.status_code = status_code
         self._payload = payload if payload is not None else {}
         self.headers = headers or {}
@@ -254,7 +256,15 @@ def test_sync_last_14_days_imports_activity(storage: CsvStorage, config: Config)
     ts_path = config.timeseries_dir / f"{activity_id}.csv"
     assert ts_path.exists()
     ts_df = pd.read_csv(ts_path)
-    assert list(ts_df.columns) == ["timestamp", "hr", "paceKmh", "elevationM", "cadence", "lat", "lon"]
+    assert list(ts_df.columns) == [
+        "timestamp",
+        "hr",
+        "paceKmh",
+        "elevationM",
+        "cadence",
+        "lat",
+        "lon",
+    ]
     assert pytest.approx(ts_df.iloc[1]["paceKmh"], rel=1e-3) == 12.6
 
     laps_path = config.laps_dir / f"{activity_id}.csv"

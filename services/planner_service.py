@@ -40,7 +40,9 @@ class PlannerService:
         ordered = [n for n in preferred if n in names] + sorted(rest)
         return ordered
 
-    def resolve_threshold_target(self, athlete_id: str, target_label: str) -> Optional[Dict[str, Any]]:
+    def resolve_threshold_target(
+        self, athlete_id: str, target_label: str
+    ) -> Optional[Dict[str, Any]]:
         df = self.thresholds.list(athleteId=athlete_id)
         if df.empty:
             return None
@@ -194,7 +196,9 @@ class PlannerService:
                 return None
         return None
 
-    def estimate_session_distance_km(self, athlete_id: str, session: Dict[str, Any]) -> Optional[float]:
+    def estimate_session_distance_km(
+        self, athlete_id: str, session: Dict[str, Any]
+    ) -> Optional[float]:
         # Prefer explicit planned distance
         dist = session.get("plannedDistanceKm")
         if dist not in (None, ""):
@@ -236,7 +240,9 @@ class PlannerService:
                 return self.estimate_interval_ascent_m(steps)
         return 0
 
-    def compute_weekly_totals(self, athlete_id: str, sessions: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def compute_weekly_totals(
+        self, athlete_id: str, sessions: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
         total_time = 0
         total_dist = 0.0
         total_ascent = 0

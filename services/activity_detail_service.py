@@ -303,9 +303,7 @@ class ActivityDetailService:
         )
 
     @staticmethod
-    def _comparison_metric(
-        actual: Optional[float], planned: Optional[float]
-    ) -> ComparisonMetric:
+    def _comparison_metric(actual: Optional[float], planned: Optional[float]) -> ComparisonMetric:
         if actual is None or planned is None:
             return ComparisonMetric(actual=actual, planned=planned, delta=None)
         return ComparisonMetric(actual=actual, planned=planned, delta=actual - planned)

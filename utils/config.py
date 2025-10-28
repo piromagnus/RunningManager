@@ -17,6 +17,7 @@ from streamlit.logger import get_logger
 
 logger = get_logger(__name__)
 
+
 @dataclass(frozen=True)
 class Config:
     strava_client_id: Optional[str]
@@ -37,7 +38,7 @@ def _ensure_dir(path: Path) -> None:
 def load_config() -> Config:
     """Load configuration from environment and provision directories."""
     # project_root = Path(__file__).resolve().parents[1]
-    load_dotenv(find_dotenv(),override=True)
+    load_dotenv(find_dotenv(), override=True)
     # load_dotenv(project_root / ".env.local", override=False)
 
     data_dir_str = os.getenv("DATA_DIR", "./data")

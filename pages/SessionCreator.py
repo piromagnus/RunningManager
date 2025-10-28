@@ -285,7 +285,11 @@ def _render_long_run_form(
         key="creator-long-target",
     )
     if target_choice in ("hr", "pace"):
-        names = planner.list_threshold_names(str(athlete_id or "")) if athlete_id else ["Fundamental", "Threshold 30", "Threshold 60"]
+        names = (
+            planner.list_threshold_names(str(athlete_id or ""))
+            if athlete_id
+            else ["Fundamental", "Threshold 30", "Threshold 60"]
+        )
         idx = names.index(target_label) if target_label in names else 0
         selected_label = st.selectbox("Seuil", names, index=idx, key="creator-long-threshold")
         result["targetType"] = target_choice
@@ -341,7 +345,9 @@ def _render_race_form(
         "targetLabel": None,
         "raceName": race_name_input.strip(),
     }
-    distance_eq_preview = planner.compute_distance_eq_km(result["plannedDistanceKm"], result["plannedAscentM"])
+    distance_eq_preview = planner.compute_distance_eq_km(
+        result["plannedDistanceKm"], result["plannedAscentM"]
+    )
     st.caption(
         f"Distance-eq ≈ {fmt_decimal(distance_eq_preview, 1)} km • "
         f"Temps cible ≈ {_format_duration(result['plannedDurationSec'])}"
@@ -353,17 +359,27 @@ def _render_interval_form(
     athlete_id: Optional[str],
     payload: Dict[str, Any],
 ) -> Dict[str, Any]:
-    thr_names = planner.list_threshold_names(str(athlete_id or "")) if athlete_id else ["Threshold 60", "Threshold 30", "Fundamental", "MVA", "Max speed"]
+    thr_names = (
+        planner.list_threshold_names(str(athlete_id or ""))
+        if athlete_id
+        else ["Threshold 60", "Threshold 30", "Fundamental", "MVA", "Max speed"]
+    )
     serialized_steps = render_interval_editor("creator", payload.get("stepsJson"), thr_names)
     step_end_mode_default = payload.get("stepEndMode") or "auto"
     step_end_mode = st.selectbox(
         "Mode de fin",
         ["auto", "lap"],
-        index=(["auto", "lap"].index(step_end_mode_default) if step_end_mode_default in ("auto", "lap") else 0),
+        index=(
+            ["auto", "lap"].index(step_end_mode_default)
+            if step_end_mode_default in ("auto", "lap")
+            else 0
+        ),
         key="creator-interval-end-mode",
     )
     planned_duration_sec = planner.estimate_interval_duration_sec(serialized_steps)
-    planned_distance_km = planner.estimate_interval_distance_km(str(athlete_id or ""), serialized_steps)
+    planned_distance_km = planner.estimate_interval_distance_km(
+        str(athlete_id or ""), serialized_steps
+    )
     planned_ascent_m = planner.estimate_interval_ascent_m(serialized_steps)
     distance_eq_preview = planner.compute_distance_eq_km(planned_distance_km, planned_ascent_m)
     st.caption(
@@ -402,7 +418,9 @@ def _render_session_form(
     return _render_fundamental_form(athlete_id, payload)
 
 
-def _session_payload_for_save(session_type: str, form_data: Dict[str, Any], notes: str) -> Dict[str, Any]:
+def _session_payload_for_save(
+    session_type: str, form_data: Dict[str, Any], notes: str
+) -> Dict[str, Any]:
     payload = {
         "type": session_type,
         "plannedDistanceKm": form_data.get("plannedDistanceKm"),
@@ -451,7 +469,9 @@ template_map = {t.get("templateId"): t for t in templates}
 template_labels = ["Créer un nouveau modèle"] + [
     f"{t.get('title') or 'Sans titre'} ({t.get('templateId')})" for t in templates
 ]
-selected_label = st.selectbox("Modèle existant", template_labels, index=0, key="creator-template-select")
+selected_label = st.selectbox(
+    "Modèle existant", template_labels, index=0, key="creator-template-select"
+)
 selected_template_id = None
 if selected_label != "Créer un nouveau modèle":
     selected_index = template_labels.index(selected_label) - 1
@@ -467,7 +487,9 @@ if selected_template_id != state.get("templateId"):
             state["sessionPayload"] = tpl.get("payload") or {}
             st.session_state["creator-template-title"] = state["templateTitle"]
             st.session_state["creator-template-notes"] = state["templateNotes"]
-            st.session_state["creator-session-notes"] = _clean_notes(state["sessionPayload"].get("notes"))
+            st.session_state["creator-session-notes"] = _clean_notes(
+                state["sessionPayload"].get("notes")
+            )
         else:
             state["sessionPayload"] = {}
             state["templateTitle"] = ""
@@ -488,7 +510,8 @@ if selected_template_id != state.get("templateId"):
 
 sessions_for_import = list_sessions(athlete_id)
 session_options = ["Aucune"] + [
-    f"{rec.get('date')} • {rec.get('type')} ({rec.get('plannedSessionId')})" for rec in sessions_for_import
+    f"{rec.get('date')} • {rec.get('type')} ({rec.get('plannedSessionId')})"
+    for rec in sessions_for_import
 ]
 selected_session_label = st.selectbox(
     "Importer une session planifiée",
@@ -519,7 +542,9 @@ if selected_session_label != "Aucune":
     st.rerun()
 
 session_payload = state.get("sessionPayload") or {}
-session_type = (session_payload.get("type") or state.get("baseType") or "FUNDAMENTAL_ENDURANCE").upper()
+session_type = (
+    session_payload.get("type") or state.get("baseType") or "FUNDAMENTAL_ENDURANCE"
+).upper()
 base_type_options = ["FUNDAMENTAL_ENDURANCE", "LONG_RUN", "RACE", "INTERVAL_SIMPLE"]
 session_type = st.selectbox(
     "Type de session",
@@ -529,15 +554,23 @@ session_type = st.selectbox(
 )
 state["baseType"] = session_type
 
-template_title_default = state.get("templateTitle") or _default_template_title({"type": session_type})
-template_title = st.text_input("Titre du modèle", value=template_title_default, key="creator-template-title")
+template_title_default = state.get("templateTitle") or _default_template_title(
+    {"type": session_type}
+)
+template_title = st.text_input(
+    "Titre du modèle", value=template_title_default, key="creator-template-title"
+)
 state["templateTitle"] = template_title
 template_notes_default = state.get("templateNotes") or ""
-template_notes = st.text_area("Notes du modèle", value=template_notes_default, key="creator-template-notes")
+template_notes = st.text_area(
+    "Notes du modèle", value=template_notes_default, key="creator-template-notes"
+)
 state["templateNotes"] = template_notes
 
 session_notes_default = _clean_notes(session_payload.get("notes"))
-session_notes = st.text_area("Notes de session", value=session_notes_default, key="creator-session-notes")
+session_notes = st.text_area(
+    "Notes de session", value=session_notes_default, key="creator-session-notes"
+)
 
 form_result, distance_eq_preview = _render_session_form(athlete_id, session_type, session_payload)
 
@@ -633,7 +666,9 @@ with col_schedule:
                         notes=template_notes,
                     )
                     state["templateId"] = template_id
-                templates_service.apply_to_calendar(template_id, athlete_id, schedule_date, notes=session_notes)
+                templates_service.apply_to_calendar(
+                    template_id, athlete_id, schedule_date, notes=session_notes
+                )
                 list_templates.clear()
                 st.session_state["planner_templates_refresh"] = True
                 st.success("Modèle planifié et appliqué au calendrier.")

@@ -224,10 +224,16 @@ class AnalyticsService:
         if not acts_df.empty:
             acts_df = acts_df[acts_df.get("athleteId") == athlete_id].copy()
             if selected_types:
-                acts_df["category"] = acts_df.get("category", pd.Series(dtype=str)).astype(str).str.upper()
+                acts_df["category"] = (
+                    acts_df.get("category", pd.Series(dtype=str)).astype(str).str.upper()
+                )
                 acts_df = acts_df[acts_df["category"].isin([s.upper() for s in selected_types])]
-            acts_df["date"] = pd.to_datetime(acts_df.get("startDate"), errors="coerce").dt.normalize()
-            mask = (acts_df["date"] >= pd.Timestamp(start_date)) & (acts_df["date"] <= pd.Timestamp(end_date))
+            acts_df["date"] = pd.to_datetime(
+                acts_df.get("startDate"), errors="coerce"
+            ).dt.normalize()
+            mask = (acts_df["date"] >= pd.Timestamp(start_date)) & (
+                acts_df["date"] <= pd.Timestamp(end_date)
+            )
             acts_df = acts_df[mask]
 
             # Attach activity names from activities.csv when available
@@ -237,18 +243,28 @@ class AnalyticsService:
                 if {"activityId", "name"}.issubset(activities_df.columns):
                     name_map = activities_df[["activityId", "name"]].copy()
                     name_map["activityId"] = name_map["activityId"].astype(str)
-                    acts_df["activityId"] = acts_df.get("activityId", pd.Series(dtype=str)).astype(str)
+                    acts_df["activityId"] = acts_df.get("activityId", pd.Series(dtype=str)).astype(
+                        str
+                    )
                     acts_df = acts_df.merge(name_map, on="activityId", how="left")
-            acts_df["activity_name"] = acts_df.get("name", pd.Series(dtype=str)).fillna("").astype(str)
+            acts_df["activity_name"] = (
+                acts_df.get("name", pd.Series(dtype=str)).fillna("").astype(str)
+            )
 
             actual_daily = (
-                acts_df.groupby("date", as_index=False)[value_col].sum().rename(columns={value_col: "actual_value"})
+                acts_df.groupby("date", as_index=False)[value_col]
+                .sum()
+                .rename(columns={value_col: "actual_value"})
             )
 
             if "activity_name" in acts_df.columns:
                 activity_names_by_date = (
                     acts_df.groupby("date")["activity_name"]
-                    .agg(lambda values: "\n".join(dict.fromkeys(str(v).strip() for v in values if str(v).strip())))
+                    .agg(
+                        lambda values: "\n".join(
+                            dict.fromkeys(str(v).strip() for v in values if str(v).strip())
+                        )
+                    )
                     .reset_index(name="activity_names")
                 )
         else:
@@ -277,7 +293,9 @@ class AnalyticsService:
                     act_dates["activityId"] = act_dates["activityId"].astype(str)
                     links_df = links_df.merge(act_dates, on="activityId", how="left")
                     link_dates = (
-                        links_df.dropna(subset=["date"]).groupby("plannedSessionId", as_index=False)["date"].min()
+                        links_df.dropna(subset=["date"])
+                        .groupby("plannedSessionId", as_index=False)["date"]
+                        .min()
                     )
                 else:
                     link_dates = pd.DataFrame(columns=["plannedSessionId", "date"])
@@ -286,7 +304,9 @@ class AnalyticsService:
 
             # Planned effective date
             pm_df = pm_df.copy()
-            pm_df["planned_date"] = pd.to_datetime(pm_df.get("date"), errors="coerce").dt.normalize()
+            pm_df["planned_date"] = pd.to_datetime(
+                pm_df.get("date"), errors="coerce"
+            ).dt.normalize()
             if not link_dates.empty and "plannedSessionId" in pm_df.columns:
                 pm_df["plannedSessionId"] = pm_df["plannedSessionId"].astype(str)
                 pm_df = pm_df.merge(
@@ -294,16 +314,22 @@ class AnalyticsService:
                     on="plannedSessionId",
                     how="left",
                 )
-                pm_df["effective_date"] = pd.to_datetime(pm_df.get("effective_date"), errors="coerce").dt.normalize()
+                pm_df["effective_date"] = pd.to_datetime(
+                    pm_df.get("effective_date"), errors="coerce"
+                ).dt.normalize()
                 pm_df["date"] = pm_df["effective_date"].fillna(pm_df["planned_date"])
             else:
                 pm_df["date"] = pm_df["planned_date"]
 
             if value_col in pm_df.columns:
-                mask = (pm_df["date"] >= pd.Timestamp(start_date)) & (pm_df["date"] <= pd.Timestamp(end_date))
+                mask = (pm_df["date"] >= pd.Timestamp(start_date)) & (
+                    pm_df["date"] <= pd.Timestamp(end_date)
+                )
                 pm_df = pm_df[mask]
                 planned_daily = (
-                    pm_df.groupby("date", as_index=False)[value_col].sum().rename(columns={value_col: "planned_value"})
+                    pm_df.groupby("date", as_index=False)[value_col]
+                    .sum()
+                    .rename(columns={value_col: "planned_value"})
                 )
             else:
                 planned_daily = pd.DataFrame(columns=["date", "planned_value"])
@@ -313,18 +339,30 @@ class AnalyticsService:
         # Build continuous day index and merge
         if start_date and end_date and start_date <= end_date:
             all_days = pd.DataFrame(
-                {"date": pd.date_range(start=pd.Timestamp(start_date), end=pd.Timestamp(end_date), freq="D")}
+                {
+                    "date": pd.date_range(
+                        start=pd.Timestamp(start_date), end=pd.Timestamp(end_date), freq="D"
+                    )
+                }
             )
         else:
             all_days = pd.DataFrame(columns=["date"])
-        daily = all_days.merge(planned_daily, on="date", how="left").merge(actual_daily, on="date", how="left")
+        daily = all_days.merge(planned_daily, on="date", how="left").merge(
+            actual_daily, on="date", how="left"
+        )
         if not activity_names_by_date.empty:
             daily = daily.merge(activity_names_by_date, on="date", how="left")
         else:
             daily["activity_names"] = ""
-        daily["planned_value"] = pd.to_numeric(daily.get("planned_value"), errors="coerce").fillna(0.0)
-        daily["actual_value"] = pd.to_numeric(daily.get("actual_value"), errors="coerce").fillna(0.0)
-        daily["activity_names"] = daily.get("activity_names", pd.Series(dtype=str)).fillna("").astype(str)
+        daily["planned_value"] = pd.to_numeric(daily.get("planned_value"), errors="coerce").fillna(
+            0.0
+        )
+        daily["actual_value"] = pd.to_numeric(daily.get("actual_value"), errors="coerce").fillna(
+            0.0
+        )
+        daily["activity_names"] = (
+            daily.get("activity_names", pd.Series(dtype=str)).fillna("").astype(str)
+        )
         return daily
 
     # ------------------------
@@ -349,7 +387,7 @@ class AnalyticsService:
         """
         # Build weeks grid
         grid: List[dt.date] = []
-        cur = (start_date - dt.timedelta(days=start_date.isoweekday() - 1))
+        cur = start_date - dt.timedelta(days=start_date.isoweekday() - 1)
         while cur <= end_date:
             grid.append(cur)
             cur = cur + dt.timedelta(days=7)
@@ -374,13 +412,16 @@ class AnalyticsService:
         if not pm_df.empty:
             pm_df = pm_df[pm_df.get("athleteId") == athlete_id]
             pm_df["date"] = pd.to_datetime(pm_df.get("date"), errors="coerce").dt.normalize()
-            pm_df = pm_df[(pm_df["date"] >= pd.Timestamp(start_date)) & (pm_df["date"] <= pd.Timestamp(end_date))]
+            pm_df = pm_df[
+                (pm_df["date"] >= pd.Timestamp(start_date))
+                & (pm_df["date"] <= pd.Timestamp(end_date))
+            ]
             pm_df["isoYear"] = pm_df["date"].dt.isocalendar().year.astype(int)
             pm_df["isoWeek"] = pm_df["date"].dt.isocalendar().week.astype(int)
             if planned_col in pm_df.columns:
-                planned_weekly = (
-                    pm_df.groupby(["isoYear", "isoWeek"], as_index=False)[planned_col].sum()
-                )
+                planned_weekly = pm_df.groupby(["isoYear", "isoWeek"], as_index=False)[
+                    planned_col
+                ].sum()
             else:
                 planned_weekly = pd.DataFrame(columns=["isoYear", "isoWeek", planned_col])
         else:
@@ -405,10 +446,17 @@ class AnalyticsService:
         if not acts_df.empty:
             acts_df = acts_df[acts_df.get("athleteId") == athlete_id].copy()
             if selected_types:
-                acts_df["category"] = acts_df.get("category", pd.Series(dtype=str)).astype(str).str.upper()
+                acts_df["category"] = (
+                    acts_df.get("category", pd.Series(dtype=str)).astype(str).str.upper()
+                )
                 acts_df = acts_df[acts_df["category"].isin([s.upper() for s in selected_types])]
-            acts_df["date"] = pd.to_datetime(acts_df.get("startDate"), errors="coerce").dt.normalize()
-            acts_df = acts_df[(acts_df["date"] >= pd.Timestamp(start_date)) & (acts_df["date"] <= pd.Timestamp(end_date))]
+            acts_df["date"] = pd.to_datetime(
+                acts_df.get("startDate"), errors="coerce"
+            ).dt.normalize()
+            acts_df = acts_df[
+                (acts_df["date"] >= pd.Timestamp(start_date))
+                & (acts_df["date"] <= pd.Timestamp(end_date))
+            ]
             # If DistEq and category RIDE, override per-activity value
             if metric_label == "DistEq":
                 acts_df["_value"] = acts_df.apply(
@@ -423,13 +471,15 @@ class AnalyticsService:
 
             acts_df["isoYear"] = acts_df["date"].dt.isocalendar().year.astype(int)
             acts_df["isoWeek"] = acts_df["date"].dt.isocalendar().week.astype(int)
-            actual_weekly = (
-                acts_df.groupby(["isoYear", "isoWeek"], as_index=False).agg(actual_value=(value_series.name if metric_label != "DistEq" else "_value", "sum"))
+            actual_weekly = acts_df.groupby(["isoYear", "isoWeek"], as_index=False).agg(
+                actual_value=(value_series.name if metric_label != "DistEq" else "_value", "sum")
             )
             if metric_label != "DistEq":
                 # recompute with correct name if not DistEq path
                 actual_weekly = (
-                    acts_df.groupby(["isoYear", "isoWeek"], as_index=False)[actual_col].sum().rename(columns={actual_col: "actual_value"})
+                    acts_df.groupby(["isoYear", "isoWeek"], as_index=False)[actual_col]
+                    .sum()
+                    .rename(columns={actual_col: "actual_value"})
                 )
         else:
             actual_weekly = pd.DataFrame(columns=["isoYear", "isoWeek", "actual_value"])
@@ -478,7 +528,11 @@ class AnalyticsService:
                     try:
                         ts = pd.read_csv(ts_path)
                         if "elevationM" in ts.columns:
-                            diffs = pd.to_numeric(ts["elevationM"], errors="coerce").fillna(method="ffill").diff()
+                            diffs = (
+                                pd.to_numeric(ts["elevationM"], errors="coerce")
+                                .fillna(method="ffill")
+                                .diff()
+                            )
                             descent_m = float((-diffs[diffs < 0].sum()) if not diffs.empty else 0.0)
                     except Exception:
                         descent_m = 0.0

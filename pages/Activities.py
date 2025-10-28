@@ -309,7 +309,9 @@ def _render_planned_strip(
                         subtitle_lines.append(type_label)
 
                 subtitle_html = "".join(
-                    f'<div class="secondary">{_escape_text(line)}</div>' for line in subtitle_lines if line
+                    f'<div class="secondary">{_escape_text(line)}</div>'
+                    for line in subtitle_lines
+                    if line
                 )
                 notes_html = (
                     f'<div class="notes">{_escape_text(notes_text)}</div>' if notes_text else ""
@@ -329,7 +331,9 @@ def _render_planned_strip(
                     "</div>"
                 )
                 st.markdown(card_html, unsafe_allow_html=True)
-                st.markdown(f'<div class="planned-card-button status-{status}">', unsafe_allow_html=True)
+                st.markdown(
+                    f'<div class="planned-card-button status-{status}">', unsafe_allow_html=True
+                )
                 clicked = st.button(
                     "Associer",
                     key=f"link-{card.planned_session_id}",
@@ -362,8 +366,7 @@ def _open_link_dialog(
             return
 
         options = {
-            _format_candidate_label(candidate): candidate.activity_id
-            for candidate in candidates
+            _format_candidate_label(candidate): candidate.activity_id for candidate in candidates
         }
         selected = st.radio(
             "Activités correspondantes",
@@ -462,7 +465,9 @@ def _render_activity_card(item: ActivityFeedItem) -> None:
     type_label = _format_sport_type(item.sport_type)
     meta_lines = [f'<div class="meta-line">{_escape_text(_format_datetime(item.start_time))}</div>']
     if planned_type == "RACE" and race_name and race_name not in subtitle_lines:
-        meta_lines.append(f'<div class="meta-line race-name">Course : {_escape_text(race_name)}</div>')
+        meta_lines.append(
+            f'<div class="meta-line race-name">Course : {_escape_text(race_name)}</div>'
+        )
     if notes_text:
         meta_lines.append(f'<div class="meta-line notes">{_escape_text(notes_text)}</div>')
     type_tag_html = (

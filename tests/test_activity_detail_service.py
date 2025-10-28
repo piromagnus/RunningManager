@@ -52,9 +52,7 @@ def detail_service(storage: CsvStorage, cfg: Config) -> ActivityDetailService:
     return ActivityDetailService(storage, cfg, ts_service)
 
 
-def _create_activity(
-    repo: ActivitiesRepo, *, raw_path: Path, **overrides
-) -> str:
+def _create_activity(repo: ActivitiesRepo, *, raw_path: Path, **overrides) -> str:
     payload = {
         "activityId": overrides.get("activityId"),
         "athleteId": overrides.get("athleteId", "ath1"),
@@ -316,7 +314,9 @@ def test_activity_detail_no_geo_returns_none(detail_service, storage, cfg):
     assert detail.map_notice == "Aucune donnée de trace disponible."
 
 
-def _setup_activity_with_polyline(activities_repo, metrics_repo, raw_path: Path, activity_id: str) -> None:
+def _setup_activity_with_polyline(
+    activities_repo, metrics_repo, raw_path: Path, activity_id: str
+) -> None:
     raw_path.write_text(json.dumps({"name": "Map activity"}), encoding="utf-8")
     _create_activity(
         activities_repo,

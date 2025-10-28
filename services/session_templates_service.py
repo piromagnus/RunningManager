@@ -151,7 +151,9 @@ class SessionTemplatesService:
             {
                 "athleteId": athlete_id,
                 "date": str(target_date),
-                "notes": notes if notes is not None else payload.get("notes") or template.get("notes") or "",
+                "notes": notes
+                if notes is not None
+                else payload.get("notes") or template.get("notes") or "",
             }
         )
         payload["templateTitle"] = template.get("title") or payload.get("templateTitle") or ""
@@ -170,7 +172,9 @@ class SessionTemplatesService:
         allowed = {"FUNDAMENTAL_ENDURANCE", "LONG_RUN", "INTERVAL_SIMPLE", "RACE"}
         norm = (base_type or "").upper()
         if norm not in allowed:
-            raise ValueError(f"Unsupported base type '{base_type}'. Expected one of {sorted(allowed)}.")
+            raise ValueError(
+                f"Unsupported base type '{base_type}'. Expected one of {sorted(allowed)}."
+            )
 
     @staticmethod
     def _session_payload(session: Dict[str, Any]) -> Dict[str, Any]:

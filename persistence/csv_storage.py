@@ -27,7 +27,9 @@ class CsvStorage:
         p.parent.mkdir(parents=True, exist_ok=True)
         return p
 
-    def read_csv(self, relative: str | Path, dtypes: Optional[Dict[str, str]] = None) -> pd.DataFrame:
+    def read_csv(
+        self, relative: str | Path, dtypes: Optional[Dict[str, str]] = None
+    ) -> pd.DataFrame:
         path = self._path(relative)
         if not path.exists():
             # Return empty DataFrame with provided dtypes as columns if given
@@ -63,7 +65,9 @@ class CsvStorage:
         with portalocker.Lock(str(path), timeout=10, flags=portalocker.LOCK_EX):
             path.write_text(data)
 
-    def append_row(self, relative: str | Path, row: Dict[str, object], columns: Iterable[str]) -> None:
+    def append_row(
+        self, relative: str | Path, row: Dict[str, object], columns: Iterable[str]
+    ) -> None:
         path = self._path(relative)
         with portalocker.Lock(str(path), timeout=10, flags=portalocker.LOCK_EX):
             exists = path.exists()
@@ -82,7 +86,7 @@ class CsvStorage:
         # Build mask for match
         mask = pd.Series([True] * len(df))
         for key in key_cols:
-            mask &= (df[key].astype(str) == str(row[key]))
+            mask &= df[key].astype(str) == str(row[key])
         if mask.any():
             # Update first match
             idx = df.index[mask][0]
@@ -101,4 +105,3 @@ class CsvStorage:
                     df[k] = None
             df.loc[len(df)] = row
             self.write_csv(relative, df)
-

@@ -170,9 +170,13 @@ def test_linking_service_enriches_with_metrics(tmp_path):
 
     link_service.create_link("ath1", activity_id, planned_id, rpe=6, comments="")
     linked = link_service.linked_activities("ath1")
-    assert {"plannedMetricDistanceEqKm", "plannedMetricTimeSec", "plannedMetricTrimp"}.issubset(linked.columns)
+    assert {"plannedMetricDistanceEqKm", "plannedMetricTimeSec", "plannedMetricTrimp"}.issubset(
+        linked.columns
+    )
     linked_row = linked.iloc[0]
-    assert pytest.approx(float(linked_row["activityTrimp"]), rel=1e-6) == float(activity_row["activityTrimp"])
+    assert pytest.approx(float(linked_row["activityTrimp"]), rel=1e-6) == float(
+        activity_row["activityTrimp"]
+    )
     assert pd.notna(linked_row["plannedMetricTrimp"])
     assert float(linked_row["plannedMetricDistanceEqKm"]) >= 0.0
 
@@ -234,6 +238,7 @@ def test_linking_service_candidates_for_planned_session(tmp_path):
     candidates = link_service.suggest_for_planned_session("ath1", planned_id, window_days=14)
     assert [candidate.activity_id for candidate in candidates] == ["act-closer"]
     assert candidates[0].match_score is not None and candidates[0].match_score > 0.0
-    assert candidates[0].start_time.date() == pd.Timestamp("2025-01-09T07:00:00Z").tz_convert(
-        None
-    ).date()
+    assert (
+        candidates[0].start_time.date()
+        == pd.Timestamp("2025-01-09T07:00:00Z").tz_convert(None).date()
+    )

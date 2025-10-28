@@ -151,7 +151,9 @@ def normalize_steps(raw: Optional[Dict[str, Any]]) -> Steps:
     cooldown_sec = _ensure_int(source.get("cooldownSec"), default=0, minimum=0)
     post_blocks_raw = source.get("postBlocks")
     if post_blocks_raw is not None:
-        post_blocks = [_normalise_action(block, fallback_kind="recovery") for block in post_blocks_raw]
+        post_blocks = [
+            _normalise_action(block, fallback_kind="recovery") for block in post_blocks_raw
+        ]
     elif cooldown_sec > 0:
         post_blocks = [
             _normalise_action(
@@ -186,7 +188,9 @@ def normalize_steps(raw: Optional[Dict[str, Any]]) -> Steps:
 
 def serialize_steps(steps: Steps) -> Dict[str, Any]:
     """Convert a normalised structure to a JSON-serialisable dictionary."""
-    pre_blocks = [_normalise_action(block, fallback_kind="run") for block in steps.get("preBlocks") or []]
+    pre_blocks = [
+        _normalise_action(block, fallback_kind="run") for block in steps.get("preBlocks") or []
+    ]
     loops_out: List[Dict[str, Any]] = []
     for loop in steps.get("loops") or []:
         actions = [_normalise_action(act, fallback_kind="run") for act in loop.get("actions") or []]
@@ -200,7 +204,10 @@ def serialize_steps(steps: Steps) -> Dict[str, Any]:
         _normalise_action(between_block, fallback_kind="recovery") if between_block else None
     )
 
-    post_blocks = [_normalise_action(block, fallback_kind="recovery") for block in steps.get("postBlocks") or []]
+    post_blocks = [
+        _normalise_action(block, fallback_kind="recovery")
+        for block in steps.get("postBlocks") or []
+    ]
 
     payload: Dict[str, Any] = {
         "preBlocks": pre_blocks,

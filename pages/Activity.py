@@ -208,6 +208,7 @@ def _render_link_panel(detail: ActivityDetail) -> None:
                 unsafe_allow_html=True,
             )
 
+
 def _format_comparison_value(label: str, value) -> str:
     if value is None:
         return "-"
@@ -285,8 +286,15 @@ def _render_timeseries(ts_service: TimeseriesService, activity_id: str) -> None:
         st.altair_chart(chart)
 
 
-def _build_map_deck(detail: ActivityDetail, map_choice: dict, mapbox_token: str | None) -> pdk.Deck | None:
-    logger.info("Building map deck for activity %s with map choice %s and mapbox token %s", detail.activity_id, map_choice, mapbox_token)
+def _build_map_deck(
+    detail: ActivityDetail, map_choice: dict, mapbox_token: str | None
+) -> pdk.Deck | None:
+    logger.info(
+        "Building map deck for activity %s with map choice %s and mapbox token %s",
+        detail.activity_id,
+        map_choice,
+        mapbox_token,
+    )
     if not detail.map_path:
         logger.debug("Skipping map render: no path for activity %s", detail.activity_id)
         return None
@@ -314,6 +322,7 @@ def _build_map_deck(detail: ActivityDetail, map_choice: dict, mapbox_token: str 
     provider = map_choice.get("provider", "carto")
     style = map_choice.get("style", "light")
     import os
+
     logger.debug("MAPBOX_API_KEY: %s", os.getenv("MAPBOX_API_KEY"))
     logger.debug(
         "Building map deck for activity %s with provider=%s style=%s points=%d",
@@ -368,7 +377,9 @@ def _render_map(detail: ActivityDetail, map_choice: dict, mapbox_token: str | No
     provider = map_choice.get("provider")
     if provider == "mapbox":
         redacted = redact(mapbox_token)
-        st.caption(f"Fond de carte Mapbox : {map_choice.get('label')} (jeton {redacted or 'absent'})")
+        st.caption(
+            f"Fond de carte Mapbox : {map_choice.get('label')} (jeton {redacted or 'absent'})"
+        )
     else:
         st.caption(f"Fond de carte Carto : {map_choice.get('label')}")
     deck = _build_map_deck(detail, map_choice, mapbox_token)
@@ -387,6 +398,7 @@ def _render_map(detail: ActivityDetail, map_choice: dict, mapbox_token: str | No
         redact(deck_token),
     )
     st.pydeck_chart(deck)
+
 
 if __name__ == "__main__":
     main()

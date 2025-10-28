@@ -85,9 +85,7 @@ class LinkingService:
         links = self._links_df()
         if not links.empty:
             linked_ids = set(links["activityId"])
-            activities = activities[
-                ~activities["activityId"].astype(str).isin(linked_ids)
-            ]
+            activities = activities[~activities["activityId"].astype(str).isin(linked_ids)]
         activities = activities.sort_values("startTime", ascending=False)
         return activities.reset_index(drop=True)
 
@@ -138,9 +136,7 @@ class LinkingService:
         links = self._links_df()
         if not links.empty and "plannedSessionId" in links.columns:
             taken = set(links["plannedSessionId"])
-            planned = planned[
-                ~planned["plannedSessionId"].astype(str).isin(taken)
-            ]
+            planned = planned[~planned["plannedSessionId"].astype(str).isin(taken)]
         planned = planned.sort_values("date")
         return planned.reset_index(drop=True)
 
@@ -155,9 +151,7 @@ class LinkingService:
                 if col not in working.columns:
                     working[col] = None
             return working
-        metrics = metrics[
-            ["activityId", "distanceEqKm", "timeSec", "trimp"]
-        ].copy()
+        metrics = metrics[["activityId", "distanceEqKm", "timeSec", "trimp"]].copy()
         metrics["activityId"] = metrics["activityId"].astype(str)
         metrics = metrics.rename(
             columns={
@@ -183,9 +177,7 @@ class LinkingService:
                 if col not in working.columns:
                     working[col] = None
             return working
-        metrics = metrics[
-            ["plannedSessionId", "distanceEqKm", "timeSec", "trimp"]
-        ].copy()
+        metrics = metrics[["plannedSessionId", "distanceEqKm", "timeSec", "trimp"]].copy()
         metrics["plannedSessionId"] = metrics["plannedSessionId"].astype(str)
         metrics = metrics.rename(
             columns={
@@ -268,9 +260,7 @@ class LinkingService:
         date_component = 0.0
         if activity_date and planned_date and window_days > 0:
             delta_days = abs((planned_date.date() - activity_date.date()).days)
-            date_component = max(
-                0.0, 1.0 - min(delta_days / float(window_days), 1.0)
-            )
+            date_component = max(0.0, 1.0 - min(delta_days / float(window_days), 1.0))
 
         score = 0.4 * distance_component + 0.4 * duration_component + 0.2 * date_component
         return max(0.0, min(score, 1.0))
@@ -307,9 +297,7 @@ class LinkingService:
         links = self._links_df()
         if not links.empty:
             linked_ids = set(links["activityId"])
-            activities = activities[
-                ~activities["activityId"].isin(linked_ids)
-            ]
+            activities = activities[~activities["activityId"].isin(linked_ids)]
         if activities.empty:
             return []
 

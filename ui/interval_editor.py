@@ -119,11 +119,14 @@ def _target_inputs(
         )
     else:
         default_label = action.get("targetLabel") or ""
-        action["targetLabel"] = st.text_input(
-            "Valeur",
-            value=str(default_label),
-            key=f"{key}-target-value",
-        ).strip() or None
+        action["targetLabel"] = (
+            st.text_input(
+                "Valeur",
+                value=str(default_label),
+                key=f"{key}-target-value",
+            ).strip()
+            or None
+        )
 
 
 def _render_action_card(
@@ -196,7 +199,10 @@ def render_interval_editor(
     st.markdown("<div class='rm-interval-editor'>", unsafe_allow_html=True)
     st.markdown("#### Avant les boucles")
     pre_blocks = state.get("preBlocks") or []
-    _ensure_minimum_blocks(pre_blocks, defaults=[new_run_action(sec=600, target_type="sensation", target_label="Fundamental")])
+    _ensure_minimum_blocks(
+        pre_blocks,
+        defaults=[new_run_action(sec=600, target_type="sensation", target_label="Fundamental")],
+    )
 
     for idx, block in enumerate(pre_blocks):
         block_key = f"{prefix}-pre-{idx}"
@@ -206,7 +212,9 @@ def render_interval_editor(
             new_state["preBlocks"].pop(idx)
             _ensure_minimum_blocks(
                 new_state["preBlocks"],
-                defaults=[new_run_action(sec=600, target_type="sensation", target_label="Fundamental")],
+                defaults=[
+                    new_run_action(sec=600, target_type="sensation", target_label="Fundamental")
+                ],
             )
             _set_state(prefix, new_state)
 
@@ -220,7 +228,9 @@ def render_interval_editor(
 
     if st.button("Ajouter un bloc avant", key=f"{prefix}-add-pre"):
         new_state = clone_steps(state)
-        new_state["preBlocks"].append(new_run_action(sec=300, target_type="sensation", target_label="Fundamental"))
+        new_state["preBlocks"].append(
+            new_run_action(sec=300, target_type="sensation", target_label="Fundamental")
+        )
         _set_state(prefix, new_state)
         st.rerun()
 
@@ -245,7 +255,9 @@ def render_interval_editor(
             )
             loop["repeats"] = int(repeats)
         with header_cols[2]:
-            if len(loops) > 1 and st.button("🗑️", key=f"{loop_key}-delete", help="Supprimer la boucle"):
+            if len(loops) > 1 and st.button(
+                "🗑️", key=f"{loop_key}-delete", help="Supprimer la boucle"
+            ):
                 new_state = clone_steps(state)
                 new_state["loops"].pop(loop_idx)
                 _ensure_minimum_blocks(new_state["loops"], defaults=[new_loop()])
@@ -263,7 +275,9 @@ def render_interval_editor(
                 new_state = clone_steps(state)
                 new_actions = new_state["loops"][loop_index]["actions"]
                 new_actions.pop(act_index)
-                _ensure_minimum_blocks(new_actions, defaults=[new_run_action(), new_recovery_action()])
+                _ensure_minimum_blocks(
+                    new_actions, defaults=[new_run_action(), new_recovery_action()]
+                )
                 _set_state(prefix, new_state)
 
             _render_action_card(

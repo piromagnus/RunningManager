@@ -28,4 +28,3 @@ def decrypt_text(fernet: Fernet, token: str) -> str:
         return fernet.decrypt(token.encode()).decode()
     except InvalidToken as e:
         raise RuntimeError("Invalid encryption token; check ENCRYPTION_KEY") from e
-

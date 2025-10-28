@@ -54,15 +54,17 @@ if st.session_state.get("adding_athlete"):
         submitted = st.form_submit_button("Save")
         if submitted:
             aid = new_id()
-            ath_repo.create({
-                "athleteId": aid,
-                "coachId": "coach-1",
-                "name": name,
-                "thresholdsProfileId": "default",
-                "units": units,
-                "hrRest": DEFAULT_HR_REST,
-                "hrMax": DEFAULT_HR_MAX,
-            })
+            ath_repo.create(
+                {
+                    "athleteId": aid,
+                    "coachId": "coach-1",
+                    "name": name,
+                    "thresholdsProfileId": "default",
+                    "units": units,
+                    "hrRest": DEFAULT_HR_REST,
+                    "hrMax": DEFAULT_HR_MAX,
+                }
+            )
             st.session_state["adding_athlete"] = False
             st.success("Athlete added")
 
@@ -131,31 +133,38 @@ else:
     with st.form("add-threshold"):
         col1, col2 = st.columns(2)
         with col1:
-            th_name = st.selectbox("Name", ["Fundamental", "Threshold 60", "Threshold 30", "MVA",
-                                 "Max speed"]) 
+            th_name = st.selectbox(
+                "Name", ["Fundamental", "Threshold 60", "Threshold 30", "MVA", "Max speed"]
+            )
             hr_min = st.number_input("HR min", min_value=0, max_value=250, value=0)
             hr_max = st.number_input("HR max", min_value=0, max_value=250, value=150)
         with col2:
-            pace_min = st.number_input("Pace flat min (km/h)", min_value=0.0, max_value=30.0,
-             value=8.0, step=0.1)
-            pace_max = st.number_input("Pace flat max (km/h)", min_value=0.0, max_value=30.0,
-             value=12.0, step=0.1)
-            ascend_min = st.number_input("Ascent rate min (m/h)", min_value=0, max_value=10000,
-             value=0)
-            ascend_max = st.number_input("Ascent rate max (m/h)", min_value=0, max_value=10000,
-             value=0)
+            pace_min = st.number_input(
+                "Pace flat min (km/h)", min_value=0.0, max_value=30.0, value=8.0, step=0.1
+            )
+            pace_max = st.number_input(
+                "Pace flat max (km/h)", min_value=0.0, max_value=30.0, value=12.0, step=0.1
+            )
+            ascend_min = st.number_input(
+                "Ascent rate min (m/h)", min_value=0, max_value=10000, value=0
+            )
+            ascend_max = st.number_input(
+                "Ascent rate max (m/h)", min_value=0, max_value=10000, value=0
+            )
         submitted = st.form_submit_button("Add threshold")
         if submitted:
             tid = new_id()
-            thr_repo.create({
-                "thresholdId": tid,
-                "athleteId": selected_athlete_id,
-                "name": th_name,
-                "hrMin": hr_min,
-                "hrMax": hr_max,
-                "paceFlatKmhMin": pace_min,
-                "paceFlatKmhMax": pace_max,
-                "ascentRateMPerHMin": ascend_min,
-                "ascentRateMPerHMax": ascend_max,
-            })
+            thr_repo.create(
+                {
+                    "thresholdId": tid,
+                    "athleteId": selected_athlete_id,
+                    "name": th_name,
+                    "hrMin": hr_min,
+                    "hrMax": hr_max,
+                    "paceFlatKmhMin": pace_min,
+                    "paceFlatKmhMax": pace_max,
+                    "ascentRateMPerHMin": ascend_min,
+                    "ascentRateMPerHMax": ascend_max,
+                }
+            )
             st.success("Threshold added")

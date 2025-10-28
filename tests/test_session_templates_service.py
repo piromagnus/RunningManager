@@ -72,7 +72,9 @@ def test_session_templates_crud_and_apply(tmp_path):
     assert from_session_template["payload"]["plannedDurationSec"] == 10800
 
     apply_date = dt.date(2025, 1, 1)
-    planned_session_id = service.apply_to_calendar(template_id, "athlete-1", apply_date, notes="calendar note")
+    planned_session_id = service.apply_to_calendar(
+        template_id, "athlete-1", apply_date, notes="calendar note"
+    )
     assert planned_session_id is not None
 
     sessions_repo = PlannedSessionsRepo(storage)

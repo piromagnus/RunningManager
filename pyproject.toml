@@ -22,6 +22,7 @@ dependencies = [
   "portalocker>=2.10",
   "babel>=2.15",
   "pytest>=8.4.2",
+  "ruff>=0.14.2",
 ]
 
 [tool.uv]

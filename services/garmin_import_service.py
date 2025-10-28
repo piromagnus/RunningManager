@@ -1,2 +1,1 @@
-"""garmin_import_service.py: service stub
-"""
+"""garmin_import_service.py: service stub"""

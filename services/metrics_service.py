@@ -171,7 +171,11 @@ class MetricsComputationService:
         athlete_ids: set[str],
         replace_all: bool,
     ) -> None:
-        new_df = pd.concat(new_frames, ignore_index=True) if new_frames else pd.DataFrame(columns=repo.headers)
+        new_df = (
+            pd.concat(new_frames, ignore_index=True)
+            if new_frames
+            else pd.DataFrame(columns=repo.headers)
+        )
         existing = repo.list()
         if replace_all or existing.empty:
             merged = new_df if not new_df.empty else pd.DataFrame(columns=repo.headers)
@@ -320,7 +324,9 @@ class MetricsComputationService:
             sport_type = ""
         raw_path = row.get("rawJsonPath")
         if not sport_type and isinstance(raw_path, (str, bytes)):
-            raw_path_str = raw_path.decode() if isinstance(raw_path, (bytes, bytearray)) else raw_path
+            raw_path_str = (
+                raw_path.decode() if isinstance(raw_path, (bytes, bytearray)) else raw_path
+            )
             raw_path_str = raw_path_str.strip()
             if raw_path_str:
                 sport_type = self._raw_activity_sport(raw_path_str)
@@ -358,7 +364,9 @@ class MetricsComputationService:
         return "OTHER"
 
     @staticmethod
-    def _compute_trimp(avg_hr: float, time_sec: float, hr_profile: Optional[Tuple[float, float]]) -> float:
+    def _compute_trimp(
+        avg_hr: float, time_sec: float, hr_profile: Optional[Tuple[float, float]]
+    ) -> float:
         if not hr_profile or avg_hr <= 0 or time_sec <= 0:
             return 0.0
         hr_rest, hr_max = hr_profile
@@ -385,7 +393,9 @@ class MetricsComputationService:
         if planned_agg.empty and actual_agg.empty:
             return pd.DataFrame(columns=self.weekly_repo.headers)
 
-        weeks = pd.concat([planned_agg[["isoYear", "isoWeek"]], actual_agg[["isoYear", "isoWeek"]]]).drop_duplicates()
+        weeks = pd.concat(
+            [planned_agg[["isoYear", "isoWeek"]], actual_agg[["isoYear", "isoWeek"]]]
+        ).drop_duplicates()
         records: List[Dict[str, object]] = []
 
         for _, wk in weeks.iterrows():
@@ -402,14 +412,22 @@ class MetricsComputationService:
             ].head(1)
 
             planned_time = float(planned_row["timeSec"].iloc[0]) if not planned_row.empty else 0.0
-            planned_distance = float(planned_row["distanceKm"].iloc[0]) if not planned_row.empty else 0.0
-            planned_distance_eq = float(planned_row["distanceEqKm"].iloc[0]) if not planned_row.empty else 0.0
+            planned_distance = (
+                float(planned_row["distanceKm"].iloc[0]) if not planned_row.empty else 0.0
+            )
+            planned_distance_eq = (
+                float(planned_row["distanceEqKm"].iloc[0]) if not planned_row.empty else 0.0
+            )
             planned_trimp = float(planned_row["trimp"].iloc[0]) if not planned_row.empty else 0.0
             num_planned = int(planned_row["count"].iloc[0]) if not planned_row.empty else 0
 
             actual_time = float(actual_row["timeSec"].iloc[0]) if not actual_row.empty else 0.0
-            actual_distance = float(actual_row["distanceKm"].iloc[0]) if not actual_row.empty else 0.0
-            actual_distance_eq = float(actual_row["distanceEqKm"].iloc[0]) if not actual_row.empty else 0.0
+            actual_distance = (
+                float(actual_row["distanceKm"].iloc[0]) if not actual_row.empty else 0.0
+            )
+            actual_distance_eq = (
+                float(actual_row["distanceEqKm"].iloc[0]) if not actual_row.empty else 0.0
+            )
             actual_trimp = float(actual_row["trimp"].iloc[0]) if not actual_row.empty else 0.0
             num_actual = int(actual_row["count"].iloc[0]) if not actual_row.empty else 0
 
@@ -457,7 +475,9 @@ class MetricsComputationService:
             return pd.DataFrame(columns=self.daily_repo.headers)
 
         filtered = actual_metrics_df.copy()
-        filtered = filtered[filtered["category"].astype(str).str.upper().isin(TRAINING_LOAD_CATEGORIES)]
+        filtered = filtered[
+            filtered["category"].astype(str).str.upper().isin(TRAINING_LOAD_CATEGORIES)
+        ]
         filtered["date"] = pd.to_datetime(filtered["startDate"], errors="coerce")
         filtered = filtered.dropna(subset=["date"])
         if filtered.empty:
@@ -478,11 +498,17 @@ class MetricsComputationService:
         grouped = grouped.reindex(full_index, fill_value=0.0)
 
         grouped["acuteDistanceKm"] = grouped["distanceKm"].rolling(window=7, min_periods=1).mean()
-        grouped["chronicDistanceKm"] = grouped["distanceKm"].rolling(window=28, min_periods=1).mean()
+        grouped["chronicDistanceKm"] = (
+            grouped["distanceKm"].rolling(window=28, min_periods=1).mean()
+        )
         grouped["acuteTimeSec"] = grouped["timeSec"].rolling(window=7, min_periods=1).mean()
         grouped["chronicTimeSec"] = grouped["timeSec"].rolling(window=28, min_periods=1).mean()
-        grouped["acuteDistanceEqKm"] = grouped["distanceEqKm"].rolling(window=7, min_periods=1).mean()
-        grouped["chronicDistanceEqKm"] = grouped["distanceEqKm"].rolling(window=28, min_periods=1).mean()
+        grouped["acuteDistanceEqKm"] = (
+            grouped["distanceEqKm"].rolling(window=7, min_periods=1).mean()
+        )
+        grouped["chronicDistanceEqKm"] = (
+            grouped["distanceEqKm"].rolling(window=28, min_periods=1).mean()
+        )
         grouped["acuteTrimp"] = grouped["trimp"].rolling(window=7, min_periods=1).mean()
         grouped["chronicTrimp"] = grouped["trimp"].rolling(window=28, min_periods=1).mean()
         grouped["acuteAscentM"] = grouped["ascentM"].rolling(window=7, min_periods=1).mean()
@@ -520,12 +546,32 @@ class MetricsComputationService:
     @staticmethod
     def _group_metrics_by_week(df: pd.DataFrame, date_column: str) -> pd.DataFrame:
         if df.empty:
-            return pd.DataFrame(columns=["isoYear", "isoWeek", "timeSec", "distanceKm", "distanceEqKm", "trimp", "count"])
+            return pd.DataFrame(
+                columns=[
+                    "isoYear",
+                    "isoWeek",
+                    "timeSec",
+                    "distanceKm",
+                    "distanceEqKm",
+                    "trimp",
+                    "count",
+                ]
+            )
         working = df.copy()
         working["date"] = pd.to_datetime(working[date_column], errors="coerce")
         working = working.dropna(subset=["date"])
         if working.empty:
-            return pd.DataFrame(columns=["isoYear", "isoWeek", "timeSec", "distanceKm", "distanceEqKm", "trimp", "count"])
+            return pd.DataFrame(
+                columns=[
+                    "isoYear",
+                    "isoWeek",
+                    "timeSec",
+                    "distanceKm",
+                    "distanceEqKm",
+                    "trimp",
+                    "count",
+                ]
+            )
         working["isoYear"] = working["date"].dt.isocalendar().year
         working["isoWeek"] = working["date"].dt.isocalendar().week
         grouped = (
@@ -585,7 +631,9 @@ class MetricsComputationService:
         self._bike_eq_cache = (float(dist), float(asc), float(desc))
         return self._bike_eq_cache
 
-    def _compute_bike_distance_eq(self, activity_id: str, distance_km: float, ascent_m: float) -> float:
+    def _compute_bike_distance_eq(
+        self, activity_id: str, distance_km: float, ascent_m: float
+    ) -> float:
         dist_f, asc_f, desc_f = self._bike_eq_factors()
         distance = max(float(distance_km or 0.0), 0.0)
         ascent = max(float(ascent_m or 0.0), 0.0)

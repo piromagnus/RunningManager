@@ -50,7 +50,9 @@ class TemplatesService:
         return row
 
     # New methods for 4.3
-    def save_week_template(self, athlete_id: str, sessions: List[Dict[str, Any]], week_start_date: dt.date, name: str) -> str:
+    def save_week_template(
+        self, athlete_id: str, sessions: List[Dict[str, Any]], week_start_date: dt.date, name: str
+    ) -> str:
         items: List[Dict[str, Any]] = []
         for s in sessions:
             try:
@@ -58,18 +60,20 @@ class TemplatesService:
             except Exception:
                 continue
             offset = (s_date - week_start_date).days
-            items.append({
-                "dateOffset": offset,
-                "type": s.get("type"),
-                "plannedDistanceKm": s.get("plannedDistanceKm"),
-                "plannedDurationSec": s.get("plannedDurationSec"),
-                "plannedAscentM": s.get("plannedAscentM"),
-                "targetType": s.get("targetType"),
-                "targetLabel": s.get("targetLabel"),
-                "notes": s.get("notes"),
-                "stepEndMode": s.get("stepEndMode"),
-                "stepsJson": s.get("stepsJson"),
-            })
+            items.append(
+                {
+                    "dateOffset": offset,
+                    "type": s.get("type"),
+                    "plannedDistanceKm": s.get("plannedDistanceKm"),
+                    "plannedDurationSec": s.get("plannedDurationSec"),
+                    "plannedAscentM": s.get("plannedAscentM"),
+                    "targetType": s.get("targetType"),
+                    "targetLabel": s.get("targetLabel"),
+                    "notes": s.get("notes"),
+                    "stepEndMode": s.get("stepEndMode"),
+                    "stepsJson": s.get("stepsJson"),
+                }
+            )
         tid = new_id()
         payload = {
             "templateId": tid,
@@ -80,7 +84,9 @@ class TemplatesService:
         self.repo.create(payload)
         return tid
 
-    def apply_week_template(self, athlete_id: str, template_id: str, target_week_start: dt.date, sessions_repo) -> None:
+    def apply_week_template(
+        self, athlete_id: str, template_id: str, target_week_start: dt.date, sessions_repo
+    ) -> None:
         row = self.get(template_id)
         if not row:
             return

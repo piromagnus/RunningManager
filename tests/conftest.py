@@ -26,6 +26,7 @@ sys.modules.setdefault(
 
 
 if "babel" not in sys.modules:
+
     class _FakeBabelNumbers:
         @staticmethod
         def format_decimal(value, format=None, locale=None):
@@ -48,7 +49,6 @@ if "babel" not in sys.modules:
                 except Exception:
                     result = str(value)
             return result.replace(".", ",")
-
 
     sys.modules.setdefault(
         "babel",

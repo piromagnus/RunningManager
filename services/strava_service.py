@@ -631,6 +631,7 @@ class StravaService:
                     short_used, daily_used = parts[0], parts[1]
         except Exception:
             pass
+
         # Compute wait until next 15-min window (approx) if capped
         def seconds_to_next_quarter(dt_now: dt.datetime) -> int:
             # next boundary at minute in {0,15,30,45}
@@ -642,7 +643,9 @@ class StravaService:
                 hour = (hour + 1) % 24
                 if hour == 0:
                     day = (dt_now + dt.timedelta(days=1)).date()
-            next_dt = dt.datetime(dt_now.year, dt_now.month, dt_now.day, hour, minutes, 0, tzinfo=dt_now.tzinfo)
+            next_dt = dt.datetime(
+                dt_now.year, dt_now.month, dt_now.day, hour, minutes, 0, tzinfo=dt_now.tzinfo
+            )
             return max(0, int((next_dt - dt_now).total_seconds()))
 
         wait = 0

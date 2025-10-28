@@ -5,7 +5,7 @@ def test_fr_formatting():
     set_locale("fr_FR")
     s = fmt_decimal(1234.5)
     # Normalize NBSP (\u00A0) and NNBSP (\u202F) to regular space for assertion
-    normalized = s.replace("\u00A0", " ").replace("\u202F", " ")
+    normalized = s.replace("\u00a0", " ").replace("\u202f", " ")
     assert normalized == "1 234,5"
     assert fmt_km(12.3).endswith("km")
     assert "," in fmt_km(12.3)

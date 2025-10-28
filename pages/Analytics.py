@@ -114,7 +114,9 @@ if not athlete_id:
     st.stop()
 
 with st.expander("Filtrer les activités incluses"):
-    default_types = _load_saved_activity_types() or [key for key in CATEGORY_OPTIONS.keys() if key != "RIDE"]
+    default_types = _load_saved_activity_types() or [
+        key for key in CATEGORY_OPTIONS.keys() if key != "RIDE"
+    ]
     selected_types = st.multiselect(
         "Inclure les types d'activités suivants",
         options=list(CATEGORY_OPTIONS.keys()),
@@ -122,7 +124,9 @@ with st.expander("Filtrer les activités incluses"):
         format_func=lambda key: CATEGORY_OPTIONS[key],
     )
     if not selected_types:
-        st.warning("Au moins un type doit être sélectionné. Toutes les activités Run/Trail/Hike seront incluses.")
+        st.warning(
+            "Au moins un type doit être sélectionné. Toutes les activités Run/Trail/Hike seront incluses."
+        )
         selected_types = list(CATEGORY_OPTIONS.keys())
     if st.button("Enregistrer ces types pour l'analytics"):
         settings_repo.update("coach-1", {"analyticsActivityTypes": json.dumps(selected_types)})
@@ -146,7 +150,8 @@ default_start = max(min_date, (default_end - dt.timedelta(days=90)))
 # Maintain selection in session state
 if "analytics_range" not in st.session_state:
     st.session_state["analytics_range"] = (
-        pd.Timestamp(default_start).to_pydatetime(), pd.Timestamp(default_end).to_pydatetime()
+        pd.Timestamp(default_start).to_pydatetime(),
+        pd.Timestamp(default_end).to_pydatetime(),
     )
 
 col_btn1, col_btn2, col_btn3, col_btn4 = st.columns(4)
@@ -227,7 +232,9 @@ weekly_df = analytics.weekly_range(
     start_date=start_date,
     end_date=plan_range_end,
 )
-weeks_df = weekly_df[["weekStart", "isoYear", "isoWeek"]].rename(columns={"weekStart": "weekStartDate"})
+weeks_df = weekly_df[["weekStart", "isoYear", "isoWeek"]].rename(
+    columns={"weekStart": "weekStartDate"}
+)
 planned_raw = pd.to_numeric(weekly_df.get("planned_value"), errors="coerce").fillna(0.0)
 actual_raw = pd.to_numeric(weekly_df.get("actual_value"), errors="coerce").fillna(0.0)
 
@@ -248,7 +255,9 @@ if not activities_metrics_raw.empty:
     acts_all["date"] = pd.to_datetime(acts_all["startDate"], errors="coerce").dt.normalize()
 
     # Now apply category filters for charting
-    activities_metrics_df = activities_metrics_raw[activities_metrics_raw["athleteId"] == athlete_id].copy()
+    activities_metrics_df = activities_metrics_raw[
+        activities_metrics_raw["athleteId"] == athlete_id
+    ].copy()
     activities_metrics_df["category"] = activities_metrics_df["category"].astype(str).str.upper()
     if selected_types:
         activities_metrics_df = activities_metrics_df[
@@ -259,9 +268,9 @@ if not activities_metrics_raw.empty:
     )
     activities_metrics_df = activities_metrics_df.dropna(subset=["date"])
     # Date range filter for weekly actual aggregation
-    mask_range = (
-        activities_metrics_df["date"].dt.normalize() >= pd.Timestamp(start_date)
-    ) & (activities_metrics_df["date"].dt.normalize() <= pd.Timestamp(end_date))
+    mask_range = (activities_metrics_df["date"].dt.normalize() >= pd.Timestamp(start_date)) & (
+        activities_metrics_df["date"].dt.normalize() <= pd.Timestamp(end_date)
+    )
     activities_metrics_df = activities_metrics_df[mask_range]
     activities_metrics_df["isoYear"] = activities_metrics_df["date"].dt.isocalendar().year
     activities_metrics_df["isoWeek"] = activities_metrics_df["date"].dt.isocalendar().week
@@ -273,10 +282,18 @@ if not activities_metrics_raw.empty:
         .rename(columns={value_column_map[metric_label]: "actualMetricValue"})
     )
     # Ensure join keys are ints on both sides to avoid merge mismatches
-    actual_agg["isoYear"] = pd.to_numeric(actual_agg["isoYear"], errors="coerce").fillna(0).astype(int)
-    actual_agg["isoWeek"] = pd.to_numeric(actual_agg["isoWeek"], errors="coerce").fillna(0).astype(int)
-    working_df["isoYear"] = pd.to_numeric(working_df["isoYear"], errors="coerce").fillna(0).astype(int)
-    working_df["isoWeek"] = pd.to_numeric(working_df["isoWeek"], errors="coerce").fillna(0).astype(int)
+    actual_agg["isoYear"] = (
+        pd.to_numeric(actual_agg["isoYear"], errors="coerce").fillna(0).astype(int)
+    )
+    actual_agg["isoWeek"] = (
+        pd.to_numeric(actual_agg["isoWeek"], errors="coerce").fillna(0).astype(int)
+    )
+    working_df["isoYear"] = (
+        pd.to_numeric(working_df["isoYear"], errors="coerce").fillna(0).astype(int)
+    )
+    working_df["isoWeek"] = (
+        pd.to_numeric(working_df["isoWeek"], errors="coerce").fillna(0).astype(int)
+    )
 
 # --- Dataset summary for selected athlete and filters (range-limited) ---
 st.subheader("Résumé des données")
@@ -357,7 +374,15 @@ color_scale = alt.Scale(
     range=["#3b82f6", "#16a34a", "#f97316", "#facc15"],
 )
 
-weekly_actual_metrics = pd.DataFrame(columns=["weekLabel", "actualTimeHours", "actualDistanceKm", "actualDistanceEqKm", "actualTrimp"])
+weekly_actual_metrics = pd.DataFrame(
+    columns=[
+        "weekLabel",
+        "actualTimeHours",
+        "actualDistanceKm",
+        "actualDistanceEqKm",
+        "actualTrimp",
+    ]
+)
 if not activities_metrics_df.empty:
     weekly_metrics = activities_metrics_df.copy()
     if not weekly_metrics.empty:
@@ -370,7 +395,9 @@ if not activities_metrics_df.empty:
             weekDate=("date", "min"),
         )
         weekly_group["weekLabel"] = weekly_group["weekDate"].dt.strftime("%Y-%m-%d")
-        weekly_actual_metrics = weekly_group[["weekLabel", "timeSec", "distanceKm", "distanceEqKm", "trimp"]].rename(
+        weekly_actual_metrics = weekly_group[
+            ["weekLabel", "timeSec", "distanceKm", "distanceEqKm", "trimp"]
+        ].rename(
             columns={
                 "timeSec": "actualTimeHours",
                 "distanceKm": "actualDistanceKm",
@@ -382,11 +409,15 @@ if not activities_metrics_df.empty:
             lambda v: float(analytics.seconds_to_hours(float(v)))
         )
         for col in ("actualDistanceKm", "actualDistanceEqKm", "actualTrimp"):
-            weekly_actual_metrics[col] = pd.to_numeric(weekly_actual_metrics[col], errors="coerce").fillna(0.0)
+            weekly_actual_metrics[col] = pd.to_numeric(
+                weekly_actual_metrics[col], errors="coerce"
+            ).fillna(0.0)
 
 stack_with_actuals = stack_df.merge(weekly_actual_metrics, on="weekLabel", how="left")
 for col in ("actualTimeHours", "actualDistanceKm", "actualDistanceEqKm", "actualTrimp"):
-    stack_with_actuals[col] = pd.to_numeric(stack_with_actuals.get(col), errors="coerce").fillna(0.0)
+    stack_with_actuals[col] = pd.to_numeric(stack_with_actuals.get(col), errors="coerce").fillna(
+        0.0
+    )
 
 chart = (
     alt.Chart(stack_with_actuals)
@@ -433,9 +464,11 @@ if planned_metrics_path.exists():
 else:
     planned_metrics_df = pd.DataFrame()
 
+
 # Prepare daily planned and actual series
 def _to_date_series(series: pd.Series) -> pd.Series:
     return pd.to_datetime(series, errors="coerce").dt.normalize()
+
 
 value_column = value_column_map[metric_label]
 
@@ -488,11 +521,22 @@ if not daily_df.empty:
     if not day_stack_df.empty:
         day_stack_df["date_dt"] = pd.to_datetime(day_stack_df["weekLabel"], errors="coerce")
         day_stack_df["segment_display"] = day_stack_df["segment"]
-        future_day_mask = (day_stack_df["segment"] == "Plan manquant") & (day_stack_df["date_dt"] > today_ts)
+        future_day_mask = (day_stack_df["segment"] == "Plan manquant") & (
+            day_stack_df["date_dt"] > today_ts
+        )
         day_stack_df.loc[future_day_mask, "segment_display"] = "Plan à venir"
 else:
     day_stack_df = pd.DataFrame(
-        columns=["weekLabel", "segment", "value", "planned", "actual", "maxValue", "order", "activity_names"]
+        columns=[
+            "weekLabel",
+            "segment",
+            "value",
+            "planned",
+            "actual",
+            "maxValue",
+            "order",
+            "activity_names",
+        ]
     )  # minimal columns
 
 if not day_stack_df.empty:
@@ -520,6 +564,8 @@ if not day_stack_df.empty:
 else:
     st.info("Aucune donnée quotidienne à afficher pour ce filtre.")
     st.dataframe(
-        summary_df[["weekLabel", "Planifié", "Réalisé", "Max"]].rename(columns={"weekLabel": "Semaine"}),
+        summary_df[["weekLabel", "Planifié", "Réalisé", "Max"]].rename(
+            columns={"weekLabel": "Semaine"}
+        ),
         use_container_width=True,
     )

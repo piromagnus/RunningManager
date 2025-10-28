@@ -25,7 +25,7 @@ def set_locale(locale_str: str = "fr_FR") -> None:
 
 
 def _nbsp() -> str:
-    return "\u00A0"
+    return "\u00a0"
 
 
 def fmt_decimal(value: Optional[float], digits: Optional[int] = None) -> str:
@@ -36,11 +36,11 @@ def fmt_decimal(value: Optional[float], digits: Optional[int] = None) -> str:
         fmt = "#" if digits == 0 else "#." + ("0" * digits)
     formatted = numbers.format_decimal(value, format=fmt, locale=LOCALE)
     if abs(value) >= 1000:
-        separators = {" ", "\u00A0", "\u202F"}
+        separators = {" ", "\u00a0", "\u202f"}
         if not any(sep in formatted for sep in separators):
             integer, sep, fractional = formatted.partition(",")
             try:
-                clean_integer = integer.replace(" ", "").replace("\u00A0", "").replace("\u202F", "")
+                clean_integer = integer.replace(" ", "").replace("\u00a0", "").replace("\u202f", "")
                 grouped = f"{int(clean_integer):,}".replace(",", " ")
                 formatted = grouped + (sep + fractional if sep else "")
             except ValueError:

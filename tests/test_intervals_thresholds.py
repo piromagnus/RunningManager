@@ -18,14 +18,26 @@ def test_interval_target_labels_roundtrip(tmp_path):
         "targetLabel": None,
         "notes": "",
         "stepEndMode": "lap",
-        "stepsJson": json.dumps({
-            "warmupSec": 600,
-            "repeats": [
-                {"workSec": 60, "recoverSec": 30, "targetType": "hr", "targetLabel": "Threshold 60"},
-                {"workSec": 60, "recoverSec": 30, "targetType": "hr", "targetLabel": "Threshold 30"},
-            ],
-            "cooldownSec": 600,
-        }),
+        "stepsJson": json.dumps(
+            {
+                "warmupSec": 600,
+                "repeats": [
+                    {
+                        "workSec": 60,
+                        "recoverSec": 30,
+                        "targetType": "hr",
+                        "targetLabel": "Threshold 60",
+                    },
+                    {
+                        "workSec": 60,
+                        "recoverSec": 30,
+                        "targetType": "hr",
+                        "targetLabel": "Threshold 30",
+                    },
+                ],
+                "cooldownSec": 600,
+            }
+        ),
     }
     sid = repo.create(row)
     got = repo.get(sid)

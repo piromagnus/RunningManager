@@ -401,9 +401,9 @@ class SettingsRepo(BaseRepo):
                 "distanceEqFactor",
                 "stravaSyncDays",
                 "analyticsActivityTypes",
-                "bikeEqDistance",   # multiplier for bike distance contribution
-                "bikeEqAscent",     # multiplier for bike ascent contribution
-                "bikeEqDescent",    # multiplier for bike descent contribution
+                "bikeEqDistance",  # multiplier for bike distance contribution
+                "bikeEqAscent",  # multiplier for bike ascent contribution
+                "bikeEqDescent",  # multiplier for bike descent contribution
             ],
             id_column="coachId",
         )

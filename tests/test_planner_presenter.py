@@ -36,7 +36,9 @@ def test_build_card_view_model_prefers_planned_distance():
         "plannedDistanceKm": 20.0,
         "stepsJson": json.dumps(
             {
-                "preBlocks": [{"kind": "run", "sec": 300, "targetType": "pace", "targetLabel": "Fundamental"}],
+                "preBlocks": [
+                    {"kind": "run", "sec": 300, "targetType": "pace", "targetLabel": "Fundamental"}
+                ],
                 "loops": [
                     {
                         "repeats": 2,
@@ -68,7 +70,9 @@ def test_build_card_view_model_prefers_planned_distance():
     assert model["sections"]
     assert model["sections"][0].title == "Avant"
     assert any("Run" in line for line in model["sections"][0].lines)
-    loop_section = next(section for section in model["sections"] if section.title.startswith("Boucle"))
+    loop_section = next(
+        section for section in model["sections"] if section.title.startswith("Boucle")
+    )
     assert "Run" in loop_section.lines[0]
     assert any("Recovery" in line for section in model["sections"] for line in section.lines)
 

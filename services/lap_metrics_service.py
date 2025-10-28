@@ -149,7 +149,9 @@ class LapMetricsService:
         }
 
     @staticmethod
-    def _average_speed_kmh(lap: Dict[str, object], distance_m: Optional[float], moving_sec: Optional[float]) -> Optional[float]:
+    def _average_speed_kmh(
+        lap: Dict[str, object], distance_m: Optional[float], moving_sec: Optional[float]
+    ) -> Optional[float]:
         speed = _safe_float(lap.get("average_speed"))
         if speed is not None:
             return max(speed * 3.6, 0.0)
@@ -158,7 +160,9 @@ class LapMetricsService:
         return max((distance_m / 1000.0) / (moving_sec / 3600.0), 0.0)
 
     @staticmethod
-    def _hr_reserve_ratio(avg_hr: Optional[float], hr_profile: Optional[Tuple[float, float]]) -> Optional[float]:
+    def _hr_reserve_ratio(
+        avg_hr: Optional[float], hr_profile: Optional[Tuple[float, float]]
+    ) -> Optional[float]:
         if hr_profile is None or avg_hr is None:
             return None
         hr_rest, hr_max = hr_profile
@@ -168,7 +172,9 @@ class LapMetricsService:
         return max(0.0, min(ratio, 1.5))
 
     @staticmethod
-    def _hr_percent_max(avg_hr: Optional[float], hr_profile: Optional[Tuple[float, float]]) -> Optional[float]:
+    def _hr_percent_max(
+        avg_hr: Optional[float], hr_profile: Optional[Tuple[float, float]]
+    ) -> Optional[float]:
         if hr_profile is None or avg_hr is None:
             return None
         _, hr_max = hr_profile

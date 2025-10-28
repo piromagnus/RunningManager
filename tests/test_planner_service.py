@@ -37,7 +37,9 @@ def test_estimate_km_falls_back_to_recent_easy_pace(planner):
 
 
 def test_interval_duration_supports_loops_structure(planner, interval_steps_loops):
-    assert planner.estimate_interval_duration_sec(interval_steps_loops) == 300 + 180 + (2 * (120 + 60))
+    assert planner.estimate_interval_duration_sec(interval_steps_loops) == 300 + 180 + (
+        2 * (120 + 60)
+    )
 
 
 def test_between_loop_recoveries_counted_once(planner, interval_steps_loops):
@@ -58,8 +60,18 @@ def test_between_loop_recovery_between_distinct_loops(planner):
         "preBlocks": [],
         "postBlocks": [],
         "loops": [
-            {"repeats": 1, "actions": [{"kind": "run", "sec": 60, "targetType": "hr", "targetLabel": "Threshold 30"}]},
-            {"repeats": 1, "actions": [{"kind": "run", "sec": 90, "targetType": "hr", "targetLabel": "Threshold 60"}]},
+            {
+                "repeats": 1,
+                "actions": [
+                    {"kind": "run", "sec": 60, "targetType": "hr", "targetLabel": "Threshold 30"}
+                ],
+            },
+            {
+                "repeats": 1,
+                "actions": [
+                    {"kind": "run", "sec": 90, "targetType": "hr", "targetLabel": "Threshold 60"}
+                ],
+            },
         ],
     }
     duration = planner.estimate_interval_duration_sec(steps)
@@ -83,8 +95,18 @@ def test_interval_distance_between_distinct_loops(planner):
         "preBlocks": [],
         "postBlocks": [],
         "loops": [
-            {"repeats": 1, "actions": [{"kind": "run", "sec": 120, "targetType": "pace", "targetLabel": "Threshold 60"}]},
-            {"repeats": 1, "actions": [{"kind": "run", "sec": 60, "targetType": "hr", "targetLabel": "Fundamental"}]},
+            {
+                "repeats": 1,
+                "actions": [
+                    {"kind": "run", "sec": 120, "targetType": "pace", "targetLabel": "Threshold 60"}
+                ],
+            },
+            {
+                "repeats": 1,
+                "actions": [
+                    {"kind": "run", "sec": 60, "targetType": "hr", "targetLabel": "Fundamental"}
+                ],
+            },
         ],
     }
     km = planner.estimate_interval_distance_km("ath-1", steps)
@@ -135,7 +157,9 @@ def test_estimate_session_distance_interval_uses_steps(planner, interval_steps_l
         "plannedDistanceKm": "",
     }
     km = planner.estimate_session_distance_km("ath-1", row)
-    assert km == pytest.approx(planner.estimate_interval_distance_km("ath-1", interval_steps_loops), rel=1e-6)
+    assert km == pytest.approx(
+        planner.estimate_interval_distance_km("ath-1", interval_steps_loops), rel=1e-6
+    )
 
 
 def test_estimate_session_distance_returns_none_when_unknown(planner):
@@ -161,7 +185,9 @@ def test_estimate_session_ascent_intervals(planner, interval_steps_loops):
         "type": "INTERVAL_SIMPLE",
         "stepsJson": json.dumps(interval_steps_loops),
     }
-    assert planner.estimate_session_ascent_m("ath-1", row) == planner.estimate_interval_ascent_m(interval_steps_loops)
+    assert planner.estimate_session_ascent_m("ath-1", row) == planner.estimate_interval_ascent_m(
+        interval_steps_loops
+    )
 
 
 def test_compute_weekly_totals(planner, week_sessions):

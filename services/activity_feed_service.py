@@ -115,12 +115,7 @@ class ActivityFeedService:
         activities = self.activities.list(athleteId=athlete_id)
         if activities.empty or "sportType" not in activities.columns:
             return []
-        values = (
-            activities["sportType"]
-            .astype(str)
-            .str.strip()
-            .str.upper()
-        )
+        values = activities["sportType"].astype(str).str.strip().str.upper()
         return sorted({value for value in values if value})
 
     def get_feed(
@@ -140,9 +135,7 @@ class ActivityFeedService:
 
         metrics = self.activity_metrics.list(athleteId=athlete_id)
         if not metrics.empty:
-            metrics = metrics[
-                ["activityId", "distanceEqKm", "trimp", "timeSec"]
-            ].copy()
+            metrics = metrics[["activityId", "distanceEqKm", "trimp", "timeSec"]].copy()
             metrics["activityId"] = metrics["activityId"].astype(str)
             metrics = metrics.rename(
                 columns={
@@ -165,13 +158,15 @@ class ActivityFeedService:
 
         planned_lookup = self.planned_sessions.list()
         if not planned_lookup.empty:
-            planned_lookup = planned_lookup[[
-                "plannedSessionId",
-                "type",
-                "templateTitle",
-                "raceName",
-                "notes",
-            ]].copy()
+            planned_lookup = planned_lookup[
+                [
+                    "plannedSessionId",
+                    "type",
+                    "templateTitle",
+                    "raceName",
+                    "notes",
+                ]
+            ].copy()
             planned_lookup["plannedSessionId"] = planned_lookup["plannedSessionId"].astype(str)
             planned_lookup = planned_lookup.rename(
                 columns={
@@ -213,7 +208,9 @@ class ActivityFeedService:
                     planned_session_id=str(row.get("plannedSessionId"))
                     if not pd.isna(row.get("plannedSessionId"))
                     else None,
-                    planned_session_type=str(row.get("plannedType") or "") if not pd.isna(row.get("plannedType")) else None,
+                    planned_session_type=str(row.get("plannedType") or "")
+                    if not pd.isna(row.get("plannedType"))
+                    else None,
                     planned_session_template_title=_coerce_str(row.get("plannedTemplateTitle")),
                     planned_session_race_name=_coerce_str(row.get("plannedRaceName")),
                     planned_session_notes=_coerce_str(row.get("plannedNotes")),
@@ -237,17 +234,13 @@ class ActivityFeedService:
         links = self._links_df()
         if not links.empty:
             taken = set(links["plannedSessionId"])
-            sessions = sessions[
-                ~sessions["plannedSessionId"].astype(str).isin(taken)
-            ]
+            sessions = sessions[~sessions["plannedSessionId"].astype(str).isin(taken)]
         if sessions.empty:
             return []
 
         sessions = sessions.copy()
         sessions["plannedSessionId"] = sessions["plannedSessionId"].astype(str)
-        sessions["date"] = pd.to_datetime(
-            sessions["date"], errors="coerce"
-        ).dt.date
+        sessions["date"] = pd.to_datetime(sessions["date"], errors="coerce").dt.date
         sessions = sessions.dropna(subset=["date"])
 
         if reference_date is None:

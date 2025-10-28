@@ -121,7 +121,7 @@ distance_eq = st.number_input(
     max_value=0.1,
     value=float(distance_eq_default),
     step=0.001,
-    help="Default: 0.01 (100 m ascent = 1.0 km)"
+    help="Default: 0.01 (100 m ascent = 1.0 km)",
 )
 
 st.markdown("#### Équivalences vélo (DistEq)")
@@ -131,7 +131,7 @@ bike_eq_distance = st.number_input(
     max_value=5.0,
     value=float(bike_eq_dist_default),
     step=0.01,
-    help="Contribution de la distance pour le vélo (par défaut 0.30)."
+    help="Contribution de la distance pour le vélo (par défaut 0.30).",
 )
 bike_eq_ascent = st.number_input(
     "Facteur D+ (vélo)",
@@ -139,7 +139,7 @@ bike_eq_ascent = st.number_input(
     max_value=1.0,
     value=float(bike_eq_ascent_default),
     step=0.001,
-    help="Contribution du dénivelé positif pour le vélo (par défaut 0.02)."
+    help="Contribution du dénivelé positif pour le vélo (par défaut 0.02).",
 )
 bike_eq_descent = st.number_input(
     "Facteur D- (vélo)",
@@ -147,7 +147,7 @@ bike_eq_descent = st.number_input(
     max_value=1.0,
     value=float(bike_eq_descent_default),
     step=0.001,
-    help="Contribution du dénivelé négatif pour le vélo (par défaut 0.00)."
+    help="Contribution du dénivelé négatif pour le vélo (par défaut 0.00).",
 )
 strava_sync_days = st.number_input(
     "Jours à synchroniser avec Strava",
@@ -333,7 +333,9 @@ else:
                 }
             except Exception as exc:  # pragma: no cover - runtime API failures
                 st.error(f"La synchronisation Strava a échoué : {exc}")
-        if st.button("Reconstruire les activités depuis le cache Strava", key="strava-rebuild-cache"):
+        if st.button(
+            "Reconstruire les activités depuis le cache Strava", key="strava-rebuild-cache"
+        ):
             try:
                 rebuilt = strava_service.rebuild_from_cache(athlete_id)
                 st.success(f"{len(rebuilt)} activité(s) recréée(s) depuis le cache Strava.")
@@ -356,9 +358,9 @@ else:
                     status = e.get("status", "")
                     usage_s = e.get("usage_short")
                     usage_d = e.get("usage_daily")
-                    extra = (
-                        f" · usage15={usage_s}" if usage_s is not None else ""
-                    ) + (f" · usageJour={usage_d}" if usage_d is not None else "")
+                    extra = (f" · usage15={usage_s}" if usage_s is not None else "") + (
+                        f" · usageJour={usage_d}" if usage_d is not None else ""
+                    )
                     st.caption(f"{ts} · {method} {endpoint} → {status}{extra}")
         # API rate status
         try:
@@ -395,9 +397,13 @@ else:
             downloaded_ids = [str(x) for x in (last_sync.get("downloaded_ids") or [])][:max_ids]
             cached_ids = [str(x) for x in (last_sync.get("created_from_cache_ids") or [])][:max_ids]
             if downloaded_ids:
-                st.caption("IDs téléchargées: " + ", ".join(downloaded_ids) + ("…" if dl > max_ids else ""))
+                st.caption(
+                    "IDs téléchargées: " + ", ".join(downloaded_ids) + ("…" if dl > max_ids else "")
+                )
             if cached_ids:
-                st.caption("IDs depuis cache: " + ", ".join(cached_ids) + ("…" if fc > max_ids else ""))
+                st.caption(
+                    "IDs depuis cache: " + ", ".join(cached_ids) + ("…" if fc > max_ids else "")
+                )
     else:
         st.warning("Aucun compte Strava connecté.")
         _render_link("Connecter Strava", auth_url)

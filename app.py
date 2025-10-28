@@ -7,6 +7,7 @@ from utils.styling import apply_theme
 from utils.auth_state import init_session_state
 from dotenv import load_dotenv
 from streamlit.logger import get_logger
+
 logger = get_logger(__name__)
 
 
@@ -27,16 +28,18 @@ def main():
     apply_theme()
     st.session_state.setdefault("app_config", cfg)
     st.session_state.setdefault("mapbox_token", cfg.mapbox_token)
-    logger.debug("cfg.mapbox: %s",cfg.mapbox_token)
+    logger.debug("cfg.mapbox: %s", cfg.mapbox_token)
     st.title("Running Manager")
     st.caption("Use the sidebar to navigate between pages.")
 
     with st.expander("Environment (sanitized)", expanded=False):
-        st.write({
-            "DATA_DIR": str(cfg.data_dir),
-            "STRAVA_CLIENT_ID": redact(cfg.strava_client_id),
-            "STRAVA_REDIRECT_URI": cfg.strava_redirect_uri or "",
-        })
+        st.write(
+            {
+                "DATA_DIR": str(cfg.data_dir),
+                "STRAVA_CLIENT_ID": redact(cfg.strava_client_id),
+                "STRAVA_REDIRECT_URI": cfg.strava_redirect_uri or "",
+            }
+        )
 
     _ensure_placeholders()
 
