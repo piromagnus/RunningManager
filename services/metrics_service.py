@@ -24,6 +24,8 @@ from persistence.repositories import (
 )
 from services.interval_utils import normalize_steps
 from services.planner_service import PlannerService
+from services.speed_profile_service import SpeedProfileService
+from utils.config import load_config
 from utils.time import iso_week_start
 
 
@@ -77,6 +79,8 @@ class MetricsComputationService:
         self.daily_repo = DailyMetricsRepo(self.storage)
         self.athletes = AthletesRepo(self.storage)
         self.planner = PlannerService(self.storage)
+        self.config = load_config()
+        self.speed_profile_service = SpeedProfileService(self.config)
         self._bike_eq_cache: Optional[Tuple[float, float, float]] = None
 
     # ------------------------------------------------------------------
@@ -219,6 +223,34 @@ class MetricsComputationService:
             else:
                 distance_eq_km = self.planner.compute_distance_eq_km(distance_km, ascent_m)
 
+            # Compute HR speed shift if timeseries exists
+            hr_speed_shift = ""
+            has_timeseries = row.get("hasTimeseries")
+            if has_timeseries:
+                try:
+                    ts_path = self.storage.base_dir / "timeseries" / f"{activity_id}.csv"
+                    if ts_path.exists():
+                        ts_df = pd.read_csv(ts_path)
+                        # Check for required HR column
+                        if not ts_df.empty and "hr" in ts_df.columns:
+                            # Try preprocessing (requires lat/lon for distance-based speed)
+                            # If GPS data missing, fall back to using paceKmh directly
+                            if "lat" in ts_df.columns and "lon" in ts_df.columns:
+                                ts_df = self.speed_profile_service.preprocess_timeseries(ts_df)
+                                if not ts_df.empty and "hr" in ts_df.columns and "speed_km_h" in ts_df.columns:
+                                    offset, _ = self.speed_profile_service.compute_hr_speed_shift(ts_df)
+                                    hr_speed_shift = int(offset)
+                            elif "paceKmh" in ts_df.columns:
+                                # Use paceKmh directly - it's already speed in km/h
+                                # Create a temporary speed_km_h column for compatibility
+                                ts_df = ts_df.copy()
+                                ts_df["speed_km_h"] = ts_df["paceKmh"]
+                                if not ts_df.empty and "hr" in ts_df.columns:
+                                    offset, _ = self.speed_profile_service.compute_hr_speed_shift(ts_df)
+                                    hr_speed_shift = int(offset)
+                except Exception:
+                    hr_speed_shift = ""
+
             rows.append(
                 {
                     "activityId": activity_id,
@@ -233,6 +265,7 @@ class MetricsComputationService:
                     "distanceEqKm": distance_eq_km,
                     "trimp": trimp,
                     "avgHr": avg_hr if avg_hr > 0 else "",
+                    "hrSpeedShift": hr_speed_shift,
                 }
             )
 
