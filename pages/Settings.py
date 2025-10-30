@@ -337,10 +337,42 @@ else:
             "Reconstruire les activités depuis le cache Strava", key="strava-rebuild-cache"
         ):
             try:
-                rebuilt = strava_service.rebuild_from_cache(athlete_id)
+                # Create a status container for progress tracking
+                status_container = st.status("Reconstruction en cours...", expanded=True)
+                
+                with status_container:
+                    st.write("Reconstruction des activités depuis le cache Strava...")
+                    
+                    # Create progress elements inside the status container
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
+                    
+                    current_activity = [None]
+                    total_activities = [0]
+                    
+                    def update_progress(current: int, total: int, activity_name: str) -> None:
+                        """Update progress bar and status text."""
+                        total_activities[0] = total
+                        current_activity[0] = activity_name
+                        if total > 0:
+                            progress = current / total
+                            progress_bar.progress(progress)
+                            status_text.text(f"Traitement des métriques timeseries: {current}/{total} - {activity_name}")
+                        else:
+                            status_text.text("Préparation de la reconstruction...")
+                    
+                    rebuilt = strava_service.rebuild_from_cache(athlete_id, progress_callback=update_progress)
+                    
+                    if total_activities[0] > 0:
+                        progress_bar.progress(1.0)
+                        status_text.text(f"Terminé ! {total_activities[0]} activité(s) avec timeseries traitées.")
+                    
+                    st.write(f"✓ {len(rebuilt)} activité(s) recréée(s) depuis le cache Strava.")
+                
                 st.success(f"{len(rebuilt)} activité(s) recréée(s) depuis le cache Strava.")
+                status_container.update(label="Reconstruction terminée", state="complete")
             except Exception as exc:  # pragma: no cover - runtime API failures
-                st.error(f"Reconstruction depuis le cache impossible : {exc}")
+                st.error(f"Reconstruction depuis le cache impossible : {exc}")
         _render_link("Gérer l'autorisation Strava", auth_url)
         # Détails récents des appels API
         with st.expander("Détails appels API Strava (récents)"):

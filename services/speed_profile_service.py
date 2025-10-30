@@ -244,6 +244,9 @@ class SpeedProfileService:
         if df.empty or "hr_shifted" not in df.columns or "speed_smooth" not in df.columns:
             return np.array([]), np.array([]), np.array([]), 0.0, 0.0, 0.0, 0.0
 
+        # Reset index to ensure sequential indices (0, 1, 2, ...)
+        df = df.reset_index(drop=True)
+
         # Prepare data for clustering
         X = df[["hr_shifted", "speed_smooth"]].dropna()
         if len(X) < n_clusters:
@@ -251,18 +254,26 @@ class SpeedProfileService:
 
         # Perform clustering
         kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
-        clusters = kmeans.fit_predict(X)
+        clusters = kmeans.fit_predict(X.values)
 
         # Map clusters back to full dataframe (NaN where data was missing)
+        # X.index now contains sequential indices matching df's reset index
         clusters_full = np.full(len(df), -1, dtype=int)
-        clusters_full[X.index] = clusters
+        valid_indices = X.index.values
+        # Ensure indices are within bounds
+        valid_indices = valid_indices[(valid_indices >= 0) & (valid_indices < len(df))]
+        if len(valid_indices) == len(clusters):
+            clusters_full[valid_indices] = clusters
+        else:
+            # Fallback: if length mismatch, use positional mapping
+            clusters_full[:len(clusters)] = clusters[:len(clusters_full)]
 
         cluster_centers = kmeans.cluster_centers_
 
         # Linear regression on cluster centers
         if len(cluster_centers) < 2:
             return (
-                clusters,
+                clusters_full,
                 cluster_centers,
                 np.arange(len(cluster_centers)),
                 0.0,
@@ -400,9 +411,11 @@ class SpeedProfileService:
     # ------------------------------------------------------------------
 
     def process_timeseries(
-        self, activity_id: str, strategy: str = "cluster", n_clusters: int = 7
+        self, activity_id: str, strategy: str = "cluster", n_clusters: Optional[int] = None
     ) -> Optional[SpeedProfileResult]:
         """Process a full timeseries file and return analysis results."""
+        if n_clusters is None:
+            n_clusters = self.config.n_cluster
         path = self.config.timeseries_dir / f"{activity_id}.csv"
         if not path.exists():
             return None
@@ -442,6 +455,9 @@ class SpeedProfileService:
         df_filtered = df_processed[df_processed["hr"] > 120].copy()
         if df_filtered.empty:
             return None
+
+        # Reset index to ensure sequential indices
+        df_filtered = df_filtered.reset_index(drop=True)
 
         df_filtered = self.moving_average(df_filtered, window_size=10, col="hr")
         df_filtered = self.moving_average(df_filtered, window_size=10, col="speed_km_h")

@@ -8,7 +8,7 @@ import logging
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, List, Optional
+from typing import Any, Callable, Dict, Iterable, List, Optional, Union
 
 import pandas as pd
 import portalocker
@@ -19,6 +19,7 @@ from persistence.csv_storage import CsvStorage
 from persistence.repositories import ActivitiesRepo, TokensRepo
 from services.lap_metrics_service import LapMetricsService
 from services.metrics_service import MetricsComputationService
+from services.speed_profile_service import SpeedProfileService
 from utils.config import Config
 from utils.crypto import decrypt_text, encrypt_text, get_fernet
 
@@ -56,6 +57,7 @@ class StravaService:
         self.activities = ActivitiesRepo(self.storage)
         self.tokens = TokensRepo(self.storage)
         self.lap_metrics = LapMetricsService(self.storage, self.config)
+        self.speed_profile_service = SpeedProfileService(self.config)
         self._fernet = None
         self._rate_log_path = self.storage.base_dir / "strava_api_log.json"
 
@@ -251,10 +253,30 @@ class StravaService:
     def sync_last_14_days(self, athlete_id: str) -> List[str]:
         return self.sync_last_n_days(athlete_id, 14)
 
-    def rebuild_from_cache(self, athlete_id: str) -> List[str]:
+    def rebuild_from_cache(
+        self, athlete_id: str, progress_callback: Optional[Callable[[int, int, str], None]] = None
+    ) -> List[str]:
+        """Rebuild activities from cache and recompute all metrics_ts files.
+        
+        Preserves existing activities and merges with cache entries.
+        Forces recomputation of metrics_ts for all activities with timeseries.
+        
+        Args:
+            athlete_id: The athlete ID to rebuild activities for
+            progress_callback: Optional callback function(current, total, activity_id) called during metrics_ts recomputation
+        """
         raw_dir = self.config.raw_strava_dir
         headers = self.activities.headers
         rows: List[Dict[str, Any]] = []
+        activity_ids: List[str] = []
+        
+        # Load existing activities to preserve those not in cache
+        existing_df = self.activities.list()
+        existing_activity_ids = set()
+        if not existing_df.empty and "activityId" in existing_df.columns:
+            existing_activity_ids = set(existing_df["activityId"].astype(str))
+        
+        # Rebuild from cache
         if raw_dir.exists():
             for path in sorted(raw_dir.glob("*.json")):
                 try:
@@ -263,16 +285,91 @@ class StravaService:
                 except Exception:
                     continue
                 activity_id = str(detail.get("id") or path.stem)
+                activity_ids.append(activity_id)
                 has_timeseries = (self.config.timeseries_dir / f"{activity_id}.csv").exists()
                 self.lap_metrics.compute_and_store(athlete_id, detail)
                 row = self._map_activity_row(detail, athlete_id, has_timeseries, path)
                 rows.append(row)
+        
+        # Merge with existing activities (preserve activities not in cache but filter by athlete)
+        if not existing_df.empty:
+            existing_df = existing_df[existing_df.get("athleteId") == athlete_id].copy()
+            for _, existing_row in existing_df.iterrows():
+                existing_id = str(existing_row.get("activityId", ""))
+                if existing_id and existing_id not in activity_ids:
+                    # Preserve existing activity row
+                    rows.append(existing_row.to_dict())
+        
+        # Write merged activities
         df = pd.DataFrame(rows, columns=headers if rows else None)
         if df.empty:
             df = pd.DataFrame(columns=headers)
         else:
             df = df[headers]
         self.activities.storage.write_csv(self.activities.file_name, df)
+        
+        # Clear metrics_ts files for all activities with timeseries (force recomputation)
+        metrics_ts_dir = self.config.metrics_ts_dir
+        if metrics_ts_dir.exists():
+            for activity_id in activity_ids:
+                metrics_ts_path = metrics_ts_dir / f"{activity_id}.csv"
+                if metrics_ts_path.exists():
+                    try:
+                        metrics_ts_path.unlink()
+                    except Exception:
+                        pass
+        
+        # Recompute metrics for rebuilt activities (includes hrSpeedShift)
+        if activity_ids:
+            MetricsComputationService(self.storage).recompute_for_activities(activity_ids)
+        
+        # Recompute metrics_ts for ALL activities with timeseries data for this athlete
+        # This ensures all metrics_ts files are up to date after rebuilding from cache
+        activities_df = self.activities.list(athleteId=athlete_id)
+        all_recomputed = []
+        all_activity_ids: List[str] = []
+        
+        # Collect activities with timeseries first to calculate total
+        activities_with_ts: List[tuple[str, str]] = []  # (activity_id, activity_name)
+        if not activities_df.empty:
+            for _, row in activities_df.iterrows():
+                activity_id = str(row.get("activityId", ""))
+                if not activity_id:
+                    continue
+                all_activity_ids.append(activity_id)
+                has_timeseries = row.get("hasTimeseries")
+                if has_timeseries:
+                    # Check if timeseries file exists
+                    ts_path = self.config.timeseries_dir / f"{activity_id}.csv"
+                    if ts_path.exists():
+                        activity_name = str(row.get("name", activity_id))
+                        activities_with_ts.append((activity_id, activity_name))
+        
+        # Process activities with progress tracking
+        total_activities = len(activities_with_ts)
+        for idx, (activity_id, activity_name) in enumerate(activities_with_ts, start=1):
+            try:
+                # Update progress
+                if progress_callback:
+                    progress_callback(idx, total_activities, activity_name)
+                
+                # Clear existing metrics_ts if any
+                metrics_ts_path = metrics_ts_dir / f"{activity_id}.csv"
+                if metrics_ts_path.exists():
+                    metrics_ts_path.unlink()
+                # Process and save metrics_ts
+                result = self.speed_profile_service.process_timeseries(activity_id, strategy="cluster")
+                if result is not None:
+                    self.speed_profile_service.save_metrics_ts(activity_id, result)
+                    all_recomputed.append(activity_id)
+            except Exception:
+                LOGGER.exception("Failed to recompute metrics_ts for activity %s", activity_id)
+        
+        # Also recompute metrics for all activities (not just those from cache)
+        if all_activity_ids:
+            MetricsComputationService(self.storage).recompute_for_activities(all_activity_ids)
+        
+        # Return all activities processed (from cache + existing)
         return [str(r.get("activityId")) for r in rows if r.get("activityId")]
 
     # --- OAuth helpers ----------------------------------------------

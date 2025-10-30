@@ -30,6 +30,10 @@ class Config:
     laps_dir: Path
     mapbox_token: Optional[str]
     metrics_ts_dir: Path
+<<<<<<< HEAD
+=======
+    n_cluster: int
+>>>>>>> feat-speed-profiling-XJGA8
 
 
 def _ensure_dir(path: Path) -> None:
@@ -57,6 +61,16 @@ def load_config() -> Config:
     raw_strava_dir = data_dir / "raw" / "strava"
     laps_dir = data_dir / "laps"
     metrics_ts_dir = data_dir / "metrics_ts"
+<<<<<<< HEAD
+=======
+
+    # Load n_cluster with default of 5
+    n_cluster_str = os.getenv("N_CLUSTER", "5")
+    try:
+        n_cluster = int(n_cluster_str)
+    except (ValueError, TypeError):
+        n_cluster = 5
+>>>>>>> feat-speed-profiling-XJGA8
 
     _ensure_dir(data_dir)
     _ensure_dir(timeseries_dir)
@@ -75,6 +89,10 @@ def load_config() -> Config:
         laps_dir=laps_dir,
         mapbox_token=mapbox_token,
         metrics_ts_dir=metrics_ts_dir,
+<<<<<<< HEAD
+=======
+        n_cluster=n_cluster,
+>>>>>>> feat-speed-profiling-XJGA8
     )
 
 
