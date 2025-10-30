@@ -1,3 +1,7 @@
+"""Copyright (C) 2025 Pierre Marrec
+SPDX-License-Identifier: GPL-3.0-or-later
+"""
+
 from __future__ import annotations
 
 import json
@@ -16,38 +20,9 @@ from persistence.repositories import (
     PlannedSessionsRepo,
 )
 from services.timeseries_service import TimeseriesService
-
+from utils.coercion import safe_float_optional, safe_int_optional
 from utils.config import Config
-
-
-def _coerce_float(value: object) -> Optional[float]:
-    try:
-        if value in (None, "", "NaN"):
-            return None
-        return float(value)
-    except Exception:
-        return None
-
-
-def _coerce_int(value: object) -> Optional[int]:
-    try:
-        if value in (None, "", "NaN"):
-            return None
-        return int(float(value))
-    except Exception:
-        return None
-
-
-def _parse_timestamp(value: object) -> Optional[pd.Timestamp]:
-    if value in (None, "", "NaT"):
-        return None
-    try:
-        ts = pd.to_datetime(value, utc=True, errors="coerce")
-    except Exception:
-        return None
-    if pd.isna(ts):
-        return None
-    return ts
+from utils.time import parse_timestamp
 
 
 def _decode_polyline(encoded: str) -> List[tuple[float, float]]:
@@ -175,23 +150,23 @@ class ActivityDetailService:
         planned_session_id: Optional[str] = None
         if link_row is not None:
             planned_session_id = str(link_row.get("plannedSessionId"))
-            match_score = _coerce_float(link_row.get("matchScore"))
+            match_score = safe_float_optional(link_row.get("matchScore"))
             planned_session = self.planned_sessions.get(planned_session_id)
             planned_metrics_row = self._planned_metrics_row(planned_session_id, resolved_athlete_id)
 
         raw_detail = self._load_raw_detail(activity.get("rawJsonPath"))
         title = self._resolve_title(activity, raw_detail)
         description = self._resolve_description(raw_detail)
-        start_time = _parse_timestamp(activity.get("startTime"))
+        start_time = parse_timestamp(activity.get("startTime"))
 
         summary = ActivitySummary(
-            distance_km=_coerce_float(activity.get("distanceKm")),
-            moving_sec=_coerce_int(activity.get("movingSec")),
-            elapsed_sec=_coerce_int(activity.get("elapsedSec")),
-            ascent_m=_coerce_float(activity.get("ascentM")),
-            avg_hr=_coerce_float(activity.get("avgHr")),
-            trimp=_coerce_float((metrics_row or {}).get("trimp")),
-            distance_eq_km=_coerce_float((metrics_row or {}).get("distanceEqKm")),
+            distance_km=safe_float_optional(activity.get("distanceKm")),
+            moving_sec=safe_int_optional(activity.get("movingSec")),
+            elapsed_sec=safe_int_optional(activity.get("elapsedSec")),
+            ascent_m=safe_float_optional(activity.get("ascentM")),
+            avg_hr=safe_float_optional(activity.get("avgHr")),
+            trimp=safe_float_optional((metrics_row or {}).get("trimp")),
+            distance_eq_km=safe_float_optional((metrics_row or {}).get("distanceEqKm")),
         )
 
         comparison = None
@@ -290,10 +265,10 @@ class ActivityDetailService:
         planned_session: Dict[str, object],
         planned_metrics_row: Optional[Dict[str, object]],
     ) -> PlanComparison:
-        planned_distance = _coerce_float(planned_session.get("plannedDistanceKm"))
-        planned_duration = _coerce_int(planned_session.get("plannedDurationSec"))
-        planned_ascent = _coerce_float(planned_session.get("plannedAscentM"))
-        planned_trimp = _coerce_float((planned_metrics_row or {}).get("trimp"))
+        planned_distance = safe_float_optional(planned_session.get("plannedDistanceKm"))
+        planned_duration = safe_int_optional(planned_session.get("plannedDurationSec"))
+        planned_ascent = safe_float_optional(planned_session.get("plannedAscentM"))
+        planned_trimp = safe_float_optional((planned_metrics_row or {}).get("trimp"))
 
         return PlanComparison(
             distance=self._comparison_metric(summary.distance_km, planned_distance),

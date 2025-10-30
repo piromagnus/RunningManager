@@ -1,3 +1,7 @@
+"""Copyright (C) 2025 Pierre Marrec
+SPDX-License-Identifier: GPL-3.0-or-later
+"""
+
 from __future__ import annotations
 
 import altair as alt
@@ -248,6 +252,36 @@ label, legend {
 
 .block-container {
     padding-top: 1.5rem;
+}
+
+/* Session Creator and Interval Editor Widget Styles */
+.rm-card {
+    padding: 10px 12px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    margin-bottom: 10px;
+    background: rgba(0, 0, 0, 0.15);
+}
+
+.rm-loop-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 8px 10px;
+    margin-bottom: 10px;
+}
+
+.rm-interval-action {
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 6px;
+    padding: 6px 8px;
+    margin-bottom: 6px;
+}
+
+.rm-interval-editor .stNumberInput label,
+.rm-interval-editor .stSelectbox label,
+.rm-interval-editor .stTextInput label {
+    font-size: 0.75rem;
 }
 </style>
 """

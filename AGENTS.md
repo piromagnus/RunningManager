@@ -15,9 +15,12 @@ See `.taskmaster/docs/prd.txt` for full requirements and domain rules.
 
 - `app.py`: Streamlit entry
 - `pages/`: UI pages (Planner, Activities, Athlete, Goals, Analytics, Settings)
+- `widgets/`: Reusable Streamlit UI components (forms, selectors, panels)
+- `graph/`: Visualization components (Altair charts, elevation profiles, scatter plots)
 - `services/`: domain services (planner, analytics, templates, timeseries; Strava/Garmin stubs present)
 - `persistence/`: CSV abstraction and repositories (CRUD over CSV files)
-- `utils/`: config loading, crypto, formatting, ids, time helpers
+- `utils/`: config loading, crypto, formatting, ids, time helpers, segment utilities
+- `ui/`: Complex UI widgets (interval editor)
 - `data/`: CSV tables and timeseries
 - `tests/`: pytest suite and fixtures
 
@@ -88,6 +91,10 @@ Run the app: `uv run streamlit run app.py`
 
 - Keep display formatting via `utils/formatting`; avoid mixing storage/compute with UI
 - Planner-specific computations should live in `services/planner_service.py` or presenters, not directly in pages
+- **Code Organization**: Keep pages under 500 lines; extract reusable components to `widgets/` and visualizations to `graph/`
+- **Widgets**: Create reusable UI components in `widgets/` for forms, selectors, and panels used across multiple pages
+- **Graphs**: Extract chart creation logic to `graph/` modules; keep preprocessing separate from rendering when possible
+- **Utils**: Place general-purpose utilities in `utils/`; keep files focused and under 500 lines when possible
 
 ## External Integrations
 
@@ -105,6 +112,14 @@ Run the app: `uv run streamlit run app.py`
 - Get the task list from the mcp server and the details of the task to do
 - Collect informations needed to implement the task
 - Propose a small plan; implement minimally; preserve formatting and headers
+- **License Headers**: All Python files must include the license header at the top:
+  ```python
+  """Copyright (C) 2025 Pierre Marrec
+  SPDX-License-Identifier: GPL-3.0-or-later
+  
+  [Module docstring if any]
+  """
+  ```
 - Add/adjust tests; run `pytest`
 - For secrets or tokens, enforce redaction and encryption rules
 - If adding CSV columns, update headers and migration logic
@@ -125,9 +140,15 @@ Run the app: `uv run streamlit run app.py`
   - `formatting.py`: fr-FR display helpers for numbers and units; storage must always keep `.` decimals.
   - `crypto.py`: Fernet helpers and safe decrypt errors; used for token-at-rest encryption.
   - `ids.py`: UUID-based `new_id()`.
-  - `time.py`: ISO week helpers and `today_local()`.
-  - `styling.py`: theme application utilities for Streamlit pages.
+  - `time.py`: ISO week helpers, `today_local()`, `parse_timestamp()`, `to_date()`, `ensure_datetime()`.
+  - `styling.py`: theme application utilities for Streamlit pages, CSS injection.
   - `auth_state.py`: session state bootstrap utilities.
+  - `coercion.py`: Type coercion helpers (`coerce_float`, `coerce_int`, `safe_float`, `safe_int`, etc.).
+  - `helpers.py`: General helper functions (`clean_optional`, `default_template_title`).
+  - `ui_helpers.py`: UI-specific utilities (`trigger_rerun`, `get_dialog_factory`).
+  - `dashboard_state.py`: Dashboard date range state management.
+  - `elevation_preprocessing.py`: Preprocessing for elevation profile data.
+  - `segments.py`: Segment merging utilities for elevation plots (small segment merging, same-color merging).
 
 - `persistence/`
   - `csv_storage.py`: pandas-based CSV IO with `portalocker` (shared/exclusive). Ensures parent dirs, header handling, and upsert/append semantics.
@@ -140,15 +161,34 @@ Run the app: `uv run streamlit run app.py`
   - `metrics_service.py`: full metrics pipeline recomputation (activities, planned, daily, weekly), TRIMP, category normalisation, bike DistEq rules.
   - `timeseries_service.py`: load per-activity timeseries CSV.
   - `strava_service.py`: OAuth flow, token storage (encrypted), raw JSON + streams caching, rate-limit logging, incremental sync and cache rebuild.
-  - `lap_metrics_service.py`, `linking_service.py`, `activity_feed_service.py`, `templates_service.py`, `session_templates_service.py`, `serialization.py`: domain utilities for laps, linking, feed building and templates.
+  - `dashboard_data_service.py`: Dashboard data loading and preprocessing (`load_daily_metrics`, `load_hr_speed_data`).
+  - `lap_metrics_service.py`, `linking_service.py`, `activity_feed_service.py`, `activity_detail_service.py`, `templates_service.py`, `session_templates_service.py`, `serialization.py`: domain utilities for laps, linking, feed building, activity details and templates.
   - `garmin_import_service.py`: stub placeholder for future ingestion.
+
+- `widgets/` (Reusable UI components)
+  - `athlete_selector.py`: Athlete selection widget used across pages.
+  - `session_forms.py`: Form renderers for different session types (fundamental, long run, race, interval).
+  - `template_selector.py`: Template selection and management UI.
+  - `template_actions.py`: Template save/delete/schedule actions.
+  - `session_importer.py`: Import planned sessions into templates.
+  - `comparison_panel.py`: Activity comparison panel display.
+
+- `graph/` (Visualization components)
+  - `training_load.py`: Acute/chronic training load charts (Altair).
+  - `hr_speed.py`: HR vs Speed scatter plots with weighted regression.
+  - `speed_scatter.py`: SpeedEq scatter chart visualization.
+  - `elevation.py`: Elevation profile with grade-based color coding and histograms.
+  - `analytics.py`: Planned vs actual bar charts (weekly/daily).
+  - `timeseries.py`: Timeseries charts for activities (HR, pace, elevation).
 
 - `pages/`
   - `Planner.py`: week editor (sessions CRUD, template apply/save), interval editor integration, cached lookups (`st.cache_data`).
-  - `Dashboard.py`: training load (acute/chronic) time series and SpeedEq scatter; Altair charts.
+  - `Dashboard.py`: training load (acute/chronic) time series and SpeedEq scatter; uses `dashboard_data_service` and `dashboard_state`.
   - `Analytics.py`: planned vs actual (weekly/daily) with category filters and persisted preferences.
   - `Activities.py`: activity feed, planned-unlinked strip, link dialog and navigation to details.
-  - `Activity.py`, `Athlete.py`, `Goals.py`, `Session.py`, `SessionCreator.py`, `Settings.py`: supporting pages (settings include Strava OAuth and metrics recompute).
+  - `Activity.py`: Activity detail page with elevation profile, timeseries charts, comparison panel.
+  - `SessionCreator.py`: Session template creation with form widgets.
+  - `Athlete.py`, `Goals.py`, `Session.py`, `Settings.py`: supporting pages (settings include Strava OAuth and metrics recompute).
 
 - `ui/`
   - `interval_editor.py`: interval step editor rendering and state wiring (used by Planner and creator flows).
