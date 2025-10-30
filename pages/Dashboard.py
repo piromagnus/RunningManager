@@ -5,7 +5,9 @@ from pathlib import Path
 import altair as alt
 import numpy as np
 import pandas as pd
+import scipy.stats as stats
 import streamlit as st
+from typing import List, Tuple, Optional
 
 from config import METRICS as CONFIG_METRICS
 from utils.config import load_config
@@ -14,6 +16,8 @@ from utils.styling import apply_theme
 from persistence.csv_storage import CsvStorage
 from persistence.repositories import AthletesRepo
 from services.analytics_service import AnalyticsService
+from services.speed_profile_service import SpeedProfileService
+from services.timeseries_service import TimeseriesService
 
 
 st.set_page_config(page_title="Running Manager - Dashboard", layout="wide")
@@ -27,6 +31,8 @@ set_locale("fr_FR")
 storage = CsvStorage(base_dir=Path(cfg.data_dir))
 ath_repo = AthletesRepo(storage)
 analytics = AnalyticsService(storage)
+speed_profile_service = SpeedProfileService(cfg)
+timeseries_service = TimeseriesService(cfg)
 
 
 def _select_athlete() -> str | None:
@@ -226,7 +232,7 @@ for metric_key in metric_definitions.keys():
     if metric_key not in available_metrics:
         available_metrics.append(metric_key)
 # Shared tabs for the two charts
-tab_charge, tab_speed = st.tabs(["Charge", "SpeedEq"])
+tab_charge, tab_speed, tab_hr_speed = st.tabs(["Charge", "SpeedEq", "FC vs Vitesse"])
 
 with tab_charge:
     st.subheader("Charge d'entraînement")
@@ -542,3 +548,184 @@ with tab_speed:
         .properties(height=360)
     )
     st.altair_chart(cloud_chart, use_container_width=True)
+
+# --- HR vs Speed Graph (Cluster-based) ---
+with tab_hr_speed:
+    st.subheader("Relation FC vs Vitesse")
+
+    @st.cache_data(ttl=3600)
+    def _load_hr_speed_data(athlete_id: str, start_date: pd.Timestamp, end_date: pd.Timestamp, categories: List[str]) -> Tuple[pd.DataFrame, Optional[float], Optional[float], Optional[float], Optional[float]]:
+        """Load and preprocess HR vs Speed data for all activities in date range."""
+        # Get activities in date range
+        acts_df = storage.read_csv("activities_metrics.csv")
+        if acts_df.empty:
+            return pd.DataFrame(), None, None, None, None
+
+        acts_df = acts_df[acts_df.get("athleteId") == athlete_id].copy()
+        acts_df["date"] = pd.to_datetime(acts_df.get("startDate"), errors="coerce").dt.normalize()
+        mask = (acts_df["date"] >= pd.Timestamp(start_date)) & (acts_df["date"] <= pd.Timestamp(end_date))
+        acts_df = acts_df[mask]
+
+        # Apply category filter
+        if categories:
+            acts_df["category"] = acts_df.get("category", pd.Series(dtype=str)).astype(str).str.upper()
+            acts_df = acts_df[acts_df["category"].isin([c.upper() for c in categories])]
+
+        # Get activities info to check for timeseries
+        activities_info = storage.read_csv("activities.csv")
+        if not activities_info.empty:
+            activities_info = activities_info[activities_info.get("athleteId") == athlete_id].copy()
+            activities_info["activityId"] = activities_info["activityId"].astype(str)
+            acts_df["activityId"] = acts_df["activityId"].astype(str)
+            acts_df = acts_df.merge(
+                activities_info[["activityId", "hasTimeseries"]],
+                on="activityId",
+                how="left",
+            )
+            # Filter to activities with timeseries
+            acts_df = acts_df[acts_df.get("hasTimeseries", pd.Series(dtype=bool)) == True]
+        else:
+            # If no activities info, check if timeseries file exists
+            acts_df = acts_df.copy()
+            acts_df["activityId"] = acts_df["activityId"].astype(str)
+            acts_df["hasTimeseries"] = acts_df["activityId"].apply(
+                lambda aid: (cfg.timeseries_dir / f"{aid}.csv").exists()
+            )
+            acts_df = acts_df[acts_df["hasTimeseries"] == True]
+
+        if acts_df.empty:
+            return pd.DataFrame(), None, None, None, None
+
+        # Collect all HR and Speed data
+        all_data = []
+
+        for _, row in acts_df.iterrows():
+            activity_id = str(row.get("activityId", ""))
+            if not activity_id:
+                continue
+
+            # Try to load precomputed metrics_ts first
+            metrics_ts = speed_profile_service.load_metrics_ts(activity_id)
+            if metrics_ts is None or metrics_ts.empty:
+                # Process timeseries if not precomputed
+                result = speed_profile_service.process_timeseries(activity_id, strategy="cluster")
+                if result is None:
+                    continue
+                # Save for future use
+                speed_profile_service.save_metrics_ts(activity_id, result)
+                # Extract data from result
+                if result.hr_shifted is not None and result.speed_smooth is not None:
+                    df_act = pd.DataFrame({
+                        "hr": result.hr_shifted.values,
+                        "speed": result.speed_smooth.values,
+                        "activityId": activity_id,
+                    })
+                    if result.clusters is not None and len(result.clusters) == len(df_act):
+                        df_act["cluster"] = result.clusters
+                    all_data.append(df_act)
+            else:
+                # Use precomputed data
+                if "hr_shifted" in metrics_ts.columns and "speed_smooth" in metrics_ts.columns:
+                    df_act = pd.DataFrame({
+                        "hr": metrics_ts["hr_shifted"].values,
+                        "speed": metrics_ts["speed_smooth"].values,
+                        "activityId": activity_id,
+                    })
+                    if "cluster" in metrics_ts.columns and len(metrics_ts["cluster"]) == len(df_act):
+                        df_act["cluster"] = metrics_ts["cluster"].values
+                    all_data.append(df_act)
+
+        if not all_data:
+            return pd.DataFrame(), None, None, None, None
+
+        combined_df = pd.concat(all_data, ignore_index=True)
+        combined_df = combined_df.dropna(subset=["hr", "speed"])
+
+        if combined_df.empty:
+            return pd.DataFrame(), None, None, None, None
+
+        # Compute linear regression on all data
+        x_values = combined_df["hr"].values
+        y_values = combined_df["speed"].values
+
+        if len(x_values) < 2:
+            return combined_df, None, None, None, None
+
+        slope, intercept, r_value, p_value, std_err = stats.linregress(x_values, y_values)
+        r_squared = r_value**2
+
+        return combined_df, slope, intercept, r_squared, std_err
+
+    # Load data
+    hr_speed_df, slope, intercept, r_squared, std_err = _load_hr_speed_data(
+        athlete_id, start_date, end_date, selected_cats
+    )
+
+    if hr_speed_df.empty:
+        st.info("Aucune donnée de timeseries disponible pour la période sélectionnée.")
+    else:
+        # Create scatter plot
+        chart_df = hr_speed_df.copy()
+
+        # Color by cluster if available
+        if "cluster" in chart_df.columns:
+            color_encoding = alt.Color("cluster:O", scale=alt.Scale(scheme="viridis"), title="Cluster")
+        else:
+            color_encoding = alt.Color("activityId:N", scale=alt.Scale(scheme="category20"), title="Activité")
+
+        scatter = (
+            alt.Chart(chart_df)
+            .mark_circle(size=30, opacity=0.6)
+            .encode(
+                x=alt.X("hr:Q", title="Fréquence cardiaque (bpm)"),
+                y=alt.Y("speed:Q", title="Vitesse (km/h)"),
+                color=color_encoding,
+                tooltip=[
+                    alt.Tooltip("hr:Q", title="FC (bpm)", format=".1f"),
+                    alt.Tooltip("speed:Q", title="Vitesse (km/h)", format=".1f"),
+                    alt.Tooltip("activityId:N", title="Activité"),
+                ],
+            )
+        )
+
+        # Add regression line if available
+        if slope is not None and intercept is not None:
+            hr_range = [chart_df["hr"].min(), chart_df["hr"].max()]
+            regression_data = pd.DataFrame({
+                "hr": hr_range,
+                "speed": [slope * hr + intercept for hr in hr_range],
+            })
+
+            regression_line = (
+                alt.Chart(regression_data)
+                .mark_line(color="red", strokeWidth=2)
+                .encode(x="hr:Q", y="speed:Q")
+            )
+
+            # Add confidence interval
+            if std_err is not None:
+                regression_data["upper"] = regression_data["speed"] + std_err
+                regression_data["lower"] = regression_data["speed"] - std_err
+
+                confidence_band = (
+                    alt.Chart(regression_data)
+                    .mark_area(opacity=0.2, color="red")
+                    .encode(
+                        x="hr:Q",
+                        y="upper:Q",
+                        y2="lower:Q",
+                    )
+                )
+
+                chart = alt.layer(confidence_band, scatter, regression_line)
+            else:
+                chart = alt.layer(scatter, regression_line)
+
+            # Add formula text
+            formula_text = f"y = {slope:.2f}x + {intercept:.2f}\nR² = {r_squared:.3f}"
+            st.caption(formula_text)
+        else:
+            chart = scatter
+
+        chart = chart.properties(height=500, width=CHART_WIDTH)
+        st.altair_chart(chart, use_container_width=True)

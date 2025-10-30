@@ -348,9 +348,25 @@ class ActivitiesMetricsRepo(BaseRepo):
                 "distanceEqKm",
                 "trimp",
                 "avgHr",
+                "hrSpeedShift",
             ],
             id_column="activityId",
         )
+
+    def _migrate_headers_if_needed(self) -> None:
+        path = self._path()
+        if not path.exists():
+            return
+        df = self.storage.read_csv(self.file_name)
+        # If any header missing, rewrite file with full headers and empty defaults
+        if any(h not in df.columns for h in self.headers):
+            df = _ensure_headers(df, self.headers)
+            self.storage.write_csv(self.file_name, df)
+
+    def create(self, row: Dict[str, Any]) -> str:
+        # Ensure file headers are migrated before appending
+        self._migrate_headers_if_needed()
+        return super().create(row)
 
 
 class PlannedMetricsRepo(BaseRepo):

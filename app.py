@@ -11,9 +11,9 @@ from streamlit.logger import get_logger
 logger = get_logger(__name__)
 
 
-def _ensure_placeholders():
-    # Demonstrate formatting without performing heavy imports
-    st.write(fmt_km(12.3), "|", fmt_speed_kmh(9.4))
+# def _ensure_placeholders():
+#     # Demonstrate formatting without performing heavy imports
+#     st.write(fmt_km(12.3), "|", fmt_speed_kmh(9.4))
 
 
 def main():
@@ -41,7 +41,7 @@ def main():
             }
         )
 
-    _ensure_placeholders()
+    # _ensure_placeholders()
 
 
 if __name__ == "__main__":
