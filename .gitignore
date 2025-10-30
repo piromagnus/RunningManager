@@ -15,3 +15,4 @@ data/laps/
 uv.lock
 requirements.lock.txt
 .cursor/mcp.json
+data/metrics_ts/*/
