@@ -1,3 +1,7 @@
+"""Copyright (C) 2025 Pierre Marrec
+SPDX-License-Identifier: GPL-3.0-or-later
+"""
+
 from pathlib import Path
 from persistence.csv_storage import CsvStorage
 from persistence.repositories import ActivitiesRepo, PlannedSessionsRepo

@@ -1,4 +1,8 @@
-"""Strava OAuth2 integration and manual sync service."""
+"""Copyright (C) 2025 Pierre Marrec
+SPDX-License-Identifier: GPL-3.0-or-later
+
+Strava OAuth2 integration and manual sync service.
+"""
 
 from __future__ import annotations
 

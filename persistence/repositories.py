@@ -1,4 +1,8 @@
-"""Repository layer for CSV-backed storage."""
+"""Copyright (C) 2025 Pierre Marrec
+SPDX-License-Identifier: GPL-3.0-or-later
+
+Repository layer for CSV-backed storage.
+"""
 
 from __future__ import annotations
 

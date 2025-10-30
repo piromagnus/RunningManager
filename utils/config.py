@@ -1,4 +1,6 @@
-"""
+"""Copyright (C) 2025 Pierre Marrec
+SPDX-License-Identifier: GPL-3.0-or-later
+
 Configuration loading utilities.
 
 Loads environment variables from `.env`, validates required values, and ensures
@@ -12,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-from dotenv import load_dotenv, find_dotenv
+from dotenv import find_dotenv, load_dotenv
 from streamlit.logger import get_logger
 
 logger = get_logger(__name__)
@@ -49,10 +51,8 @@ def load_config() -> Config:
     strava_client_id = os.getenv("STRAVA_CLIENT_ID")
     strava_client_secret = os.getenv("STRAVA_CLIENT_SECRET")
     strava_redirect_uri = os.getenv("STRAVA_REDIRECT_URI")
-    logger.debug("STRAVA_CLIENT_ID: %s", strava_client_id)
     encryption_key = os.getenv("ENCRYPTION_KEY")
     mapbox_token = os.getenv("MAPBOX_API_KEY")
-    logger.debug("MAPBOX_API_KEY: %s", mapbox_token)
 
     timeseries_dir = data_dir / "timeseries"
     raw_strava_dir = data_dir / "raw" / "strava"

@@ -1,22 +1,26 @@
+"""Copyright (C) 2025 Pierre Marrec
+SPDX-License-Identifier: GPL-3.0-or-later
+"""
+
 from __future__ import annotations
 
+import datetime as dt
 import json
 from pathlib import Path
-import datetime as dt
 
 import altair as alt
 import pandas as pd
 import streamlit as st
 
 from config import METRICS as CONFIG_METRICS
+from graph.analytics import create_daily_bar_chart, create_weekly_bar_chart
+from persistence.csv_storage import CsvStorage
+from persistence.repositories import AthletesRepo, SettingsRepo
+from services.analytics_service import AnalyticsService
 from utils.config import load_config
 from utils.formatting import fmt_decimal, set_locale
 from utils.styling import apply_theme
-from persistence.csv_storage import CsvStorage
-from persistence.repositories import AthletesRepo, SettingsRepo, LinksRepo
-from services.analytics_service import AnalyticsService
-from utils.time import iso_week_start
-
+from widgets.athlete_selector import select_athlete
 
 st.set_page_config(page_title="Running Manager - Analytics", layout="wide")
 apply_theme()
@@ -65,20 +69,6 @@ METRIC_CONFIG = {
     },
 }
 
-
-def _select_athlete() -> str | None:
-    df = ath_repo.list()
-    if df.empty:
-        st.warning("Aucun athlète enregistré.")
-        return None
-    options = {
-        f"{row.get('name') or 'Sans nom'} ({row.get('athleteId')})": row.get("athleteId")
-        for _, row in df.iterrows()
-    }
-    label = st.selectbox("Athlète", list(options.keys()))
-    return options.get(label)
-
-
 def _load_saved_activity_types() -> list[str]:
     """Load allowed activity categories for analytics from settings.
 
@@ -109,7 +99,7 @@ def _load_saved_activity_types() -> list[str]:
     return []
 
 
-athlete_id = _select_athlete()
+athlete_id = select_athlete(ath_repo)
 if not athlete_id:
     st.stop()
 
@@ -125,7 +115,8 @@ with st.expander("Filtrer les activités incluses"):
     )
     if not selected_types:
         st.warning(
-            "Au moins un type doit être sélectionné. Toutes les activités Run/Trail/Hike seront incluses."
+            "Au moins un type doit être sélectionné. "
+            "Toutes les activités Run/Trail/Hike seront incluses.",
         )
         selected_types = list(CATEGORY_OPTIONS.keys())
     if st.button("Enregistrer ces types pour l'analytics"):
@@ -419,27 +410,9 @@ for col in ("actualTimeHours", "actualDistanceKm", "actualDistanceEqKm", "actual
         0.0
     )
 
-chart = (
-    alt.Chart(stack_with_actuals)
-    .mark_bar()
-    .encode(
-        x=alt.X("weekLabel:N", title="Semaine"),
-        y=alt.Y("value:Q", title=f"{metric_label} ({metric_cfg['unit']})"),
-        color=alt.Color("segment_display:N", scale=color_scale, title=""),
-        order=alt.Order("order:Q"),
-        tooltip=[
-            alt.Tooltip("weekLabel:N", title="Semaine"),
-            alt.Tooltip("actual:Q", title=f"Réalisé ({metric_cfg['unit']})", format=".2f"),
-            alt.Tooltip("planned:Q", title=f"Planifié ({metric_cfg['unit']})", format=".2f"),
-            alt.Tooltip("actualTimeHours:Q", title="Durée (h)", format=".2f"),
-            alt.Tooltip("actualDistanceKm:Q", title="Distance (km)", format=".2f"),
-            alt.Tooltip("actualDistanceEqKm:Q", title="Dist. équiv. (km)", format=".2f"),
-            alt.Tooltip("actualTrimp:Q", title="TRIMP", format=".2f"),
-        ],
-    )
-    .properties(height=400, width=CHART_WIDTH)
+chart = create_weekly_bar_chart(
+    stack_with_actuals, metric_label, metric_cfg, color_scale, CHART_WIDTH
 )
-
 st.altair_chart(chart, use_container_width=False)
 
 st.caption(
@@ -540,25 +513,8 @@ else:
     )  # minimal columns
 
 if not day_stack_df.empty:
-    day_chart = (
-        alt.Chart(day_stack_df)
-        .mark_bar()
-        .encode(
-            x=alt.X("weekLabel:N", title="Jour"),
-            y=alt.Y("value:Q", title=f"{metric_label} ({metric_cfg['unit']})"),
-            color=alt.Color("segment_display:N", scale=color_scale, title=""),
-            order=alt.Order("order:Q"),
-            tooltip=[
-                alt.Tooltip("weekLabel:N", title="Jour"),
-                alt.Tooltip("segment_display:N", title="Segment"),
-                alt.Tooltip("value:Q", title="Valeur", format=".2f"),
-                alt.Tooltip("planned:Q", title="Planifié", format=".2f"),
-                alt.Tooltip("actual:Q", title="Réalisé", format=".2f"),
-                alt.Tooltip("maxValue:Q", title="Max", format=".2f"),
-                alt.Tooltip("activity_names:N", title="Activités"),
-            ],
-        )
-        .properties(height=300, width=CHART_WIDTH)
+    day_chart = create_daily_bar_chart(
+        day_stack_df, metric_label, metric_cfg, color_scale, CHART_WIDTH
     )
     st.altair_chart(day_chart, use_container_width=False)
 else:
