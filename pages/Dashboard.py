@@ -5,7 +5,10 @@ from pathlib import Path
 import altair as alt
 import numpy as np
 import pandas as pd
+import scipy.stats as stats
 import streamlit as st
+from sklearn.cluster import KMeans
+from typing import List, Tuple, Optional
 
 from config import METRICS as CONFIG_METRICS
 from utils.config import load_config
@@ -14,6 +17,8 @@ from utils.styling import apply_theme
 from persistence.csv_storage import CsvStorage
 from persistence.repositories import AthletesRepo
 from services.analytics_service import AnalyticsService
+from services.speed_profile_service import SpeedProfileService
+from services.timeseries_service import TimeseriesService
 
 
 st.set_page_config(page_title="Running Manager - Dashboard", layout="wide")
@@ -27,6 +32,8 @@ set_locale("fr_FR")
 storage = CsvStorage(base_dir=Path(cfg.data_dir))
 ath_repo = AthletesRepo(storage)
 analytics = AnalyticsService(storage)
+speed_profile_service = SpeedProfileService(cfg)
+timeseries_service = TimeseriesService(cfg)
 
 
 def _select_athlete() -> str | None:
@@ -226,7 +233,7 @@ for metric_key in metric_definitions.keys():
     if metric_key not in available_metrics:
         available_metrics.append(metric_key)
 # Shared tabs for the two charts
-tab_charge, tab_speed = st.tabs(["Charge", "SpeedEq"])
+tab_charge, tab_speed, tab_hr_speed = st.tabs(["Charge", "SpeedEq", "FC vs Vitesse"])
 
 with tab_charge:
     st.subheader("Charge d'entraînement")
@@ -542,3 +549,357 @@ with tab_speed:
         .properties(height=360)
     )
     st.altair_chart(cloud_chart, use_container_width=True)
+
+# --- HR vs Speed Graph (Cluster-based) ---
+with tab_hr_speed:
+    st.subheader("Relation FC vs Vitesse")
+
+    @st.cache_data(ttl=3600)
+    def _load_hr_speed_data(athlete_id: str, start_date: pd.Timestamp, end_date: pd.Timestamp, categories: List[str], min_cluster_percent: float = 5.0) -> Tuple[pd.DataFrame, Optional[float], Optional[float], Optional[float], Optional[float]]:
+        """Load and preprocess HR vs Speed data for all activities in date range.
+        
+        Returns cluster centers with their standard deviations instead of all data points.
+        
+        Args:
+            min_cluster_percent: Minimum percentage of total points a cluster must contain to be included (default: 5.0%)
+        """
+        # Get activities in date range
+        acts_df = storage.read_csv("activities_metrics.csv")
+        if acts_df.empty:
+            return pd.DataFrame(), None, None, None, None
+
+        acts_df = acts_df[acts_df.get("athleteId") == athlete_id].copy()
+        acts_df["date"] = pd.to_datetime(acts_df.get("startDate"), errors="coerce").dt.normalize()
+        mask = (acts_df["date"] >= pd.Timestamp(start_date)) & (acts_df["date"] <= pd.Timestamp(end_date))
+        acts_df = acts_df[mask]
+
+        # Apply category filter
+        if categories:
+            acts_df["category"] = acts_df.get("category", pd.Series(dtype=str)).astype(str).str.upper()
+            acts_df = acts_df[acts_df["category"].isin([c.upper() for c in categories])]
+
+        # Get activities info to check for timeseries
+        activities_info = storage.read_csv("activities.csv")
+        if not activities_info.empty:
+            activities_info = activities_info[activities_info.get("athleteId") == athlete_id].copy()
+            activities_info["activityId"] = activities_info["activityId"].astype(str)
+            acts_df["activityId"] = acts_df["activityId"].astype(str)
+            acts_df = acts_df.merge(
+                activities_info[["activityId", "hasTimeseries"]],
+                on="activityId",
+                how="left",
+            )
+            # Filter to activities with timeseries
+            acts_df = acts_df[acts_df.get("hasTimeseries", pd.Series(dtype=bool)) == True]
+        else:
+            # If no activities info, check if timeseries file exists
+            acts_df = acts_df.copy()
+            acts_df["activityId"] = acts_df["activityId"].astype(str)
+            acts_df["hasTimeseries"] = acts_df["activityId"].apply(
+                lambda aid: (cfg.timeseries_dir / f"{aid}.csv").exists()
+            )
+            acts_df = acts_df[acts_df["hasTimeseries"] == True]
+
+        if acts_df.empty:
+            return pd.DataFrame(), None, None, None, None
+
+        # Collect all HR and Speed data
+        all_data = []
+
+        for _, row in acts_df.iterrows():
+            activity_id = str(row.get("activityId", ""))
+            if not activity_id:
+                continue
+
+            # Try to load precomputed metrics_ts first
+            metrics_ts = speed_profile_service.load_metrics_ts(activity_id)
+            if metrics_ts is None or metrics_ts.empty:
+                # Process timeseries if not precomputed
+                result = speed_profile_service.process_timeseries(activity_id, strategy="cluster")
+                if result is None:
+                    continue
+                # Save for future use
+                speed_profile_service.save_metrics_ts(activity_id, result)
+                # Extract data from result
+                if result.hr_shifted is not None and result.speed_smooth is not None:
+                    df_act = pd.DataFrame({
+                        "hr": result.hr_shifted.values,
+                        "speed": result.speed_smooth.values,
+                        "activityId": activity_id,
+                    })
+                    if result.clusters is not None and len(result.clusters) == len(df_act):
+                        df_act["cluster"] = result.clusters
+                    all_data.append(df_act)
+            else:
+                # Use precomputed data
+                if "hr_shifted" in metrics_ts.columns and "speed_smooth" in metrics_ts.columns:
+                    df_act = pd.DataFrame({
+                        "hr": metrics_ts["hr_shifted"].values,
+                        "speed": metrics_ts["speed_smooth"].values,
+                        "activityId": activity_id,
+                    })
+                    if "cluster" in metrics_ts.columns and len(metrics_ts["cluster"]) == len(df_act):
+                        df_act["cluster"] = metrics_ts["cluster"].values
+                    all_data.append(df_act)
+
+        if not all_data:
+            return pd.DataFrame(), None, None, None, None
+
+        # Compute cluster centers for each activity separately
+        n_clusters = cfg.n_cluster
+        cluster_centers_list = []
+        
+        for df_act in all_data:
+            activity_id = df_act["activityId"].iloc[0]
+            df_act = df_act.dropna(subset=["hr", "speed"])
+            
+            if df_act.empty:
+                continue
+            
+            total_points = len(df_act)
+            min_points_per_cluster = max(1, int(total_points * min_cluster_percent / 100.0))
+            min_allowed_points = max(min_points_per_cluster, 20)  # At least 20 points or percentage threshold
+            
+            # Prepare data for clustering (use individual activity's data)
+            X = df_act[["hr", "speed"]].values
+            
+            if len(X) < n_clusters:
+                continue
+            
+            # Perform KMeans clustering for this activity
+            kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
+            clusters = kmeans.fit_predict(X)
+            df_act["cluster"] = clusters
+            
+            # Compute cluster centers and standard deviations for this activity
+            # Filter out clusters with less than min_cluster_percent of total points or less than 20 points
+            for cluster_id in range(n_clusters):
+                cluster_data = df_act[df_act["cluster"] == cluster_id]
+                cluster_count = len(cluster_data)
+                
+                # Skip clusters that are too small (outliers)
+                if cluster_count < min_allowed_points:
+                    continue
+                
+                if cluster_count > 0:
+                    hr_mean = cluster_data["hr"].mean()
+                    speed_mean = cluster_data["speed"].mean()
+                    
+                    # Skip clusters with mean speed less than 6 km/h
+                    if speed_mean < 6:
+                        continue
+                    
+                    hr_std = cluster_data["hr"].std()
+                    speed_std = cluster_data["speed"].std()
+                    
+                    cluster_centers_list.append({
+                        "hr": hr_mean,
+                        "speed": speed_mean,
+                        "hr_std": hr_std if not pd.isna(hr_std) else 0.0,
+                        "speed_std": speed_std if not pd.isna(speed_std) else 0.0,
+                        "cluster": cluster_id,
+                        "activityId": activity_id,
+                        "count": cluster_count,
+                    })
+        
+        if not cluster_centers_list:
+            return pd.DataFrame(), None, None, None, None
+        
+        centers_df = pd.DataFrame(cluster_centers_list)
+        
+        # Load activity names and dates from activities.csv
+        activities_info = storage.read_csv("activities.csv")
+        if not activities_info.empty:
+            activities_info = activities_info[activities_info.get("athleteId") == athlete_id].copy()
+            activities_info["activityId"] = activities_info["activityId"].astype(str)
+            centers_df["activityId"] = centers_df["activityId"].astype(str)
+            
+            # Merge name and startTime
+            merge_cols = ["activityId"]
+            if "name" in activities_info.columns:
+                merge_cols.append("name")
+            if "startTime" in activities_info.columns:
+                merge_cols.append("startTime")
+            
+            centers_df = centers_df.merge(
+                activities_info[merge_cols],
+                on="activityId",
+                how="left",
+            )
+            
+            # Format date for display
+            if "startTime" in centers_df.columns:
+                centers_df["activity_date"] = pd.to_datetime(centers_df["startTime"], errors="coerce")
+                centers_df["activity_date_str"] = centers_df["activity_date"].dt.strftime("%Y-%m-%d")
+            else:
+                centers_df["activity_date_str"] = ""
+            
+            # Ensure name exists
+            if "name" not in centers_df.columns:
+                centers_df["name"] = ""
+            centers_df["name"] = centers_df["name"].fillna("").astype(str)
+            
+            # Ensure date_str exists
+            if "activity_date_str" not in centers_df.columns:
+                centers_df["activity_date_str"] = ""
+            centers_df["activity_date_str"] = centers_df["activity_date_str"].fillna("").astype(str)
+        else:
+            # If no activities info, create empty columns
+            centers_df["name"] = ""
+            centers_df["activity_date_str"] = ""
+        
+        # Compute weighted linear regression on all cluster centers
+        # Using speed as x (independent) and hr as y (dependent)
+        # Weights are inversely proportional to the standard deviation
+        x_values = centers_df["speed"].values
+        y_values = centers_df["hr"].values
+        
+        # Compute weights: inverse of speed_std (uncertainty in the independent variable)
+        # Add small epsilon to avoid division by zero
+        epsilon = 1e-6
+        speed_std_values = centers_df["speed_std"].values
+        
+        # Weight = 1 / (speed_std + epsilon) - clusters with larger std have less weight
+        weights = 1.0 / (speed_std_values + epsilon)
+
+        if len(x_values) < 2:
+            return centers_df, None, None, None, None
+
+        # Weighted least squares: y = slope * x + intercept
+        # Build design matrix for [x, 1]
+        A = np.vstack([x_values, np.ones(len(x_values))]).T
+        
+        # Apply weights
+        W = np.diag(weights)
+        A_weighted = np.sqrt(W) @ A
+        y_weighted = np.sqrt(W) @ y_values
+        
+        # Solve weighted least squares: (A^T * W * A) * params = A^T * W * y
+        params, residuals, rank, s = np.linalg.lstsq(A_weighted, y_weighted, rcond=None)
+        slope, intercept = params
+        
+        # Calculate R-squared for weighted regression
+        y_pred = slope * x_values + intercept
+        ss_res = np.sum(weights * (y_values - y_pred)**2)
+        ss_tot = np.sum(weights * (y_values - np.average(y_values, weights=weights))**2)
+        r_squared = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0.0
+        
+        # Calculate weighted standard error
+        if len(x_values) > 2:
+            dof = len(x_values) - 2  # degrees of freedom
+            mse = ss_res / dof if dof > 0 else 0.0
+            std_err = np.sqrt(mse)
+        else:
+            std_err = 0.0
+
+        return centers_df, slope, intercept, r_squared, std_err
+
+    # Load data
+    hr_speed_df, slope, intercept, r_squared, std_err = _load_hr_speed_data(
+        athlete_id, start_date, end_date, selected_cats
+    )
+
+    if hr_speed_df.empty:
+        st.info("Aucune donnée de timeseries disponible pour la période sélectionnée.")
+    else:
+        # Create scatter plot of cluster centers with error bars
+        chart_df = hr_speed_df.copy()
+
+        # Prepare data for error bars (uncertainty based on std)
+        chart_df["hr_upper"] = chart_df["hr"] + chart_df["hr_std"]
+        chart_df["hr_lower"] = chart_df["hr"] - chart_df["hr_std"]
+        chart_df["speed_upper"] = chart_df["speed"] + chart_df["speed_std"]
+        chart_df["speed_lower"] = chart_df["speed"] - chart_df["speed_std"]
+
+        # Color by cluster
+        color_encoding = alt.Color("cluster:O", scale=alt.Scale(scheme="viridis"), title="Cluster")
+
+        # Plot cluster centers (HR on y-axis, Speed on x-axis)
+        centers = (
+            alt.Chart(chart_df)
+            .mark_circle(size=100, opacity=0.8, stroke="black", strokeWidth=2)
+            .encode(
+                x=alt.X("speed:Q", title="Vitesse (km/h)", scale=alt.Scale(domain=[4, 24])),
+                y=alt.Y("hr:Q", title="Fréquence cardiaque (bpm)", scale=alt.Scale(domain=[80, 210])),
+                color=color_encoding,
+                tooltip=[
+                    alt.Tooltip("hr:Q", title="FC (bpm)", format=".1f"),
+                    alt.Tooltip("speed:Q", title="Vitesse (km/h)", format=".1f"),
+                    alt.Tooltip("hr_std:Q", title="FC std (bpm)", format=".1f"),
+                    alt.Tooltip("speed_std:Q", title="Vitesse std (km/h)", format=".1f"),
+                    alt.Tooltip("cluster:O", title="Cluster"),
+                    alt.Tooltip("name:N", title="Activité"),
+                    alt.Tooltip("activity_date_str:N", title="Date"),
+                    alt.Tooltip("count:Q", title="Nombre de points"),
+                ],
+            )
+        )
+
+        # Add horizontal error bars (uncertainty in Speed, now on x-axis)
+        speed_error_bars = (
+            alt.Chart(chart_df)
+            .mark_rule(strokeWidth=2, opacity=0.6)
+            .encode(
+                x=alt.X("speed_lower:Q", title="Vitesse (km/h)", scale=alt.Scale(domain=[4, 24])),
+                x2="speed_upper:Q",
+                y=alt.Y("hr:Q", title="Fréquence cardiaque (bpm)", scale=alt.Scale(domain=[80, 210])),
+                color=color_encoding,
+            )
+        )
+
+        # Add vertical error bars (uncertainty in HR, now on y-axis)
+        hr_error_bars = (
+            alt.Chart(chart_df)
+            .mark_rule(strokeWidth=2, opacity=0.6)
+            .encode(
+                x=alt.X("speed:Q", title="Vitesse (km/h)", scale=alt.Scale(domain=[4, 24])),
+                y=alt.Y("hr_lower:Q", title="Fréquence cardiaque (bpm)", scale=alt.Scale(domain=[80, 210])),
+                y2="hr_upper:Q",
+                color=color_encoding,
+            )
+        )
+
+        # Add regression line if available
+        if slope is not None and intercept is not None:
+            # Regression: hr = slope * speed + intercept
+            speed_range = [4, 24]  # Use fixed range
+            regression_data = pd.DataFrame({
+                "speed": speed_range,
+                "hr": [slope * speed + intercept for speed in speed_range],
+            })
+
+            regression_line = (
+                alt.Chart(regression_data)
+                .mark_line(color="red", strokeWidth=2)
+                .encode(
+                    x=alt.X("speed:Q", scale=alt.Scale(domain=[4, 24])),
+                    y=alt.Y("hr:Q", scale=alt.Scale(domain=[80, 210]))
+                )
+            )
+
+            # Add confidence interval
+            if std_err is not None:
+                regression_data["upper"] = regression_data["hr"] + std_err
+                regression_data["lower"] = regression_data["hr"] - std_err
+
+                confidence_band = (
+                    alt.Chart(regression_data)
+                    .mark_area(opacity=0.2, color="red")
+                    .encode(
+                        x=alt.X("speed:Q", scale=alt.Scale(domain=[4, 24])),
+                        y=alt.Y("upper:Q", scale=alt.Scale(domain=[80, 210])),
+                        y2="lower:Q",
+                    )
+                )
+
+                chart = alt.layer(confidence_band, speed_error_bars, hr_error_bars, centers, regression_line)
+            else:
+                chart = alt.layer(speed_error_bars, hr_error_bars, centers, regression_line)
+
+            formula_text = f"FC = {slope:.2f} × Vitesse + {intercept:.2f}\nR² = {r_squared:.3f}"
+            st.caption(formula_text)
+        else:
+            chart = alt.layer(speed_error_bars, hr_error_bars, centers)
+
+        chart = chart.properties(height=500, width=CHART_WIDTH)
+        st.altair_chart(chart, use_container_width=True)

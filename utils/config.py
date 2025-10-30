@@ -29,6 +29,8 @@ class Config:
     raw_strava_dir: Path
     laps_dir: Path
     mapbox_token: Optional[str]
+    metrics_ts_dir: Path
+    n_cluster: int
 
 
 def _ensure_dir(path: Path) -> None:
@@ -55,11 +57,20 @@ def load_config() -> Config:
     timeseries_dir = data_dir / "timeseries"
     raw_strava_dir = data_dir / "raw" / "strava"
     laps_dir = data_dir / "laps"
+    metrics_ts_dir = data_dir / "metrics_ts"
+
+    # Load n_cluster with default of 5
+    n_cluster_str = os.getenv("N_CLUSTER", "5")
+    try:
+        n_cluster = int(n_cluster_str)
+    except (ValueError, TypeError):
+        n_cluster = 5
 
     _ensure_dir(data_dir)
     _ensure_dir(timeseries_dir)
     _ensure_dir(raw_strava_dir)
     _ensure_dir(laps_dir)
+    _ensure_dir(metrics_ts_dir)
 
     return Config(
         strava_client_id=strava_client_id,
@@ -71,6 +82,8 @@ def load_config() -> Config:
         raw_strava_dir=raw_strava_dir,
         laps_dir=laps_dir,
         mapbox_token=mapbox_token,
+        metrics_ts_dir=metrics_ts_dir,
+        n_cluster=n_cluster,
     )
 
 
