@@ -1,19 +1,16 @@
-import os
+"""Copyright (C) 2025 Pierre Marrec
+SPDX-License-Identifier: GPL-3.0-or-later
+"""
 
 import streamlit as st
-from utils.config import load_config, redact
-from utils.formatting import set_locale, fmt_km, fmt_speed_kmh
-from utils.styling import apply_theme
-from utils.auth_state import init_session_state
-from dotenv import load_dotenv
 from streamlit.logger import get_logger
 
+from utils.auth_state import init_session_state
+from utils.config import load_config, redact
+from utils.formatting import set_locale
+from utils.styling import apply_theme
+
 logger = get_logger(__name__)
-
-
-# def _ensure_placeholders():
-#     # Demonstrate formatting without performing heavy imports
-#     st.write(fmt_km(12.3), "|", fmt_speed_kmh(9.4))
 
 
 def main():

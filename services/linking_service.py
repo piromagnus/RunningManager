@@ -1,3 +1,7 @@
+"""Copyright (C) 2025 Pierre Marrec
+SPDX-License-Identifier: GPL-3.0-or-later
+"""
+
 from __future__ import annotations
 
 import datetime as dt
@@ -15,36 +19,9 @@ from persistence.repositories import (
     PlannedSessionsRepo,
 )
 from services.metrics_service import MetricsComputationService
+from utils.coercion import safe_float_optional, safe_int_optional
 from utils.ids import new_id
-
-
-def _coerce_float(value: object) -> Optional[float]:
-    try:
-        if value in (None, "", "NaN"):
-            return None
-        return float(value)
-    except Exception:
-        return None
-
-
-def _coerce_int(value: object) -> Optional[int]:
-    try:
-        if value in (None, "", "NaN"):
-            return None
-        return int(float(value))
-    except Exception:
-        return None
-
-
-def _ensure_datetime(value: object) -> Optional[dt.datetime]:
-    if value in (None, "", "NaT"):
-        return None
-    try:
-        if isinstance(value, dt.datetime):
-            return value
-        return pd.to_datetime(value, utc=True)
-    except Exception:
-        return None
+from utils.time import ensure_datetime
 
 
 @dataclass
@@ -202,9 +179,9 @@ class LinkingService:
         if planned.empty:
             return []
         suggestions: List[Dict[str, object]] = []
-        activity_date = _ensure_datetime(activity_row.get("startTime"))
-        activity_distance = _coerce_float(activity_row.get("distanceKm"))
-        activity_duration = _coerce_int(
+        activity_date = ensure_datetime(activity_row.get("startTime"))
+        activity_distance = safe_float_optional(activity_row.get("distanceKm"))
+        activity_duration = safe_int_optional(
             activity_row.get("movingSec") or activity_row.get("elapsedSec")
         )
 
@@ -239,8 +216,8 @@ class LinkingService:
         planned_row: pd.Series,
         window_days: int,
     ) -> float:
-        planned_distance = _coerce_float(planned_row.get("plannedDistanceKm"))
-        planned_duration = _coerce_int(planned_row.get("plannedDurationSec"))
+        planned_distance = safe_float_optional(planned_row.get("plannedDistanceKm"))
+        planned_duration = safe_int_optional(planned_row.get("plannedDurationSec"))
         planned_date = None
         if planned_row.get("date"):
             planned_date = pd.to_datetime(planned_row.get("date"), utc=True)
@@ -275,14 +252,14 @@ class LinkingService:
         if not planned or str(planned.get("athleteId")) != str(athlete_id):
             return []
 
-        planned_date = _ensure_datetime(planned.get("date"))
+        planned_date = ensure_datetime(planned.get("date"))
         activities = self.activities.list(athleteId=athlete_id)
         if activities.empty:
             return []
 
         activities = activities.copy()
         activities["activityId"] = activities["activityId"].astype(str)
-        activities["startTime"] = activities["startTime"].map(_ensure_datetime)
+        activities["startTime"] = activities["startTime"].map(ensure_datetime)
         activities = activities.dropna(subset=["startTime"])
 
         if planned_date and window_days > 0:
@@ -305,8 +282,8 @@ class LinkingService:
         candidates: List[LinkCandidate] = []
         for _, row in activities.iterrows():
             score = self._compute_match_score(
-                _coerce_float(row.get("distanceKm")),
-                _coerce_int(row.get("movingSec") or row.get("elapsedSec")),
+                safe_float_optional(row.get("distanceKm")),
+                safe_int_optional(row.get("movingSec") or row.get("elapsedSec")),
                 row.get("startTime"),
                 planned_series,
                 window_days,
@@ -317,9 +294,9 @@ class LinkingService:
                 LinkCandidate(
                     activity_id=str(row["activityId"]),
                     start_time=row.get("startTime"),
-                    distance_km=_coerce_float(row.get("distanceKm")),
-                    moving_sec=_coerce_int(row.get("movingSec")),
-                    ascent_m=_coerce_float(row.get("ascentM")),
+                    distance_km=safe_float_optional(row.get("distanceKm")),
+                    moving_sec=safe_int_optional(row.get("movingSec")),
+                    ascent_m=safe_float_optional(row.get("ascentM")),
                     match_score=score,
                 )
             )
@@ -350,9 +327,9 @@ class LinkingService:
             raise ValueError("Planned session not found")
 
         score = self._compute_match_score(
-            _coerce_float(activity_row.get("distanceKm")),
-            _coerce_int(activity_row.get("movingSec") or activity_row.get("elapsedSec")),
-            _ensure_datetime(activity_row.get("startTime")),
+            safe_float_optional(activity_row.get("distanceKm")),
+            safe_int_optional(activity_row.get("movingSec") or activity_row.get("elapsedSec")),
+            ensure_datetime(activity_row.get("startTime")),
             pd.Series(planned),
             window_days,
         )

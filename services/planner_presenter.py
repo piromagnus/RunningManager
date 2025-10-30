@@ -1,4 +1,8 @@
-"""Pure helpers to build Planner view models for unit testing."""
+"""Copyright (C) 2025 Pierre Marrec
+SPDX-License-Identifier: GPL-3.0-or-later
+
+Pure helpers to build Planner view models for unit testing.
+"""
 
 from __future__ import annotations
 
@@ -7,6 +11,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional
 
 from services.interval_utils import describe_action, format_duration_label, normalize_steps
+from utils.coercion import safe_float_optional, safe_int_optional
 from utils.formatting import fmt_decimal, fmt_m
 
 
@@ -24,24 +29,6 @@ class CardSection:
     lines: List[str]
 
 
-def _coerce_int(value: object) -> Optional[int]:
-    try:
-        if value in (None, ""):
-            return None
-        return int(value)
-    except Exception:
-        return None
-
-
-def _coerce_float(value: object) -> Optional[float]:
-    try:
-        if value in (None, ""):
-            return None
-        return float(value)
-    except Exception:
-        return None
-
-
 def build_card_view_model(
     session: Dict[str, object],
     *,
@@ -50,14 +37,14 @@ def build_card_view_model(
 ) -> Dict[str, object]:
     session_id = str(session.get("plannedSessionId") or "")
     session_type = str(session.get("type") or "").upper()
-    duration = _coerce_int(session.get("plannedDurationSec")) or 0
+    duration = safe_int_optional(session.get("plannedDurationSec")) or 0
     duration_label = format_duration_label(duration)
     header = session_type.replace("_", " ").title()
     if duration:
         header = f"{header} • {duration_label}"
 
     meta: List[str] = []
-    planned_distance = _coerce_float(session.get("plannedDistanceKm"))
+    planned_distance = safe_float_optional(session.get("plannedDistanceKm"))
     if planned_distance is not None:
         meta.append(f"{fmt_decimal(planned_distance, 1)} km")
     elif estimated_distance_km is not None:
@@ -65,7 +52,7 @@ def build_card_view_model(
     if distance_eq_km is not None:
         meta.append(f"DEQ {fmt_decimal(distance_eq_km, 1)} km")
 
-    ascent = _coerce_int(session.get("plannedAscentM"))
+    ascent = safe_int_optional(session.get("plannedAscentM"))
     if ascent:
         meta.append(fmt_m(ascent))
 
@@ -102,7 +89,7 @@ def build_card_view_model(
                     )
                 )
             for index, loop in enumerate(normalised["loops"], start=1):
-                repeats = max(1, _coerce_int(loop.get("repeats")) or 1)
+                repeats = max(1, safe_int_optional(loop.get("repeats")) or 1)
                 lines = [describe_action(action) for action in loop.get("actions") or []]
                 sections.append(CardSection(f"Boucle {index} ×{repeats}", lines))
             between = normalised.get("betweenBlock")

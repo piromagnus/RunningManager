@@ -1,3 +1,7 @@
+"""Copyright (C) 2025 Pierre Marrec
+SPDX-License-Identifier: GPL-3.0-or-later
+"""
+
 from utils.formatting import set_locale, fmt_decimal, fmt_km, fmt_m, fmt_speed_kmh, to_str_storage
 
 

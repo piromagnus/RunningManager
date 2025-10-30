@@ -1,4 +1,8 @@
-"""Service managing single-session templates for the planner."""
+"""Copyright (C) 2025 Pierre Marrec
+SPDX-License-Identifier: GPL-3.0-or-later
+
+Service managing single-session templates for the planner.
+"""
 
 from __future__ import annotations
 

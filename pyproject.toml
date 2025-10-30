@@ -34,7 +34,7 @@ dependencies = [
 # uses pyproject dependencies; uv will resolve into a venv; freeze to lock
 
 [tool.ruff]
-line-length = 100
+line-length = 120
 select = ["E","F","I"]
 
 [tool.pytest.ini_options]

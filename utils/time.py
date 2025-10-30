@@ -1,8 +1,15 @@
-"""Time helpers for ISO week boundaries and local date."""
+"""Copyright (C) 2025 Pierre Marrec
+SPDX-License-Identifier: GPL-3.0-or-later
+
+Time helpers for ISO week boundaries and local date.
+"""
 
 from __future__ import annotations
 
 import datetime as dt
+from typing import Optional
+
+import pandas as pd
 
 
 def today_local() -> dt.date:
@@ -20,3 +27,61 @@ def iso_week_end(d: dt.date) -> dt.datetime:
     start = iso_week_start(d)
     end = start + dt.timedelta(days=6, hours=23, minutes=59, seconds=59, microseconds=999999)
     return end
+
+def to_date(value: object) -> Optional[dt.date]:
+    if value in (None, "", "NaT"):
+        return None
+    try:
+        if isinstance(value, dt.date) and not isinstance(value, dt.datetime):
+            return value
+        parsed = pd.to_datetime(value)
+        if pd.isna(parsed):
+            return None
+        return parsed.date()
+    except Exception:
+        return None
+
+
+def parse_timestamp(value: object) -> Optional[pd.Timestamp]:
+    """Parse a timestamp value to pandas Timestamp.
+
+    Args:
+        value: Timestamp value (string, datetime, date, None, etc.)
+
+    Returns:
+        Parsed pandas Timestamp or None if parsing fails
+    """
+    if value in (None, "", "NaT"):
+        return None
+    try:
+        if isinstance(value, pd.Timestamp):
+            return value
+        if isinstance(value, dt.datetime):
+            return pd.Timestamp(value)
+        if isinstance(value, dt.date):
+            return pd.Timestamp(dt.datetime.combine(value, dt.time.min))
+        parsed = pd.to_datetime(value)
+        if pd.isna(parsed):
+            return None
+        return parsed
+    except Exception:
+        return None
+
+
+def ensure_datetime(value: object) -> Optional[dt.datetime]:
+    """Ensure a value is a datetime, converting if necessary.
+
+    Args:
+        value: Value to convert (datetime, date, string, etc.)
+
+    Returns:
+        Datetime object or None if conversion fails
+    """
+    parsed = parse_timestamp(value)
+    if parsed is None:
+        return None
+    if isinstance(parsed, pd.Timestamp):
+        return parsed.to_pydatetime()
+    if isinstance(parsed, dt.datetime):
+        return parsed
+    return None

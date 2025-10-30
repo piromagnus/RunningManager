@@ -1,4 +1,6 @@
-"""
+"""Copyright (C) 2025 Pierre Marrec
+SPDX-License-Identifier: GPL-3.0-or-later
+
 CSV storage abstraction using pandas with basic file locking.
 
 Notes:
