@@ -45,10 +45,12 @@ class SpeedProfileResult:
 class SpeedProfileService:
     """Service for analyzing speed profiles and HR vs Speed relationships."""
 
-    def __init__(self, config: Config):
-        self.config = config
-        self.metrics_ts_dir = config.metrics_ts_dir
-        self.metrics_ts_dir.mkdir(parents=True, exist_ok=True)
+    def __init__(self, config: Optional[Config] = None):
+
+        if config is not None:
+            self.config = config
+            self.metrics_ts_dir = config.metrics_ts_dir
+            self.metrics_ts_dir.mkdir(parents=True, exist_ok=True)
 
     # ------------------------------------------------------------------
     # Preprocessing Functions
@@ -113,7 +115,7 @@ class SpeedProfileService:
         return df
 
     @staticmethod
-    def elevation(df: pd.DataFrame, elevation_col: str = "elevationM") -> pd.DataFrame:
+    def elevation(df: pd.DataFrame, elevation_col: str = "elevationM_ma_5") -> pd.DataFrame:
         """Compute the elevation difference of the dataframe based on the elevation column."""
         df = df.copy()
         df["elevation_difference"] = df[elevation_col].diff().fillna(0)
@@ -126,7 +128,7 @@ class SpeedProfileService:
     def grade(df: pd.DataFrame, distance_col: str = "distance", elevation_col: str = "elevation_difference") -> pd.DataFrame:
         """Compute the grade of the dataframe based on the distance and elevation columns."""
         df = df.copy()
-        df["grade"] = df[elevation_col] / df[distance_col] * 1000
+        df["grade"] = df[elevation_col] / (df[distance_col] * 1000)
         df["grade"] = df["grade"].replace([np.inf, -np.inf], 0)
         df["grade"] = df["grade"].fillna(0)
         return df
@@ -150,7 +152,7 @@ class SpeedProfileService:
         # Apply moving average to lat/lon
         df = self.moving_average(df, window_size=5, col="lat")
         df = self.moving_average(df, window_size=5, col="lon")
-
+        df = self.moving_average(df, window_size=5, col="elevationM")
         # Compute distance
         df = self.distance(df, lat_col="lat_ma_5", lon_col="lon_ma_5")
 
@@ -164,7 +166,7 @@ class SpeedProfileService:
         df["distance"] = df["distance"].interpolate(method="linear")
 
         # Compute elevation
-        df = self.elevation(df)
+        df = self.elevation(df, elevation_col="elevationM_ma_5")
 
         # Convert timestamp and compute duration
         df = self.time_from_timestamp(df)
@@ -174,7 +176,7 @@ class SpeedProfileService:
         df = self.cumulated_distance(df)
 
         # Apply moving average to distance
-        df = self.moving_average(df, window_size=30, col="distance")
+        df = self.moving_average(df, window_size=10, col="distance")
 
         # Compute speed
         df = self.speed(df, distance_col="distance", time_col="duration_seconds")
@@ -183,7 +185,7 @@ class SpeedProfileService:
         df = df[df["speed_km_h"] < 40].reset_index(drop=True)
 
         # Compute grade
-        df = self.grade(df, distance_col="distance_ma_30", elevation_col="elevation_difference")
+        df = self.grade(df, distance_col="distance_ma_10", elevation_col="elevation_difference")
 
         return df
 
