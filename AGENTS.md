@@ -95,7 +95,7 @@ Run the app: `uv run streamlit run app.py`
 - Garmin: use `garminconnect` for ingest in `services/garmin_import_service.py` per PRD; ensure tokens are encrypted if persisted
 - TCX export: only interval workouts (MVP); step end mode `auto|lap` from planned session
 
-## Task Workflows (Taskmaster optional)
+## Task Workflows (Taskmaster)
 
 - Use `.taskmaster/` if managing tasks; start with `parse_prd` for initial tasks; expand and track subtasks per dev workflow
 - Use mcp server to get the task list, update it and eventually expand tasks but never modify the file inside '.taskmaster/'
@@ -109,6 +109,8 @@ Run the app: `uv run streamlit run app.py`
 - For secrets or tokens, enforce redaction and encryption rules
 - If adding CSV columns, update headers and migration logic
 - Update the task list in the mcp server
+- Explain what you did directly in the chat.
+- Use a markdown file only when the user asks for it.
 
 ## Common Pitfalls
 

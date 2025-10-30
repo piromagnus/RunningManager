@@ -1,2 +1,2 @@
 coachId,units,distanceEqFactor,stravaSyncDays,analyticsActivityTypes,bikeEqDistance,bikeEqAscent,bikeEqDescent
-coach-1,metric,0.01,500,"[""RUN"", ""TRAIL_RUN"", ""HIKE""]",0.3,0.02,0.0
+coach-1,metric,0.01,550,"[""RUN"", ""TRAIL_RUN"", ""HIKE""]",0.3,0.02,0.0
