@@ -6,6 +6,18 @@
 
 **Running Manager** is an open-source Streamlit application for managing trail running coaching. It provides coaches and athletes with tools to plan training sessions, track activities from Strava or Garmin, analyze performance metrics, and manage running goals.
 
+## 🖼️ Visualization
+
+Key screenshots from the application to give a quick visual overview:
+
+![Session Summary](docs/images/session_summary.png)
+
+![Training Load](docs/images/training_load.png)
+
+![Speed Equivalent Over Time](docs/images/speedeq_time.png)
+
+![Weekly Analytics](docs/images/weeks_analytics.png)
+
 ## ✨ Features
 
 - **Weekly Planner**: Create and manage training sessions with flexible session types (fundamental endurance, long runs, intervals, races)
