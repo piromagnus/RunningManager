@@ -1,4 +1,8 @@
-"""Utilities for working with interval session step structures."""
+"""Copyright (C) 2025 Pierre Marrec
+SPDX-License-Identifier: GPL-3.0-or-later
+
+Utilities for working with interval session step structures.
+"""
 
 from __future__ import annotations
 

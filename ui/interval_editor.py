@@ -1,4 +1,8 @@
-"""Shared Streamlit widgets for editing interval loop structures."""
+"""Copyright (C) 2025 Pierre Marrec
+SPDX-License-Identifier: GPL-3.0-or-later
+
+Shared Streamlit widgets for editing interval loop structures.
+"""
 
 from __future__ import annotations
 

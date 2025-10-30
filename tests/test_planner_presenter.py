@@ -1,3 +1,7 @@
+"""Copyright (C) 2025 Pierre Marrec
+SPDX-License-Identifier: GPL-3.0-or-later
+"""
+
 import json
 
 from services.planner_presenter import build_card_view_model, build_empty_state_placeholder

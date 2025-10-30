@@ -1,3 +1,7 @@
+"""Copyright (C) 2025 Pierre Marrec
+SPDX-License-Identifier: GPL-3.0-or-later
+"""
+
 import datetime as dt
 from pathlib import Path
 
@@ -7,11 +11,12 @@ from persistence.csv_storage import CsvStorage
 from persistence.repositories import AthletesRepo, SettingsRepo, TokensRepo
 from services.metrics_service import MetricsComputationService
 from services.strava_service import StravaService
+from utils.coercion import coerce_float, coerce_int
 from utils.config import load_config
 from utils.formatting import set_locale
-from utils.styling import apply_theme
 from utils.ids import new_id
-
+from utils.styling import apply_theme
+from utils.ui_helpers import trigger_rerun
 
 st.set_page_config(page_title="Running Manager - Settings")
 apply_theme()
@@ -24,24 +29,6 @@ settings_repo = SettingsRepo(storage)
 tokens_repo = TokensRepo(storage)
 athletes_repo = AthletesRepo(storage)
 state_file = Path(cfg.data_dir) / ".strava_state"
-
-
-def _coerce_float(value: object, default: float) -> float:
-    try:
-        if value in (None, ""):
-            return default
-        return float(value)
-    except Exception:
-        return default
-
-
-def _coerce_int(value: object, default: int) -> int:
-    try:
-        if value in (None, ""):
-            return default
-        return int(float(value))
-    except Exception:
-        return default
 
 
 def _first_athlete_id() -> str | None:
@@ -62,12 +49,6 @@ def _strava_missing_config() -> list[str]:
     if not cfg.encryption_key:
         missing.append("ENCRYPTION_KEY")
     return missing
-
-
-def _trigger_rerun() -> None:
-    rerun = getattr(st, "experimental_rerun", None) or getattr(st, "rerun", None)
-    if rerun:
-        rerun()
 
 
 def _load_state_file() -> str | None:
@@ -106,11 +87,11 @@ athlete_id = _first_athlete_id()
 metrics_service = MetricsComputationService(storage)
 
 existing_settings = settings_repo.get("coach-1") or {}
-distance_eq_default = _coerce_float(existing_settings.get("distanceEqFactor"), 0.01)
-strava_days_default = _coerce_int(existing_settings.get("stravaSyncDays"), 14)
-bike_eq_dist_default = _coerce_float(existing_settings.get("bikeEqDistance"), 0.3)
-bike_eq_ascent_default = _coerce_float(existing_settings.get("bikeEqAscent"), 0.02)
-bike_eq_descent_default = _coerce_float(existing_settings.get("bikeEqDescent"), 0.0)
+distance_eq_default = coerce_float(existing_settings.get("distanceEqFactor"), 0.01)
+strava_days_default = coerce_int(existing_settings.get("stravaSyncDays"), 14)
+bike_eq_dist_default = coerce_float(existing_settings.get("bikeEqDistance"), 0.3)
+bike_eq_ascent_default = coerce_float(existing_settings.get("bikeEqAscent"), 0.02)
+bike_eq_descent_default = coerce_float(existing_settings.get("bikeEqDescent"), 0.0)
 
 
 st.subheader("Coach Settings")
@@ -154,7 +135,7 @@ strava_sync_days = st.number_input(
     min_value=1,
     value=int(strava_days_default),
     step=1,
-    help="Nombre de jours remontés lors d'une synchronisation manuelle Strava. Aucun plafond n'est imposé.",
+    help="Nombre de jours remontés lors d'une synchronisation manuelle Strava.",
 )
 if int(strava_sync_days) > 31:
     st.warning(
@@ -203,7 +184,7 @@ if strava_service and athlete_id:
                 strava_service.exchange_code(athlete_id, code)
                 st.session_state["strava_flash"] = (
                     "success",
-                    "Compte Strava connecté avec succès. Vous pouvez lancer une synchronisation manuelle.",
+                    "Compte Strava connecté avec succès. Vous pouvez lancer une synchronisation",
                 )
                 st.session_state["strava_state"] = new_id()
                 _save_state_file(st.session_state["strava_state"])
@@ -226,7 +207,7 @@ if strava_service and athlete_id:
                 "Requête Strava invalide (state différent). Merci de réessayer la connexion.",
             )
         st.experimental_set_query_params()
-        _trigger_rerun()
+        trigger_rerun()
     elif "error" in params:
         description = params.get("error_description", params.get("message", [""]))[0]
         st.session_state["strava_flash"] = (
@@ -234,7 +215,7 @@ if strava_service and athlete_id:
             f"Strava a refusé l'autorisation : {description or params['error'][0]}",
         )
         st.experimental_set_query_params()
-        _trigger_rerun()
+        trigger_rerun()
 
 flash = st.session_state.pop("strava_flash", None)
 
@@ -283,10 +264,10 @@ else:
         st.success("Compte Strava connecté.")
         if expires_label:
             st.caption(f"Expiration du token : {expires_label}")
-        sync_days = _coerce_int(existing_settings.get("stravaSyncDays"), int(strava_sync_days))
+        sync_days = coerce_int(existing_settings.get("stravaSyncDays"), int(strava_sync_days))
         if int(sync_days) > 31:
             st.warning(
-                "Fenêtre > 31 jours: attention aux limites de l'API Strava et au temps de traitement."
+                "Fenêtre > 31 jours: attention aux limites de l'API Strava."
             )
         if st.button(f"Synchroniser les {sync_days} derniers jours", type="primary"):
             try:
@@ -357,15 +338,17 @@ else:
                         if total > 0:
                             progress = current / total
                             progress_bar.progress(progress)
-                            status_text.text(f"Traitement des métriques timeseries: {current}/{total} - {activity_name}")
+                            status_text.text(f"Traitement des métriques timeseries:"
+                                f"{current}/{total} - {activity_name}")
                         else:
                             status_text.text("Préparation de la reconstruction...")
                     
-                    rebuilt = strava_service.rebuild_from_cache(athlete_id, progress_callback=update_progress)
+                    rebuilt = strava_service.rebuild_from_cache(athlete_id,
+                        progress_callback=update_progress)
                     
                     if total_activities[0] > 0:
                         progress_bar.progress(1.0)
-                        status_text.text(f"Terminé ! {total_activities[0]} activité(s) avec timeseries traitées.")
+                        status_text.text(f"Terminé ! {total_activities[0]} activité(s) traitées.")
                     
                     st.write(f"✓ {len(rebuilt)} activité(s) recréée(s) depuis le cache Strava.")
                 
@@ -422,7 +405,8 @@ else:
             total = int(last_sync.get("created_rows_count", dl + fc))
             days = int(last_sync.get("days", sync_days))
             st.info(
-                f"{dl} téléchargée(s), {fc} depuis cache · fenêtre: {days}j · total lignes créées: {total}"
+                f"{dl} téléchargée(s), {fc} depuis cache · fenêtre: {days}j"
+                f"· total lignes créées: {total}."
             )
             # Show a concise list of IDs for quick inspection (trim if long)
             max_ids = 6
@@ -440,7 +424,7 @@ else:
         st.warning("Aucun compte Strava connecté.")
         _render_link("Connecter Strava", auth_url)
         st.caption(
-            "Après l'autorisation Strava, vous reviendrez sur cette page pour finaliser l'enregistrement du token."
+            "Après l'autorisation Strava, vous reviendrez sur cette page"
         )
 
 st.markdown("### Garmin")

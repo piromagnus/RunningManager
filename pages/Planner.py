@@ -1,3 +1,7 @@
+"""Copyright (C) 2025 Pierre Marrec
+SPDX-License-Identifier: GPL-3.0-or-later
+"""
+
 from __future__ import annotations
 
 import json
@@ -9,9 +13,18 @@ import streamlit as st
 from typing import Any, Callable, Dict, List, Optional
 
 from utils.config import load_config
-from utils.formatting import set_locale, fmt_decimal, fmt_m
+from utils.coercion import coerce_float, coerce_int
+from utils.formatting import (
+    format_session_duration,
+    format_week_duration,
+    fmt_decimal,
+    fmt_m,
+    set_locale,
+)
+from utils.helpers import clean_optional, default_template_title
 from utils.styling import apply_theme
 from utils.time import iso_week_start, iso_week_end
+from utils.ui_helpers import get_dialog_factory
 from persistence.csv_storage import CsvStorage
 from persistence.repositories import PlannedSessionsRepo, AthletesRepo, ThresholdsRepo
 from services.templates_service import TemplatesService
@@ -36,53 +49,6 @@ planner = PlannerService(storage)
 session_templates = SessionTemplatesService(storage)
 
 
-def _format_week_duration(seconds: int) -> str:
-    total = max(0, int(seconds))
-    hours, remainder = divmod(total, 3600)
-    minutes = remainder // 60
-    return f"{hours}h{minutes:02d}"
-
-
-def _format_session_duration(seconds: int) -> str:
-    total = max(0, int(seconds))
-    hours, remainder = divmod(total, 3600)
-    minutes = remainder // 60
-    if hours:
-        return f"{hours}h{minutes:02d}"
-    return f"{minutes} min"
-
-
-def _coerce_float(value: Any, default: float = 0.0) -> float:
-    try:
-        if value in (None, ""):
-            return default
-        return float(value)
-    except Exception:
-        return default
-
-
-def _coerce_int(value: Any, default: int = 0) -> int:
-    try:
-        if value in (None, ""):
-            return default
-        return int(float(value))
-    except Exception:
-        return default
-
-
-def _default_template_title(session: Dict[str, Any]) -> str:
-    raw_type = str(session.get("type") or "Session").replace("_", " ")
-    title_part = raw_type.title()
-    date_part = str(session.get("date") or "")
-    return f"{title_part} {date_part}".strip()
-
-
-def _clean_optional(value: Any) -> str:
-    if value in (None, ""):
-        return ""
-    if isinstance(value, float) and math.isnan(value):
-        return ""
-    return str(value)
 
 
 def _reset_planner_state() -> None:
@@ -110,9 +76,9 @@ def _apply_planner_prefill(
     if not force and planner_state.get("source") == source and planner_state.get("form"):
         return
 
-    planned_distance = float(_coerce_float(payload.get("plannedDistanceKm"), 0.0))
-    planned_duration = int(_coerce_int(payload.get("plannedDurationSec"), 0))
-    planned_ascent = int(_coerce_int(payload.get("plannedAscentM"), 0))
+    planned_distance = float(coerce_float(payload.get("plannedDistanceKm"), 0.0))
+    planned_duration = int(coerce_int(payload.get("plannedDurationSec"), 0))
+    planned_ascent = int(coerce_int(payload.get("plannedAscentM"), 0))
     target_type = str(payload.get("targetType") or "").lower()
     if target_type not in ("hr", "pace"):
         target_type = "none"
@@ -120,36 +86,30 @@ def _apply_planner_prefill(
     form = {
         "date": date_value,
         "type": session_type,
-        "notes": _clean_optional(payload.get("notes")),
+        "notes": clean_optional(payload.get("notes")),
         "plannedDistanceKm": planned_distance,
         "plannedDurationSec": planned_duration,
         "plannedAscentM": planned_ascent,
         "targetType": target_type,
-        "targetLabel": _clean_optional(payload.get("targetLabel"))
+        "targetLabel": clean_optional(payload.get("targetLabel"))
         if target_type in ("hr", "pace")
         else None,
         "mode": "distance" if planned_distance > 0 or planned_duration <= 0 else "duration",
         "stepEndMode": payload.get("stepEndMode")
         or ("auto" if session_type == "INTERVAL_SIMPLE" else None),
         "stepsJson": payload.get("stepsJson") or "",
-        "templateTitle": _clean_optional(payload.get("templateTitle")),
-        "raceName": _clean_optional(payload.get("raceName")),
+        "templateTitle": clean_optional(payload.get("templateTitle")),
+        "raceName": clean_optional(payload.get("raceName")),
     }
     planner_state["form"] = form
     planner_state["source"] = source
     context = dict(template_context or {})
     if "original_title" in context:
-        context["original_title"] = _clean_optional(context.get("original_title"))
+        context["original_title"] = clean_optional(context.get("original_title"))
     context.setdefault("prompt_ack", False)
     planner_state["template_context"] = context
 
 
-def _get_dialog_factory() -> Optional[Callable]:
-    if hasattr(st, "dialog"):
-        return getattr(st, "dialog")
-    if hasattr(st, "experimental_dialog"):
-        return getattr(st, "experimental_dialog")
-    return None
 
 
 def _should_prompt_template_save(form: Dict[str, Any], planner_state: Dict[str, Any]) -> bool:
@@ -159,8 +119,8 @@ def _should_prompt_template_save(form: Dict[str, Any], planner_state: Dict[str, 
     kind = context.get("kind")
     if kind not in {"template", "edit"}:
         return False
-    original = _clean_optional(context.get("original_title"))
-    current = _clean_optional(form.get("templateTitle"))
+    original = clean_optional(context.get("original_title"))
+    current = clean_optional(form.get("templateTitle"))
     if not original or not current:
         return False
     return original != current
@@ -172,7 +132,7 @@ def _render_template_prompt_if_needed() -> None:
     if not prompt_open or not prompt_data:
         return
 
-    factory = _get_dialog_factory()
+    factory = get_dialog_factory()
     if not factory:
         st.info(
             "La séance a été renommée. Utilisez l'onglet Session Creator pour créer un modèle si besoin.",
@@ -222,7 +182,7 @@ def build_session_row(
     if isinstance(date_value, dt.date):
         date_str = date_value.isoformat()
     else:
-        date_str = _clean_optional(date_value)
+        date_str = clean_optional(date_value)
     row = {
         "athleteId": athlete_id,
         "date": date_str,
@@ -234,9 +194,9 @@ def build_session_row(
         if form.get("targetType") in (None, "", "none")
         else form.get("targetType"),
         "targetLabel": form.get("targetLabel"),
-        "notes": _clean_optional(form.get("notes")),
-        "templateTitle": _clean_optional(form.get("templateTitle")),
-        "raceName": _clean_optional(form.get("raceName")),
+        "notes": clean_optional(form.get("notes")),
+        "templateTitle": clean_optional(form.get("templateTitle")),
+        "raceName": clean_optional(form.get("raceName")),
         "stepEndMode": form.get("stepEndMode"),
         "stepsJson": form.get("stepsJson"),
     }
@@ -471,7 +431,7 @@ with st.expander("Create/Edit session", expanded=bool(edit_ctx)):
     else:
         form["type"] = typ
 
-    title_placeholder = _default_template_title({"type": typ, "date": date_value})
+    title_placeholder = default_template_title({"type": typ, "date": date_value})
     session_title = st.text_input(
         "Titre de la séance",
         value=str(form.get("templateTitle") or ""),
@@ -528,7 +488,7 @@ with st.expander("Create/Edit session", expanded=bool(edit_ctx)):
             planned_ascent_m = int(ascent_input)
             distance_eq_preview = derived["distanceEqKm"]
             st.caption(
-                f"Distance-eq ≈ {fmt_decimal(distance_eq_preview, 1)} km • Durée estimée ≈ {_format_session_duration(planned_duration_sec)}"
+                f"Distance-eq ≈ {fmt_decimal(distance_eq_preview, 1)} km • Durée estimée ≈ {format_session_duration(planned_duration_sec)}"
             )
         else:
             duration_input = st.number_input(
@@ -607,7 +567,7 @@ with st.expander("Create/Edit session", expanded=bool(edit_ctx)):
             planned_ascent_m = int(ascent_input)
             distance_eq_preview = derived["distanceEqKm"]
             st.caption(
-                f"Distance-eq ≈ {fmt_decimal(distance_eq_preview, 1)} km • Durée estimée ≈ {_format_session_duration(planned_duration_sec)}"
+                f"Distance-eq ≈ {fmt_decimal(distance_eq_preview, 1)} km • Durée estimée ≈ {format_session_duration(planned_duration_sec)}"
             )
         else:
             duration_input = st.number_input(
@@ -688,7 +648,7 @@ with st.expander("Create/Edit session", expanded=bool(edit_ctx)):
         distance_eq_preview = planner.compute_distance_eq_km(planned_distance_km, planned_ascent_m)
         st.caption(
             f"Distance-eq ≈ {fmt_decimal(distance_eq_preview, 1)} km • "
-            f"Temps cible ≈ {_format_session_duration(planned_duration_sec)}"
+            f"Temps cible ≈ {format_session_duration(planned_duration_sec)}"
         )
         target_type = "race"
         target_label = None
@@ -722,7 +682,7 @@ with st.expander("Create/Edit session", expanded=bool(edit_ctx)):
         planned_ascent_m = planner.estimate_interval_ascent_m(serialized_steps)
         distance_eq_preview = planner.compute_distance_eq_km(planned_distance_km, planned_ascent_m)
         st.caption(
-            f"Durée ≈ {_format_session_duration(planned_duration_sec)} • "
+            f"Durée ≈ {format_session_duration(planned_duration_sec)} • "
             f"Distance ≈ {fmt_decimal(planned_distance_km, 1)} km • "
             f"D+ ≈ {fmt_m(planned_ascent_m)} • "
             f"Distance-eq ≈ {fmt_decimal(distance_eq_preview, 1)} km"
@@ -773,8 +733,8 @@ with st.expander("Create/Edit session", expanded=bool(edit_ctx)):
                     st.session_state["planner_template_prompt_data"] = {
                         "athlete_id": athlete_id,
                         "date": row.get("date"),
-                        "template_title": _clean_optional(form.get("templateTitle")),
-                        "template_notes": _clean_optional(form.get("notes")),
+                        "template_title": clean_optional(form.get("templateTitle")),
+                        "template_notes": clean_optional(form.get("notes")),
                         "session_payload": session_payload,
                         "planned_session_id": str(sid) if sid else None,
                     }
@@ -911,7 +871,7 @@ if athlete_id:
                                     if not session_for_template.get("athleteId"):
                                         session_for_template["athleteId"] = athlete_id
                                     try:
-                                        title_hint = _default_template_title(session_for_template)
+                                        title_hint = default_template_title(session_for_template)
                                         template_id = session_templates.create_from_session(
                                             session_for_template,
                                             title=title_hint,
@@ -946,7 +906,7 @@ if athlete_id:
     totals = planner.compute_weekly_totals(athlete_id, week_records)
     totals_caption = (
         "Totals — "
-        f"{_format_week_duration(totals['timeSec'])} • "
+        f"{format_week_duration(totals['timeSec'])} • "
         f"{fmt_decimal(totals['distanceKm'], 1)} km • "
         f"DEQ {fmt_decimal(totals.get('distanceEqKm', 0.0), 1)} km • "
         f"{fmt_m(totals['ascentM'])}"

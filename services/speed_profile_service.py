@@ -1,4 +1,8 @@
-"""Speed profile analysis service for HR vs Speed correlation and clustering."""
+"""Copyright (C) 2025 Pierre Marrec
+SPDX-License-Identifier: GPL-3.0-or-later
+
+Speed profile analysis service for HR vs Speed correlation and clustering.
+"""
 
 from __future__ import annotations
 

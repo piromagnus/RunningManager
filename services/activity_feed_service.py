@@ -1,3 +1,7 @@
+"""Copyright (C) 2025 Pierre Marrec
+SPDX-License-Identifier: GPL-3.0-or-later
+"""
+
 from __future__ import annotations
 
 import datetime as dt
@@ -13,6 +17,8 @@ from persistence.repositories import (
     LinksRepo,
     PlannedSessionsRepo,
 )
+from utils.coercion import safe_float_optional, safe_int_optional
+from utils.time import parse_timestamp
 
 
 def _coerce_str(value: object) -> Optional[str]:
@@ -26,44 +32,6 @@ def _coerce_str(value: object) -> Optional[str]:
     except Exception:
         pass
     return str(value)
-
-
-def _coerce_float(value: object) -> Optional[float]:
-    try:
-        if value in (None, "", "NaN"):
-            return None
-        if isinstance(value, float) and pd.isna(value):
-            return None
-        if pd.isna(value):
-            return None
-        return float(value)
-    except Exception:
-        return None
-
-
-def _coerce_int(value: object) -> Optional[int]:
-    try:
-        if value in (None, "", "NaN"):
-            return None
-        if isinstance(value, float) and pd.isna(value):
-            return None
-        if pd.isna(value):
-            return None
-        return int(float(value))
-    except Exception:
-        return None
-
-
-def _parse_timestamp(value: object) -> Optional[pd.Timestamp]:
-    if value in (None, "", "NaT"):
-        return None
-    try:
-        ts = pd.to_datetime(value, utc=True, errors="coerce")
-    except Exception:
-        return None
-    if pd.isna(ts):
-        return None
-    return ts
 
 
 @dataclass(frozen=True)
@@ -131,7 +99,7 @@ class ActivityFeedService:
 
         activities = activities.copy()
         activities["activityId"] = activities["activityId"].astype(str)
-        activities["startTime"] = activities["startTime"].map(_parse_timestamp)
+        activities["startTime"] = activities["startTime"].map(parse_timestamp)
 
         metrics = self.activity_metrics.list(athleteId=athlete_id)
         if not metrics.empty:
@@ -196,15 +164,15 @@ class ActivityFeedService:
                     name=str(name),
                     sport_type=sport_type,
                     start_time=row.get("startTime"),
-                    distance_km=_coerce_float(row.get("distanceKm")),
-                    ascent_m=_coerce_float(row.get("ascentM")),
-                    avg_hr=_coerce_float(row.get("avgHr")),
-                    moving_sec=_coerce_int(row.get("movingSec")),
-                    elapsed_sec=_coerce_int(row.get("elapsedSec")),
-                    trimp=_coerce_float(row.get("activityTrimp")),
-                    distance_eq_km=_coerce_float(row.get("activityDistanceEqKm")),
+                    distance_km=safe_float_optional(row.get("distanceKm")),
+                    ascent_m=safe_float_optional(row.get("ascentM")),
+                    avg_hr=safe_float_optional(row.get("avgHr")),
+                    moving_sec=safe_int_optional(row.get("movingSec")),
+                    elapsed_sec=safe_int_optional(row.get("elapsedSec")),
+                    trimp=safe_float_optional(row.get("activityTrimp")),
+                    distance_eq_km=safe_float_optional(row.get("activityDistanceEqKm")),
                     linked=not pd.isna(row.get("matchScore")),
-                    match_score=_coerce_float(row.get("matchScore")),
+                    match_score=safe_float_optional(row.get("matchScore")),
                     planned_session_id=str(row.get("plannedSessionId"))
                     if not pd.isna(row.get("plannedSessionId"))
                     else None,
@@ -278,9 +246,9 @@ class ActivityFeedService:
                     template_title=str(row.get("templateTitle") or ""),
                     race_name=_coerce_str(row.get("raceName")),
                     notes=_coerce_str(row.get("notes")),
-                    planned_distance_km=_coerce_float(row.get("plannedDistanceKm")),
-                    planned_duration_sec=_coerce_int(row.get("plannedDurationSec")),
-                    planned_ascent_m=_coerce_float(row.get("plannedAscentM")),
+                    planned_distance_km=safe_float_optional(row.get("plannedDistanceKm")),
+                    planned_duration_sec=safe_int_optional(row.get("plannedDurationSec")),
+                    planned_ascent_m=safe_float_optional(row.get("plannedAscentM")),
                     target_label=str(row.get("targetLabel") or ""),
                 )
             )

@@ -1,4 +1,8 @@
-"""Templates service to save/apply week templates as JSON payloads."""
+"""Copyright (C) 2025 Pierre Marrec
+SPDX-License-Identifier: GPL-3.0-or-later
+
+Templates service to save/apply week templates as JSON payloads.
+"""
 
 from __future__ import annotations
 

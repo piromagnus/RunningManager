@@ -1,4 +1,8 @@
-"""Per-activity lap metrics computation and storage."""
+"""Copyright (C) 2025 Pierre Marrec
+SPDX-License-Identifier: GPL-3.0-or-later
+
+Per-activity lap metrics computation and storage.
+"""
 
 from __future__ import annotations
 
@@ -13,27 +17,7 @@ from persistence.csv_storage import CsvStorage
 from persistence.repositories import AthletesRepo
 from services.planner_service import PlannerService
 from utils.config import Config
-
-
-def _safe_float(value: object) -> Optional[float]:
-    try:
-        if value in (None, "", "NaN"):
-            return None
-        result = float(value)
-        if math.isnan(result):
-            return None
-        return result
-    except Exception:
-        return None
-
-
-def _safe_int(value: object) -> Optional[int]:
-    try:
-        if value in (None, "", "NaN"):
-            return None
-        return int(float(value))
-    except Exception:
-        return None
+from utils.coercion import safe_float_optional, safe_int_optional
 
 
 @dataclass
@@ -91,8 +75,8 @@ class LapMetricsService:
         row = self._athletes.get(str(athlete_id))
         if not row:
             return None
-        hr_rest = _safe_float(row.get("hrRest"))
-        hr_max = _safe_float(row.get("hrMax"))
+        hr_rest = safe_float_optional(row.get("hrRest"))
+        hr_max = safe_float_optional(row.get("hrMax"))
         if hr_rest is None or hr_max is None:
             return None
         if hr_max <= hr_rest or hr_max <= 0:
@@ -105,17 +89,17 @@ class LapMetricsService:
         lap: Dict[str, object],
         hr_profile: Optional[Tuple[float, float]],
     ) -> Optional[Dict[str, object]]:
-        elapsed = _safe_float(lap.get("elapsed_time"))
-        moving = _safe_float(lap.get("moving_time"))
+        elapsed = safe_float_optional(lap.get("elapsed_time"))
+        moving = safe_float_optional(lap.get("moving_time"))
         if moving is None or moving <= 0:
             moving = elapsed
         if moving is None or moving <= 0:
             return None
 
-        distance_m = _safe_float(lap.get("distance"))
-        ascent_m = _safe_float(lap.get("total_elevation_gain"))
-        avg_hr = _safe_float(lap.get("average_heartrate"))
-        max_hr = _safe_float(lap.get("max_heartrate"))
+        distance_m = safe_float_optional(lap.get("distance"))
+        ascent_m = safe_float_optional(lap.get("total_elevation_gain"))
+        avg_hr = safe_float_optional(lap.get("average_heartrate"))
+        max_hr = safe_float_optional(lap.get("max_heartrate"))
         avg_speed_kmh = self._average_speed_kmh(lap, distance_m, moving)
         distance_km = (distance_m / 1000.0) if distance_m is not None else None
         distance_eq_km = (
@@ -152,7 +136,7 @@ class LapMetricsService:
     def _average_speed_kmh(
         lap: Dict[str, object], distance_m: Optional[float], moving_sec: Optional[float]
     ) -> Optional[float]:
-        speed = _safe_float(lap.get("average_speed"))
+        speed = safe_float_optional(lap.get("average_speed"))
         if speed is not None:
             return max(speed * 3.6, 0.0)
         if distance_m is None or moving_sec in (None, 0):

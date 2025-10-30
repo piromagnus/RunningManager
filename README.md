@@ -12,7 +12,7 @@
 - **Session Templates**: Save and reuse session configurations for consistent planning
 - **Strava Integration**: OAuth-based sync with automatic activity import (14-day window, incremental updates)
 - **Activity Linking**: Manual matching of planned sessions with logged activities; RPE tracking
-- **Performance Analytics**: 
+- **Performance Analytics**:
   - Planned vs actual workload comparison (weekly/daily)
   - Training load metrics (acute/chronic TRIMP, distance-equivalent)
   - Multi-metric visualization (time, distance, DistEq, TRIMP)
@@ -33,9 +33,9 @@
 - [Environment Setup](#-environment-setup)
 - [Usage](#usage)
 - [Architecture](#architecture)
-- [Contributing](#contributing)
-- [License](#license)
-- [Support](#support)
+- [Contributing](#-contributing)
+- [License](#-license)
+- [Support](#-support)
 
 ## 🚀 Quick Start
 
@@ -133,15 +133,19 @@ uv run streamlit run app.py
 - **Goals**: Set and track race/performance goals
 
 #### Planner Page
+
 ![Session Summary](docs/images/session_summary.png)
 
 #### Dashboard - Training Load
+
 ![Training Load](docs/images/training_load.png)
 
 #### Dashboard - Speed & Effort Analysis
+
 ![Speed Equivalent Over Time](docs/images/speedeq_time.png)
 
 #### Analytics - Weekly Comparison
+
 ![Weekly Analytics](docs/images/weeks_analytics.png)
 
 ### Testing
@@ -168,19 +172,33 @@ ruff format .
 
 ### High-Level Overview
 
-```
-app.py (Streamlit entry)
+```bash
+RunningManager/
+├── app.py (Streamlit entry)
 ├── pages/ (UI multi-page app)
 │   ├── Planner.py: Session planning
 │   ├── Dashboard.py: Training load trends
 │   ├── Analytics.py: Planned vs actual analysis
 │   ├── Activities.py: Activity feed & linking
 │   └── Settings.py: Integrations & config
+├── widgets/ (Reusable UI components)
+│   ├── athlete_selector.py: Athlete selection widget
+│   ├── session_forms.py: Session type form renderers
+│   ├── template_selector.py: Template selection UI
+│   ├── comparison_panel.py: Activity comparison display
+│   └── ...
+├── graph/ (Visualization components)
+│   ├── training_load.py: Acute/chronic load charts
+│   ├── hr_speed.py: HR vs Speed scatter plots
+│   ├── elevation.py: Elevation profile with grade coloring
+│   ├── analytics.py: Planned vs actual bar charts
+│   └── ...
 ├── services/ (Domain logic)
 │   ├── planner_service.py: Estimation (pace, distance, TRIMP)
 │   ├── metrics_service.py: Metrics pipeline
 │   ├── analytics_service.py: Analytics computations
 │   ├── strava_service.py: OAuth & sync
+│   ├── dashboard_data_service.py: Dashboard data loading
 │   └── ...
 ├── persistence/ (CSV storage)
 │   ├── csv_storage.py: Pandas + portalocker IO
@@ -188,13 +206,16 @@ app.py (Streamlit entry)
 └── utils/ (Helpers)
     ├── config.py: Env loading & secrets
     ├── formatting.py: fr-FR locale display
-    ├── crypto.py: Token encryption
+    ├── segments.py: Segment merging utilities
+    ├── dashboard_state.py: Dashboard state management
+    ├── elevation_preprocessing.py: Elevation data preprocessing
     └── ...
 ```
 
 ### Data Model
 
 **CSV Tables** (stored in `DATA_DIR`, default `./data/`):
+
 - `activities.csv`: Imported from Strava/Garmin
 - `planned_sessions.csv`: Coach-created training sessions
 - `links.csv`: Manual matches between sessions and activities
@@ -235,6 +256,7 @@ Contributions are welcome! Please follow these guidelines:
 - **Format**: Black-compatible formatting via Ruff
 - **Type Hints**: Use type annotations for public APIs
 - **Testing**: Add tests for new behavior; maintain >80% coverage
+- **File Organization**: Keep files under 500 lines; extract reusable components to `widgets/` and visualizations to `graph/`
 
 ### Contribution Areas
 
@@ -248,6 +270,7 @@ Contributions are welcome! Please follow these guidelines:
 ### Reporting Issues
 
 When reporting bugs, please include:
+
 - Python version and OS
 - Steps to reproduce
 - Expected vs actual behavior
@@ -266,6 +289,7 @@ When reporting bugs, please include:
 This project is licensed under the **GNU General Public License v3.0** (GPLv3). See [LICENSE](LICENSE) for full details.
 
 **Summary**: You are free to use, modify, and distribute this software, provided that:
+
 - You retain the copyright notice and license
 - You provide a copy of the license with any distribution
 - Any modifications are also licensed under GPLv3

@@ -1,4 +1,8 @@
-"""Metrics computation pipeline for activities, weekly, and daily aggregates."""
+"""Copyright (C) 2025 Pierre Marrec
+SPDX-License-Identifier: GPL-3.0-or-later
+
+Metrics computation pipeline for activities, weekly, and daily aggregates.
+"""
 
 from __future__ import annotations
 
@@ -7,7 +11,7 @@ import json
 import math
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple, Any
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 import pandas as pd
 
@@ -25,44 +29,14 @@ from persistence.repositories import (
 from services.interval_utils import normalize_steps
 from services.planner_service import PlannerService
 from services.speed_profile_service import SpeedProfileService
+from utils.coercion import safe_float, safe_int
 from utils.config import load_config
-from utils.time import iso_week_start
-
+from utils.time import iso_week_start, to_date
 
 PRIMARY_CATEGORIES = {"RUN", "TRAIL_RUN", "HIKE", "RIDE"}
 TRAINING_LOAD_CATEGORIES = {"RUN", "TRAIL_RUN", "HIKE"}
 
 
-def _safe_float(value: object) -> float:
-    try:
-        if value in (None, "", "NaN"):
-            return 0.0
-        return float(value)
-    except Exception:
-        return 0.0
-
-
-def _safe_int(value: object) -> int:
-    try:
-        if value in (None, "", "NaN"):
-            return 0
-        return int(float(value))
-    except Exception:
-        return 0
-
-
-def _to_date(value: object) -> Optional[dt.date]:
-    if value in (None, "", "NaT"):
-        return None
-    try:
-        if isinstance(value, dt.date) and not isinstance(value, dt.datetime):
-            return value
-        parsed = pd.to_datetime(value)
-        if pd.isna(parsed):
-            return None
-        return parsed.date()
-    except Exception:
-        return None
 
 
 @dataclass
@@ -207,15 +181,15 @@ class MetricsComputationService:
         rows: List[Dict[str, object]] = []
         for _, row in activities_df.iterrows():
             activity_id = str(row.get("activityId") or "")
-            start = _to_date(row.get("startTime"))
+            start = to_date(row.get("startTime"))
             if not activity_id or not start:
                 continue
-            distance_km = _safe_float(row.get("distanceKm"))
-            ascent_m = _safe_float(row.get("ascentM"))
-            time_sec = float(_safe_int(row.get("movingSec")))
+            distance_km = safe_float(row.get("distanceKm"))
+            ascent_m = safe_float(row.get("ascentM"))
+            time_sec = float(safe_int(row.get("movingSec")))
             if time_sec <= 0:
-                time_sec = float(_safe_int(row.get("elapsedSec")))
-            avg_hr = _safe_float(row.get("avgHr"))
+                time_sec = float(safe_int(row.get("elapsedSec")))
+            avg_hr = safe_float(row.get("avgHr"))
             trimp = self._compute_trimp(avg_hr, time_sec, hr_profile)
             sport_type, category = self._resolve_activity_category(row)
             if category == "RIDE":
@@ -288,12 +262,12 @@ class MetricsComputationService:
             session_id = str(row.get("plannedSessionId") or "")
             if not session_id:
                 continue
-            date = _to_date(row.get("date"))
+            date = to_date(row.get("date"))
             if not date:
                 continue
-            ascent = _safe_float(row.get("plannedAscentM"))
-            distance = _safe_float(row.get("plannedDistanceKm"))
-            duration = _safe_int(row.get("plannedDurationSec"))
+            ascent = safe_float(row.get("plannedAscentM"))
+            distance = safe_float(row.get("plannedDistanceKm"))
+            duration = safe_int(row.get("plannedDurationSec"))
 
             if duration <= 0 and distance > 0:
                 derived = self.planner.derive_from_distance(athlete_id, distance, ascent)
@@ -343,8 +317,8 @@ class MetricsComputationService:
             athlete_id = str(row.get("athleteId") or "")
             if not athlete_id:
                 continue
-            hr_rest = _safe_float(row.get("hrRest"))
-            hr_max = _safe_float(row.get("hrMax"))
+            hr_rest = safe_float(row.get("hrRest"))
+            hr_max = safe_float(row.get("hrMax"))
             if hr_max <= hr_rest or hr_max <= 0:
                 continue
             profiles[athlete_id] = (hr_rest, hr_max)
@@ -651,15 +625,15 @@ class MetricsComputationService:
             return self._bike_eq_cache
         settings = self.settings.get("coach-1") or {}
         if "bikeEqDistance" in settings:
-            dist = max(float(_safe_float(settings.get("bikeEqDistance"))), 0.0)
+            dist = max(float(safe_float(settings.get("bikeEqDistance"))), 0.0)
         else:
             dist = 0.3
         if "bikeEqAscent" in settings:
-            asc = max(float(_safe_float(settings.get("bikeEqAscent"))), 0.0)
+            asc = max(float(safe_float(settings.get("bikeEqAscent"))), 0.0)
         else:
             asc = 0.02
         if "bikeEqDescent" in settings:
-            desc = max(float(_safe_float(settings.get("bikeEqDescent"))), 0.0)
+            desc = max(float(safe_float(settings.get("bikeEqDescent"))), 0.0)
         else:
             desc = 0.0
         self._bike_eq_cache = (float(dist), float(asc), float(desc))
@@ -694,7 +668,7 @@ class MetricsComputationService:
     ) -> List[Tuple[int, float]]:
         segments: List[Tuple[int, float]] = []
         fundamental_hr = self._avg_hr_for_target(athlete_id, None, "Fundamental", hr_profile)
-        duration = _safe_int(session.get("plannedDurationSec"))
+        duration = safe_int(session.get("plannedDurationSec"))
         steps_json = session.get("stepsJson")
         if not steps_json:
             avg_hr = self._avg_hr_for_target(
@@ -728,22 +702,22 @@ class MetricsComputationService:
             return fundamental_hr
 
         for block in normalised["preBlocks"]:
-            sec = _safe_int(block.get("sec"))
+            sec = safe_int(block.get("sec"))
             if sec > 0:
                 segments.append((sec, _segment_hr(block)))
 
         between = normalised.get("betweenBlock")
-        between_sec = _safe_int((between or {}).get("sec"))
+        between_sec = safe_int((between or {}).get("sec"))
         between_hr = _segment_hr(between) if between and between_sec > 0 else fundamental_hr
 
         loops = normalised["loops"] or []
         loop_count = len(loops)
         for loop_index, loop in enumerate(loops):
             actions = loop.get("actions") or []
-            repeats = max(1, _safe_int(loop.get("repeats")) or 1)
+            repeats = max(1, safe_int(loop.get("repeats")) or 1)
             for rep_index in range(repeats):
                 for action in actions:
-                    sec = _safe_int(action.get("sec"))
+                    sec = safe_int(action.get("sec"))
                     if sec <= 0:
                         continue
                     segments.append((sec, _segment_hr(action)))
@@ -751,7 +725,7 @@ class MetricsComputationService:
                 segments.append((between_sec, between_hr))
 
         for block in normalised["postBlocks"]:
-            sec = _safe_int(block.get("sec"))
+            sec = safe_int(block.get("sec"))
             if sec > 0:
                 segments.append((sec, _segment_hr(block)))
         return segments
@@ -772,8 +746,8 @@ class MetricsComputationService:
         if label:
             threshold = self.planner.resolve_threshold_target(athlete_id, label)
         if threshold:
-            hr_min = _safe_float(threshold.get("hrMin"))
-            hr_max = _safe_float(threshold.get("hrMax"))
+            hr_min = safe_float(threshold.get("hrMin"))
+            hr_max = safe_float(threshold.get("hrMax"))
             if hr_max > 0 and hr_min > 0:
                 return (hr_min + hr_max) / 2.0
         if hr_profile:

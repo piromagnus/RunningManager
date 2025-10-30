@@ -1,4 +1,6 @@
-"""
+"""Copyright (C) 2025 Pierre Marrec
+SPDX-License-Identifier: GPL-3.0-or-later
+
 FR locale display helpers for decimals and units.
 
 Note: CSV storage must keep '.' as decimal separator. These helpers
@@ -80,3 +82,71 @@ def to_str_storage(value: Optional[float], ndigits: Optional[int] = None) -> str
     if ndigits is None:
         return f"{value}"
     return f"{value:.{ndigits}f}"
+
+
+def format_duration(seconds: Optional[float], include_seconds: bool = False) -> str:
+    """Format duration in seconds to a human-readable string.
+
+    Formats as:
+    - "XhYY" if hours > 0
+    - "Xm" or "XmYYs" if only minutes/seconds
+    - "Xs" if only seconds (when include_seconds=True)
+
+    Args:
+        seconds: Duration in seconds (can be None, int, float, or string representation)
+        include_seconds: If True, include seconds for minutes-only durations (default: False)
+
+    Returns:
+        str: Formatted duration string or "-" if invalid
+    """
+    if seconds in (None, "", float("nan")):
+        return "-"
+    try:
+        total = int(float(seconds))
+        hours, remainder = divmod(total, 3600)
+        minutes, secs = divmod(remainder, 60)
+        if hours:
+            return f"{hours}h{minutes:02d}"
+        if minutes:
+            if include_seconds and secs > 0:
+                return f"{minutes}m{secs:02d}s"
+            return f"{minutes} min"
+        if include_seconds:
+            return f"{secs}s"
+        return "0 min"
+    except Exception:
+        return "-"
+
+
+def format_week_duration(seconds: int) -> str:
+    """Format duration for week-level totals (hours:minutes, no seconds).
+
+    Args:
+        seconds: Duration in seconds
+
+    Returns:
+        str: Formatted as "XhYY"
+    """
+    total = max(0, int(seconds))
+    hours, remainder = divmod(total, 3600)
+    minutes = remainder // 60
+    return f"{hours}h{minutes:02d}"
+
+
+def format_session_duration(seconds: int) -> str:
+    """Format duration for session display (hours:minutes or minutes).
+
+    Shows hours:minutes format if hours > 0, otherwise "X min".
+
+    Args:
+        seconds: Duration in seconds
+
+    Returns:
+        str: Formatted as "XhYY" or "X min"
+    """
+    total = max(0, int(seconds))
+    hours, remainder = divmod(total, 3600)
+    minutes = remainder // 60
+    if hours:
+        return f"{hours}h{minutes:02d}"
+    return f"{minutes} min"

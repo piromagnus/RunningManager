@@ -1,3 +1,7 @@
+"""Copyright (C) 2025 Pierre Marrec
+SPDX-License-Identifier: GPL-3.0-or-later
+"""
+
 from utils.time import today_local, iso_week_start, iso_week_end
 from utils.ids import new_id
 import datetime as dt
