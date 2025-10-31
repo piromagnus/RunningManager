@@ -60,22 +60,35 @@ if not races_df.empty:
     if selected_race_idx > 0:
         selected_race_name = race_options[selected_race_idx]
         race_id = selected_race_name.split("(")[-1].rstrip(")")
-        loaded_race = pacer_service.load_race(race_id)
+        
+        # Only load if this is a different race than what's already loaded
+        current_race_id = st.session_state.get("race_pacing_race_id")
+        if race_id != current_race_id:
+            loaded_race = pacer_service.load_race(race_id)
 
-        if loaded_race:
-            race_name, aid_stations_km, segments_df, aid_stations_times = loaded_race
-            st.session_state["race_pacing_race_id"] = race_id
-            st.session_state["race_pacing_race_name"] = race_name
-            st.session_state["race_pacing_aid_km"] = aid_stations_km
-            st.session_state["race_pacing_segments"] = segments_df
-            # Store aid station times if available (for display)
-            if aid_stations_times:
-                st.session_state["race_pacing_aid_times"] = aid_stations_times
-            st.rerun()
+            if loaded_race:
+                race_name, aid_stations_km, segments_df, aid_stations_times = loaded_race
+                st.session_state["race_pacing_race_id"] = race_id
+                st.session_state["race_pacing_race_name"] = race_name
+                st.session_state["race_pacing_aid_km"] = aid_stations_km
+                st.session_state["race_pacing_segments"] = segments_df
+                # Store aid station times if available (for display)
+                if aid_stations_times:
+                    st.session_state["race_pacing_aid_times"] = aid_stations_times
+                else:
+                    # Clear aid times if not available
+                    st.session_state.pop("race_pacing_aid_times", None)
+                st.rerun()
 
 # Race name input
-race_name = st.text_input("Nom de la course", value=st.session_state["race_pacing_race_name"], key="race_name_input")
-if race_name != st.session_state["race_pacing_race_name"]:
+# Use race_id in key to force widget update when loading a different race
+race_name_key = f"race_name_input_{st.session_state.get('race_pacing_race_id', 'new')}"
+race_name = st.text_input(
+    "Nom de la course",
+    value=st.session_state.get("race_pacing_race_name", ""),
+    key=race_name_key
+)
+if race_name != st.session_state.get("race_pacing_race_name", ""):
     st.session_state["race_pacing_race_name"] = race_name
 
 # GPX upload
@@ -86,6 +99,9 @@ with col1:
 
     if uploaded_file is not None:
         try:
+            # Preserve aid stations before processing GPX
+            preserved_aid_km = st.session_state.get("race_pacing_aid_km", []).copy()
+            
             gpx_bytes = uploaded_file.read()
             timeseries_df = parse_gpx_to_timeseries(gpx_bytes)
 
@@ -100,6 +116,8 @@ with col1:
                     st.error("Erreur lors du prétraitement des données GPX.")
                 else:
                     st.session_state["race_pacing_metrics"] = metrics_df
+                    # Restore preserved aid stations after GPX load
+                    st.session_state["race_pacing_aid_km"] = preserved_aid_km
                     st.success(f"GPX chargé: {len(timeseries_df)} points")
 
         except Exception as e:
@@ -109,11 +127,14 @@ with col1:
 # Aid stations input
 with col2:
     st.subheader("Ravitaillements (km)")
+    # Use race_id in key to force widget update when loading a different race
+    # Also ensures aid stations are preserved when GPX is loaded
+    aid_input_key = f"aid_stations_input_{st.session_state.get('race_pacing_race_id', 'new')}"
     aid_input = st.text_area(
         "Positions en km (une par ligne)",
-        value="\n".join([str(x) for x in st.session_state["race_pacing_aid_km"]]),
+        value="\n".join([str(x) for x in st.session_state.get("race_pacing_aid_km", [])]),
         height=150,
-        key="aid_stations_input",
+        key=aid_input_key,
     )
 
     # Parse aid stations
