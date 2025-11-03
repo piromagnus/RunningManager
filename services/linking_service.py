@@ -18,7 +18,6 @@ from persistence.repositories import (
     PlannedMetricsRepo,
     PlannedSessionsRepo,
 )
-from services.metrics_service import MetricsComputationService
 from utils.coercion import safe_float_optional, safe_int_optional
 from utils.ids import new_id
 from utils.time import ensure_datetime
@@ -263,8 +262,27 @@ class LinkingService:
         activities = activities.dropna(subset=["startTime"])
 
         if planned_date and window_days > 0:
-            start = planned_date - pd.Timedelta(days=window_days)
-            end = planned_date + pd.Timedelta(days=window_days)
+            # Normalize timezones: remove timezone info for comparison
+            # Convert to pandas Timestamp, then to timezone-naive datetime
+            planned_ts = pd.Timestamp(planned_date)
+            if planned_ts.tz is not None:
+                planned_ts = planned_ts.tz_convert("UTC").tz_localize(None)
+            planned_date_naive = planned_ts.to_pydatetime()
+            
+            start = planned_date_naive - pd.Timedelta(days=window_days)
+            end = planned_date_naive + pd.Timedelta(days=window_days)
+            
+            # Convert activities startTime to timezone-naive for comparison
+            def normalize_datetime(dt_val):
+                if dt_val is None:
+                    return None
+                ts = pd.Timestamp(dt_val)
+                if ts.tz is not None:
+                    return ts.tz_convert("UTC").tz_localize(None).to_pydatetime()
+                return ts.to_pydatetime()
+            
+            activities["startTime"] = activities["startTime"].apply(normalize_datetime)
+            
             activities = activities[
                 (activities["startTime"] >= start) & (activities["startTime"] <= end)
             ]
@@ -343,7 +361,9 @@ class LinkingService:
             "comments": comments or "",
         }
         link_id = self.links.create(payload)
-        MetricsComputationService(self.storage).recompute_athlete(athlete_id)
+        # Note: Metrics recomputation removed for performance.
+        # Weekly/daily metrics will be updated on next sync or manual recompute.
+        # If immediate update is needed, call MetricsComputationService.recompute_athlete() separately.
         return link_id
 
     def update_link(self, link_id: str, *, rpe: Optional[int], comments: str) -> None:

@@ -12,11 +12,14 @@ from typing import Literal, Optional
 
 import numpy as np
 import pandas as pd
+from haversine import haversine
 from streamlit.logger import get_logger
 
 from persistence.csv_storage import CsvStorage
+from persistence.repositories import RacePacingLinksRepo
 from services.planner_service import PlannerService
 from services.speed_profile_service import SpeedProfileService
+from utils.config import Config
 from utils.ids import new_id
 from utils.segments import merge_adjacent_same_color, merge_small_segments
 
@@ -26,10 +29,13 @@ logger = get_logger(__name__)
 class PacerService:
     """Service for race course segmentation and pacing."""
 
-    def __init__(self, storage: CsvStorage):
+    def __init__(self, storage: CsvStorage, config: Optional[Config] = None):
         self.storage = storage
         self.planner = PlannerService(storage)
-        self.speed_profile = SpeedProfileService(config=None)
+        from utils.config import load_config
+        self.config = config or load_config()
+        self.speed_profile = SpeedProfileService(config=self.config)
+        self.links_repo = RacePacingLinksRepo(storage)
 
     def preprocess_timeseries_for_pacing(self, timeseries_df: pd.DataFrame) -> pd.DataFrame:
         """Preprocess timeseries for pacing (time-invariant).
@@ -948,8 +954,23 @@ class PacerService:
             # Use boundaries from segments_df to ensure continuity
             distance_km = end_km - start_km
 
-            # Compute metrics from actual data points (if any)
+            # Extract lat/lon for start and end of segment
+            start_lat = None
+            start_lon = None
+            end_lat = None
+            end_lon = None
+            
             if not seg_df.empty:
+                # Get first and last points for GPS coordinates
+                first_point = seg_df.iloc[0]
+                last_point = seg_df.iloc[-1]
+                
+                if "lat" in seg_df.columns and "lon" in seg_df.columns:
+                    start_lat = float(first_point["lat"]) if pd.notna(first_point["lat"]) else None
+                    start_lon = float(first_point["lon"]) if pd.notna(first_point["lon"]) else None
+                    end_lat = float(last_point["lat"]) if pd.notna(last_point["lat"]) else None
+                    end_lon = float(last_point["lon"]) if pd.notna(last_point["lon"]) else None
+                
                 elev_gain = seg_df["elevation_difference"].clip(lower=0).sum()
                 elev_loss = seg_df["elevation_difference"].clip(upper=0).abs().sum()
                 avg_grade = self.compute_avg_grade(elev_gain, elev_loss, distance_km)
@@ -958,6 +979,20 @@ class PacerService:
                 elev_gain = seg_row.get("elevGainM", 0.0)
                 elev_loss = seg_row.get("elevLossM", 0.0)
                 avg_grade = self.compute_avg_grade(elev_gain, elev_loss, distance_km)
+                
+                # Try to get lat/lon from df by finding closest points
+                if "lat" in df.columns and "lon" in df.columns:
+                    start_distances = abs(df["cumulated_distance"] - start_km)
+                    end_distances = abs(df["cumulated_distance"] - end_km)
+                    start_idx = start_distances.idxmin()
+                    end_idx = end_distances.idxmin()
+                    
+                    if pd.notna(df.loc[start_idx, "lat"]) and pd.notna(df.loc[start_idx, "lon"]):
+                        start_lat = float(df.loc[start_idx, "lat"])
+                        start_lon = float(df.loc[start_idx, "lon"])
+                    if pd.notna(df.loc[end_idx, "lat"]) and pd.notna(df.loc[end_idx, "lon"]):
+                        end_lat = float(df.loc[end_idx, "lat"])
+                        end_lon = float(df.loc[end_idx, "lon"])
 
             # Check if aid station at boundary
             is_aid_split = seg_row.get("isAidSplit", False)
@@ -973,23 +1008,33 @@ class PacerService:
             # Get type from segments_df
             seg_type = seg_row.get("type", "unknown")
 
-            segments.append(
-                {
-                    "segmentId": int(seg_id),
-                    "type": seg_type,
-                    "startKm": start_km,  # Use boundaries from segments_df
-                    "endKm": end_km,  # Use boundaries from segments_df
-                    "distanceKm": distance_km,
-                    "elevGainM": elev_gain,
-                    "elevLossM": elev_loss,
-                    "avgGrade": avg_grade,
-                    "isAidSplit": is_aid_split,
-                    "distanceEqKm": distance_eq_km,
-                    "speedEqKmh": 0.0,
-                    "speedKmh": 0.0,
-                    "timeSec": 0,
-                }
-            )
+            segment_dict = {
+                "segmentId": int(seg_id),
+                "type": seg_type,
+                "startKm": start_km,  # Use boundaries from segments_df
+                "endKm": end_km,  # Use boundaries from segments_df
+                "distanceKm": distance_km,
+                "elevGainM": elev_gain,
+                "elevLossM": elev_loss,
+                "avgGrade": avg_grade,
+                "isAidSplit": is_aid_split,
+                "distanceEqKm": distance_eq_km,
+                "speedEqKmh": 0.0,
+                "speedKmh": 0.0,
+                "timeSec": 0,
+            }
+            
+            # Add GPS coordinates if available
+            if start_lat is not None:
+                segment_dict["startLat"] = start_lat
+            if start_lon is not None:
+                segment_dict["startLon"] = start_lon
+            if end_lat is not None:
+                segment_dict["endLat"] = end_lat
+            if end_lon is not None:
+                segment_dict["endLon"] = end_lon
+            
+            segments.append(segment_dict)
 
         result_df = pd.DataFrame(segments)
         # Sort by startKm to ensure proper ordering
@@ -1560,4 +1605,348 @@ class PacerService:
             return pd.DataFrame(columns=["raceId", "name", "createdAt"])
 
         return races_df[["raceId", "name", "createdAt"]].copy()
+
+    def compare_race_segments_with_activity(
+        self, race_id: str, activity_timeseries_df: pd.DataFrame
+    ) -> Optional[pd.DataFrame]:
+        """Compare planned race segments with actual activity performance.
+
+        Args:
+            race_id: Race ID to load planned segments from
+            activity_timeseries_df: Activity timeseries DataFrame with cumulated_distance, timestamp, paceKmh
+
+        Returns:
+            DataFrame with comparison metrics for each segment, or None if race not found
+        """
+        loaded = self.load_race(race_id)
+        if not loaded:
+            return None
+
+        race_name, aid_stations_km, planned_segments_df, aid_stations_times = loaded
+
+        if activity_timeseries_df.empty or planned_segments_df.empty:
+            return None
+
+        # Preprocess timeseries if needed (for distance and time calculation)
+        if "cumulated_distance" not in activity_timeseries_df.columns:
+            # Try full preprocessing if GPS data is available
+            if "lat" in activity_timeseries_df.columns and "lon" in activity_timeseries_df.columns:
+                preprocessed = self.speed_profile.preprocess_timeseries(activity_timeseries_df.copy())
+                if not preprocessed.empty and "cumulated_distance" in preprocessed.columns:
+                    activity_timeseries_df = preprocessed
+                else:
+                    # Fallback: basic distance computation
+                    activity_timeseries_df = self.speed_profile.distance(
+                        activity_timeseries_df, lat_col="lat", lon_col="lon"
+                    )
+                    activity_timeseries_df = self.speed_profile.cumulated_distance(
+                        activity_timeseries_df, distance_col="distance"
+                    )
+            else:
+                return None
+
+        # Ensure we have timestamp for time calculation
+        has_timestamp = "timestamp" in activity_timeseries_df.columns
+        if has_timestamp and "cumulated_duration_seconds" not in activity_timeseries_df.columns:
+            # Convert timestamp to datetime if needed
+            if activity_timeseries_df["timestamp"].dtype == "object":
+                activity_timeseries_df = self.speed_profile.time_from_timestamp(
+                    activity_timeseries_df, timestamp_col="timestamp"
+                )
+            activity_timeseries_df = self.speed_profile.duration(
+                activity_timeseries_df, timestamp_col="timestamp"
+            )
+
+        # Get pace/speed for speed calculation
+        has_pace = "paceKmh" in activity_timeseries_df.columns
+        if not has_pace and "speed_km_h" in activity_timeseries_df.columns:
+            activity_timeseries_df["paceKmh"] = activity_timeseries_df["speed_km_h"]
+            has_pace = True
+
+        # Ensure we have GPS data in activity timeseries for GPS-based matching
+        has_gps = "lat" in activity_timeseries_df.columns and "lon" in activity_timeseries_df.columns
+        if not has_gps:
+            logger.warning("GPS data required for GPS-based segment matching")
+            return None
+
+        comparison_rows = []
+
+        for _, planned_seg in planned_segments_df.iterrows():
+            seg_start_km = float(planned_seg["startKm"])
+            seg_end_km = float(planned_seg["endKm"])
+
+            # Try GPS-based matching first if planned segment has GPS coordinates
+            actual_start_idx = None
+            actual_end_idx = None
+            
+            planned_start_lat = planned_seg.get("startLat")
+            planned_start_lon = planned_seg.get("startLon")
+            planned_end_lat = planned_seg.get("endLat")
+            planned_end_lon = planned_seg.get("endLon")
+            
+            if (
+                has_gps
+                and planned_start_lat is not None
+                and pd.notna(planned_start_lat)
+                and planned_start_lon is not None
+                and pd.notna(planned_start_lon)
+                and planned_end_lat is not None
+                and pd.notna(planned_end_lat)
+                and planned_end_lon is not None
+                and pd.notna(planned_end_lon)
+            ):
+                # GPS-based matching: find closest points in actual activity
+                # Filter out NaN GPS points
+                valid_gps_mask = (
+                    activity_timeseries_df["lat"].notna() & activity_timeseries_df["lon"].notna()
+                )
+                valid_gps_df = activity_timeseries_df[valid_gps_mask].copy()
+                
+                if not valid_gps_df.empty:
+                    # Compute distances from planned start/end to all actual points
+                    start_distances = valid_gps_df.apply(
+                        lambda row: haversine(
+                            (float(planned_start_lat), float(planned_start_lon)),
+                            (float(row["lat"]), float(row["lon"])),
+                        ),
+                        axis=1,
+                    )
+                    end_distances = valid_gps_df.apply(
+                        lambda row: haversine(
+                            (float(planned_end_lat), float(planned_end_lon)),
+                            (float(row["lat"]), float(row["lon"])),
+                        ),
+                        axis=1,
+                    )
+                    
+                    # Find closest points (ensure end comes after start)
+                    actual_start_idx = valid_gps_df.index[start_distances.idxmin()]
+                    actual_end_idx = valid_gps_df.index[end_distances.idxmin()]
+                    
+                    # Ensure end is after start (if not, use distance-based fallback)
+                    if actual_end_idx <= actual_start_idx:
+                        # Fallback to distance-based matching
+                        actual_start_idx = None
+                        actual_end_idx = None
+            
+            # Fallback to distance-based matching if GPS matching failed
+            if actual_start_idx is None or actual_end_idx is None:
+                # Find points in activity timeseries within this segment using distance
+                seg_points = activity_timeseries_df[
+                    (activity_timeseries_df["cumulated_distance"] >= seg_start_km)
+                    & (activity_timeseries_df["cumulated_distance"] <= seg_end_km)
+                ].copy()
+                
+                if seg_points.empty:
+                    # No actual data for this segment
+                    comparison_rows.append(
+                        {
+                            "segmentId": int(planned_seg["segmentId"]),
+                            "type": planned_seg.get("type", "unknown"),
+                            "startKm": seg_start_km,
+                            "endKm": seg_end_km,
+                            "plannedTimeSec": float(planned_seg.get("timeSec", 0) or 0),
+                            "plannedSpeedKmh": float(planned_seg.get("speedKmh", 0) or 0),
+                            "plannedSpeedEqKmh": float(planned_seg.get("speedEqKmh", 0) or 0),
+                            "actualTimeSec": None,
+                            "actualSpeedKmh": None,
+                            "actualSpeedEqKmh": None,
+                            "timeDeltaSec": None,
+                            "speedDeltaKmh": None,
+                            "speedEqDeltaKmh": None,
+                        }
+                    )
+                    continue
+                
+                # Use first and last points of distance-based segment
+                actual_start_idx = seg_points.index[0]
+                actual_end_idx = seg_points.index[-1]
+            
+            # Extract actual segment points using GPS-matched indices
+            actual_seg_mask = (activity_timeseries_df.index >= actual_start_idx) & (
+                activity_timeseries_df.index <= actual_end_idx
+            )
+            seg_points = activity_timeseries_df[actual_seg_mask].copy()
+            
+            if seg_points.empty:
+                # No actual data for this segment
+                comparison_rows.append(
+                    {
+                        "segmentId": int(planned_seg["segmentId"]),
+                        "type": planned_seg.get("type", "unknown"),
+                        "startKm": seg_start_km,
+                        "endKm": seg_end_km,
+                        "plannedTimeSec": float(planned_seg.get("timeSec", 0) or 0),
+                        "plannedSpeedKmh": float(planned_seg.get("speedKmh", 0) or 0),
+                        "plannedSpeedEqKmh": float(planned_seg.get("speedEqKmh", 0) or 0),
+                        "actualTimeSec": None,
+                        "actualSpeedKmh": None,
+                        "actualSpeedEqKmh": None,
+                        "timeDeltaSec": None,
+                        "speedDeltaKmh": None,
+                        "speedEqDeltaKmh": None,
+                    }
+                )
+                continue
+
+            # Compute actual metrics based on GPS-matched segment
+            # Compute actual distance from GPS points
+            actual_distance_km = 0.0
+            if has_gps and "lat" in seg_points.columns and "lon" in seg_points.columns:
+                # Compute cumulative distance along actual GPS path
+                valid_points = seg_points[seg_points["lat"].notna() & seg_points["lon"].notna()].copy()
+                if len(valid_points) > 1:
+                    # Compute distance between consecutive points
+                    distances = [
+                        haversine(
+                            (float(valid_points.iloc[i]["lat"]), float(valid_points.iloc[i]["lon"])),
+                            (
+                                float(valid_points.iloc[i + 1]["lat"]),
+                                float(valid_points.iloc[i + 1]["lon"]),
+                            ),
+                        )
+                        for i in range(len(valid_points) - 1)
+                    ]
+                    actual_distance_km = sum(distances)
+                elif "cumulated_distance" in seg_points.columns:
+                    # Fallback to cumulated_distance if GPS distance computation fails
+                    actual_distance_km = (
+                        float(seg_points["cumulated_distance"].iloc[-1])
+                        - float(seg_points["cumulated_distance"].iloc[0])
+                    )
+            elif "cumulated_distance" in seg_points.columns:
+                # Use cumulated_distance if GPS not available
+                actual_distance_km = (
+                    float(seg_points["cumulated_distance"].iloc[-1])
+                    - float(seg_points["cumulated_distance"].iloc[0])
+                )
+            else:
+                # Final fallback: use planned distance
+                actual_distance_km = seg_end_km - seg_start_km
+
+            # Compute actual time
+            actual_time_sec = None
+            if has_timestamp and "cumulated_duration_seconds" in seg_points.columns:
+                time_start = float(seg_points["cumulated_duration_seconds"].iloc[0])
+                time_end = float(seg_points["cumulated_duration_seconds"].iloc[-1])
+                actual_time_sec = time_end - time_start
+
+            # Compute actual speed
+            actual_speed_kmh = None
+            if has_pace and actual_time_sec and actual_time_sec > 0:
+                # Use average pace/speed in segment
+                avg_pace = seg_points["paceKmh"].mean()
+                if pd.notna(avg_pace):
+                    actual_speed_kmh = float(avg_pace)
+            elif actual_time_sec and actual_time_sec > 0:
+                # Compute from distance and time
+                actual_speed_kmh = (actual_distance_km / actual_time_sec) * 3600
+
+            # Compute actual speed-eq (needs elevation gain)
+            actual_speed_eq_kmh = None
+            actual_elev_gain = 0.0
+            if "elevationM" in seg_points.columns:
+                # Calculate total elevation gain (sum of positive differences)
+                elev_diffs = seg_points["elevationM"].diff().fillna(0)
+                actual_elev_gain = float(elev_diffs[elev_diffs > 0].sum())
+
+            if actual_time_sec and actual_time_sec > 0:
+                actual_distance_eq_km = self.planner.compute_distance_eq_km(
+                    actual_distance_km, actual_elev_gain
+                )
+                actual_speed_eq_kmh = (actual_distance_eq_km / actual_time_sec) * 3600
+
+            # Planned metrics
+            planned_time_sec = float(planned_seg.get("timeSec", 0) or 0)
+            planned_speed_kmh = float(planned_seg.get("speedKmh", 0) or 0)
+            planned_speed_eq_kmh = float(planned_seg.get("speedEqKmh", 0) or 0)
+
+            # Deltas
+            time_delta = actual_time_sec - planned_time_sec if actual_time_sec is not None else None
+            speed_delta = actual_speed_kmh - planned_speed_kmh if actual_speed_kmh is not None else None
+            speed_eq_delta = (
+                actual_speed_eq_kmh - planned_speed_eq_kmh if actual_speed_eq_kmh is not None else None
+            )
+
+            # Get actual start/end km for display (from actual segment)
+            actual_start_km = (
+                float(seg_points["cumulated_distance"].iloc[0])
+                if "cumulated_distance" in seg_points.columns
+                else seg_start_km
+            )
+            actual_end_km = (
+                float(seg_points["cumulated_distance"].iloc[-1])
+                if "cumulated_distance" in seg_points.columns
+                else seg_end_km
+            )
+
+            comparison_rows.append(
+                {
+                    "segmentId": int(planned_seg["segmentId"]),
+                    "type": planned_seg.get("type", "unknown"),
+                    "startKm": actual_start_km,  # Use actual GPS-matched start
+                    "endKm": actual_end_km,  # Use actual GPS-matched end
+                    "plannedTimeSec": planned_time_sec,
+                    "plannedSpeedKmh": planned_speed_kmh,
+                    "plannedSpeedEqKmh": planned_speed_eq_kmh,
+                    "actualTimeSec": actual_time_sec,
+                    "actualSpeedKmh": actual_speed_kmh,
+                    "actualSpeedEqKmh": actual_speed_eq_kmh,
+                    "timeDeltaSec": time_delta,
+                    "speedDeltaKmh": speed_delta,
+                    "speedEqDeltaKmh": speed_eq_delta,
+                }
+            )
+
+        return pd.DataFrame(comparison_rows)
+
+    def link_race_to_activity(self, activity_id: str, race_id: str) -> str:
+        """Link a race pacing to an activity.
+
+        Args:
+            activity_id: Activity ID
+            race_id: Race ID
+
+        Returns:
+            Link ID
+        """
+        # Check if link already exists
+        existing_links = self.links_repo.list(activityId=activity_id)
+        if not existing_links.empty:
+            # Update existing link
+            link_id = existing_links.iloc[0]["linkId"]
+            self.links_repo.update(link_id, {"raceId": race_id})
+            return link_id
+        else:
+            # Create new link
+            return self.links_repo.create({"activityId": activity_id, "raceId": race_id})
+
+    def unlink_race_from_activity(self, activity_id: str) -> None:
+        """Unlink race pacing from an activity.
+
+        Args:
+            activity_id: Activity ID
+        """
+        existing_links = self.links_repo.list(activityId=activity_id)
+        if not existing_links.empty:
+            for _, link in existing_links.iterrows():
+                self.links_repo.delete(link["linkId"])
+
+    def get_linked_race_id(self, activity_id: str) -> Optional[str]:
+        """Get the race ID linked to an activity.
+
+        Args:
+            activity_id: Activity ID
+
+        Returns:
+            Race ID if linked, None otherwise
+        """
+        # Ensure activity_id is a string for comparison
+        activity_id_str = str(activity_id)
+        existing_links = self.links_repo.list(activityId=activity_id_str)
+        if not existing_links.empty:
+            race_id = existing_links.iloc[0].get("raceId")
+            if race_id and pd.notna(race_id) and str(race_id).strip():
+                return str(race_id).strip()
+        return None
 

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from typing import Optional
 
+import pandas as pd
 from babel import numbers
 
 LOCALE = "fr_FR"
@@ -150,3 +151,23 @@ def format_session_duration(seconds: int) -> str:
     if hours:
         return f"{hours}h{minutes:02d}"
     return f"{minutes} min"
+
+
+def format_delta_minutes(seconds: Optional[float]) -> str:
+    """Format time delta in seconds to minutes with sign.
+
+    Args:
+        seconds: Delta in seconds (can be negative)
+
+    Returns:
+        str: Formatted as "+X min" or "-X min" or "-" if None
+    """
+    if seconds is None or pd.isna(seconds):
+        return "-"
+    try:
+        total_seconds = float(seconds)
+        minutes = int(abs(total_seconds) / 60)
+        sign = "+" if total_seconds >= 0 else "-"
+        return f"{sign}{minutes} min"
+    except Exception:
+        return "-"
