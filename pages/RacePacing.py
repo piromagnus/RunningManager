@@ -29,7 +29,7 @@ st.title("Race Pacing")
 cfg = load_config()
 set_locale("fr_FR")
 storage = CsvStorage(base_dir=Path(cfg.data_dir))
-pacer_service = PacerService(storage)
+pacer_service = PacerService(storage, cfg)
 
 # Initialize session state
 if "race_pacing_race_id" not in st.session_state:

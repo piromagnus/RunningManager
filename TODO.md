@@ -35,6 +35,10 @@
 - Pacing of a race with gpx / TCX / FIT : with values for each segment based on the values of recent segments in activities. (HR, Speed, Pace, etc. ascend, speedEq, etc.)
 - In the future refine it with evaluation of previous load in the current activity.
 
+## Pacing comparison
+- Add expected time to spend to each aid station based.
+- Compute the missing speed/speed-eq directly in the pacer tools and save it.
+
 ## Small fix
 
 - Open the card to be linked in the feed.

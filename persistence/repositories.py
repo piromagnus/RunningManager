@@ -38,7 +38,10 @@ class BaseRepo:
         df = _ensure_headers(df, self.headers)
         for k, v in filters.items():
             if k in df.columns:
-                df = df[df[k] == v]
+                # Convert both sides to string for comparison to handle type mismatches
+                df[k] = df[k].astype(str)
+                filter_value = str(v)
+                df = df[df[k] == filter_value]
         return df.reset_index(drop=True)
 
     def get(self, entity_id: str) -> Optional[Dict[str, Any]]:
@@ -105,6 +108,7 @@ class ActivitiesRepo(BaseRepo):
                 "hasTimeseries",
                 "polyline",
                 "rawJsonPath",
+                "raceId",
             ],
             id_column="activityId",
         )
@@ -371,6 +375,20 @@ class ActivitiesMetricsRepo(BaseRepo):
         # Ensure file headers are migrated before appending
         self._migrate_headers_if_needed()
         return super().create(row)
+
+
+class RacePacingLinksRepo(BaseRepo):
+    def __init__(self, storage: CsvStorage):
+        super().__init__(
+            storage,
+            "race-pacing-link.csv",
+            [
+                "linkId",
+                "activityId",
+                "raceId",
+            ],
+            id_column="linkId",
+        )
 
 
 class PlannedMetricsRepo(BaseRepo):
