@@ -982,11 +982,78 @@
         "dependencies": [],
         "priority": "medium",
         "subtasks": []
+      },
+      {
+        "id": 27,
+        "title": "Max Speed Profile (speed + speed-eq) precompute and Activity view",
+        "description": "Precompute per-activity maximum average speed profiles across configurable windows (both raw speed and equivalent speed using the Minetti model) when activities are synced, persist results under data/speed_profil, and render an interactive profile chart on the Activity page.",
+        "details": "Scope and goals\n- Compute a max speed profile per activity as the maximum rolling average over a list of window sizes for both: (a) speed_km_h and (b) speed_eq_km_h (equivalent speed using Minetti energy cost model).\n- Persist one CSV per activity in data/speed_profil/{activity_id}.csv so profiles are computed once at sync and reused by the UI.\n- Add a chart to pages/Activity.py to visualize the two curves across all window sizes.\n- Reuse and extend services/speed_profile_service.py and adapt logic from notebooks/record_speed_profil.ipynb and notebooks/elevation_grade.ipynb.\n\nTech design\n1) Config and storage\n- utils/config.py: extend Config with new path speed_profile_dir = data_dir / \"speed_profil\" and ensure directory creation in load_config().\n- config.py (root): define PROFILE_WINDOW_SIZES = [15, 20, 30, 60, 120, 180, 240, 300, 360, 420, 480, 540, 600, 660, 720, 780, 840, 900, 960, 1020, 1080, 1140, 1200, 1320, 1440, 1560, 1680, 1920, 2160, 2400, 2640, 2880, 3120, 3360, 3600]. Keep values aligned with the existing defaults seen in services/speed_profile_service.profile_based_analysis.\n\n2) Service: compute + persist profiles\n- services/speed_profile_service.py\n  - Add compute_speed_eq_column(df: pd.DataFrame) -> pd.DataFrame that adds a vectorized speed_eq_km_h column from speed_km_h and grade using Minetti energy cost model (lift logic from notebooks/elevation_grade.ipynb). Implementation outline:\n    - Ensure df has speed_km_h and a smoothed grade (the service already computes grade in preprocess_timeseries and can moving_average it at window 10).\n    - Implement a helper minetti_energy_cost(grade: float) and a vectorized wrapper to derive an equivalent-flat speed. Use the Minetti 2002 grade-dependent energy cost curve from the notebook (piecewise polynomial or parametric function); document constants in code and cite the notebook. Fallback: if grade missing, treat grade = 0 so speed_eq_km_h == speed_km_h.\n  - Add compute_max_speed_profiles(df: pd.DataFrame, window_sizes: list[int]) -> pd.DataFrame that:\n    - Smooths speed_km_h (reuse moving_average), ensures grade_ma_10 exists, computes speed_eq_km_h.\n    - For each window size, computes rolling mean centered=True of speed_km_h and speed_eq_km_h and records the maximum for each; optionally capture the index/time at the max for future UX.\n    - Returns a DataFrame with columns: windowSec, maxSpeedKmh, maxSpeedEqKmh (float values in km/h; windowSec as int).\n  - Add save_speed_profile(activity_id: str, profile_df: pd.DataFrame) -> Path and load_speed_profile(activity_id: str) -> Optional[pd.DataFrame] that read/write CSV in config.speed_profile_dir.\n  - Add compute_and_store_speed_profile(activity_id: str, window_sizes: Optional[list[int]] = None) -> Optional[Path] that:\n    - Loads timeseries from cfg.timeseries_dir (reuse existing logic in process_timeseries to read CSV and preprocess via preprocess_timeseries).\n    - Uses PROFILE_WINDOW_SIZES from config.py if window_sizes not provided.\n    - Computes profiles and persists them only if not already present (idempotent/cacheable).\n\n3) Sync hook (compute once on new activities)\n- services/strava_service.py\n  - In sync_last_n_days(...): after creating a new activities.csv row and writing the timeseries, trigger precomputation if the activity has timeseries. Use SpeedProfileService(self.config).compute_and_store_speed_profile(activity_id) inside a try/except; skip if the profile already exists.\n  - In rebuild_from_cache(...): when recomputing metrics_ts for each activity with timeseries, also clear any pre-existing profile CSV for that activity and regenerate it with compute_and_store_speed_profile to keep profiles consistent with the rebuilt metrics.\n\n4) Activity page visualization\n- Add graph/speed_profile.py with create_speed_profile_chart(profile_df: pd.DataFrame) -> alt.Chart:\n  - Two lines (maxSpeedKmh and maxSpeedEqKmh) over x=windowSec (seconds), tooltips with both values and the window.\n  - Labels in French consistent with the page (e.g., \"Vitesse max (km/h)\", \"Vitesse‑eq max (km/h)\", x: \"Fenêtre (s)\").\n- pages/Activity.py:\n  - In the \"Timeseries\" section, load the profile via SpeedProfileService.load_speed_profile(activity_id). If not found, compute on-demand via compute_and_store_speed_profile and reload.\n  - Render a new sub-section titled \"Profils de vitesse maximale\" with the Altair chart.\n\n5) Reuse existing functions and structure\n- Reuse SpeedProfileService.preprocess_timeseries, moving_average, and grade derivations already in services/speed_profile_service.py to avoid duplicating smoothing and grade computation.\n- For equivalent speed, reuse the grade_smoothed column and implement Minetti energy mapping once (either directly in the service or via a small helper in utils if preferred). Reference notebooks/elevation_grade.ipynb to port the exact formula and constants.\n- Keep file I/O consistent with metrics_ts_dir patterns; follow the same error handling approach as save_metrics_ts/load_metrics_ts.\n\nFile changes (high level)\n- utils/config.py: add Config.speed_profile_dir and mkdir; expose via load_config().\n- config.py: add PROFILE_WINDOW_SIZES constant.\n- services/speed_profile_service.py: add speed_eq computation helpers, max profile computation, and load/save helpers for speed profiles.\n- services/strava_service.py: call compute_and_store_speed_profile during sync and rebuild pipelines.\n- graph/speed_profile.py: new chart helper.\n- pages/Activity.py: load and render the speed profile chart in the timeseries tab.\n\nData contract\n- CSV schema at data/speed_profil/{activity_id}.csv:\n  - windowSec:int, maxSpeedKmh:float, maxSpeedEqKmh:float\n  - File is overwritten when rebuilding cache; otherwise created once at first sync.\n\nFallbacks and edge cases\n- If timeseries lacks GPS/grade, compute speed_eq with grade=0 (speed_eq == speed) so the profile still renders.\n- Filter unrealistic speeds consistently with existing preprocess (< 40 km/h).\n- If HR missing, proceed with speed-only logic; HR is not required for this task.\n",
+        "testStrategy": "Unit tests (pytest)\n1) Speed profile computation\n- tests/test_speed_profile_service_profile.py\n  - Build a synthetic df with timestamp at 1s cadence, constant speed 12 km/h, grade 0. PROFILE_WINDOW_SIZES = [15, 30, 60]. compute_max_speed_profiles yields exactly 12.0 for both maxSpeedKmh and maxSpeedEqKmh for each window.\n  - Build a df with a 60s surge to 16 km/h in the middle, otherwise 10 km/h; validate the 60s window picks ~16.0 and 15s/30s windows > 10 and < 16 as expected (tolerance ±0.05 km/h).\n  - Build a df with alternating uphill/downhill (e.g., grade +0.05 / -0.05) at constant speed; verify speed_eq decreases on uphills and increases on downhills relative to raw speed; profile values for speed_eq reflect those adjustments.\n\n2) Persistence\n- tests/test_speed_profile_persist.py\n  - Write a minimal timeseries CSV to cfg.timeseries_dir for a fake activity ID. Call SpeedProfileService.compute_and_store_speed_profile and assert data/speed_profil/{id}.csv exists with columns [windowSec, maxSpeedKmh, maxSpeedEqKmh] and row count == len(PROFILE_WINDOW_SIZES).\n  - Call again and confirm the method is idempotent (no exception; content unchanged).\n\n3) Sync integration (no network)\n- tests/test_strava_service_profile_hook.py\n  - Create a StravaService with a temp CsvStorage and a test Config, monkeypatch internal iteration to simulate one activity with a ready timeseries file. Invoke sync_last_n_days and assert the corresponding speed_profil CSV is created.\n  - For rebuild_from_cache, pre-seed raw and timeseries for multiple activities, call rebuild_from_cache and assert all corresponding profile CSVs exist and were regenerated.\n\n4) Visualization\n- tests/test_speed_profile_chart.py\n  - Provide a small DataFrame with windowSec and two series; create_speed_profile_chart returns an alt.Chart instance (no exception). Keep this unit test light and independent of Streamlit.\n\nManual checks\n- Run the app and open pages/Activity.py for an activity with timeseries. Verify the new \"Profils de vitesse maximale\" chart renders two curves, and that numbers look plausible on flat vs hilly activities.\n- Perform a sync; confirm new profile files appear in data/speed_profil and the Activity page uses them without recomputation.\n",
+        "status": "done",
+        "dependencies": [
+          21
+        ],
+        "priority": "high",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Extend Config with speed_profile_dir",
+            "description": "Update utils/config.py to include a new configuration parameter for speed profile storage directory and ensure its creation.",
+            "dependencies": [],
+            "details": "In utils/config.py, add attribute speed_profile_dir = data_dir / \"speed_profil\" to the Config class. In load_config(), after ensuring other directories exist, call mkdir(parents=True, exist_ok=True) on speed_profile_dir. Follow the pattern used for timeseries_dir and metrics_ts_dir.",
+            "status": "done",
+            "testStrategy": "Unit test to instantiate Config via load_config() and assert that config.speed_profile_dir exists on disk."
+          },
+          {
+            "id": 2,
+            "title": "Add PROFILE_WINDOW_SIZES constant",
+            "description": "Define the list of window sizes for profile computation in config.py.",
+            "dependencies": [
+              1
+            ],
+            "details": "In the root config.py, add PROFILE_WINDOW_SIZES = [15, 20, 30, 60, 120, 180, 240, 300, 360, 420, 480, 540, 600, 660, 720, 780, 840, 900, 960, 1020, 1080, 1140, 1200, 1320, 1440, 1560, 1680, 1920, 2160, 2400, 2640, 2880, 3120, 3360, 3600]. Ensure imports in services/speed_profile_service.py refer to this constant.",
+            "status": "done",
+            "testStrategy": "A simple import test verifying config.PROFILE_WINDOW_SIZES matches the expected list length and contains integers."
+          },
+          {
+            "id": 3,
+            "title": "Implement speed_eq and max profile computation in SpeedProfileService",
+            "description": "Extend services/speed_profile_service.py with methods to compute equivalent speed and rolling max speed profiles.",
+            "dependencies": [
+              2
+            ],
+            "details": "In services/speed_profile_service.py, implement:\n- minetti_energy_cost(grade: float) -> float using the Minetti 2002 energy cost curve (port constants from notebooks/elevation_grade.ipynb).\n- compute_speed_eq_column(df) to add speed_eq_km_h = speed_km_h * (energy_cost_flat / energy_cost_grade).\n- compute_max_speed_profiles(df, window_sizes) that smooths speed_km_h and grade_ma_10, computes speed_eq_km_h, then for each window size computes centered rolling mean and selects max for speed_km_h and speed_eq_km_h. Return DataFrame with columns windowSec, maxSpeedKmh, maxSpeedEqKmh.\nUse existing moving_average and preprocess_timeseries for smoothing and grade.",
+            "status": "done",
+            "testStrategy": "Write pytest unit tests with synthetic uniform-speed DataFrame to assert maxSpeedKmh and maxSpeedEqKmh equal expected values."
+          },
+          {
+            "id": 4,
+            "title": "Add load/save and compute_and_store methods",
+            "description": "Implement persistence layer and orchestrator in SpeedProfileService for CSV I/O and idempotent precomputation.",
+            "dependencies": [
+              3
+            ],
+            "details": "In services/speed_profile_service.py, add:\n- save_speed_profile(activity_id, profile_df) that writes CSV to config.speed_profile_dir/activity_id.csv.\n- load_speed_profile(activity_id) that reads CSV or returns None.\n- compute_and_store_speed_profile(activity_id, window_sizes=None) that:\n  - uses existing timeseries loading and preprocess_timeseries.\n  - uses PROFILE_WINDOW_SIZES if window_sizes is None.\n  - checks if CSV exists; if not, computes profiles and calls save_speed_profile.\nReturn Path or None.\nFollow error handling of load_metrics_ts/save_metrics_ts.",
+            "status": "done",
+            "testStrategy": "Integration test creating a temp timeseries CSV, calling compute_and_store_speed_profile, and verifying the CSV file is created with correct schema."
+          },
+          {
+            "id": 5,
+            "title": "Integrate profile computation and chart in StravaService and Activity page",
+            "description": "Hook precompute into sync pipelines and render interactive chart in pages/Activity.py.",
+            "dependencies": [
+              4
+            ],
+            "details": "In services/strava_service.py, after writing timeseries for an activity in sync_last_n_days and rebuild_from_cache, call compute_and_store_speed_profile(activity_id) inside try/except.\nCreate graph/speed_profile.py with create_speed_profile_chart(profile_df) returning an Altair chart with two lines and French labels.\nIn pages/Activity.py, in the Timeseries section, load profile via SpeedProfileService; if missing, call compute_and_store_speed_profile then reload. Render under a new \"Profils de vitesse maximale\" subsection using create_speed_profile_chart.",
+            "status": "done",
+            "testStrategy": "End-to-end test: simulate syncing an activity, then render pages/Activity.py and assert the chart object is present with expected fields."
+          }
+        ]
       }
     ],
     "metadata": {
       "created": "2025-10-06T19:00:14.797Z",
-      "updated": "2025-10-31T15:45:06.908Z",
+      "updated": "2025-11-04T17:16:40.585Z",
       "description": "Tasks for master context"
     }
   }

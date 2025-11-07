@@ -32,6 +32,7 @@ class Config:
     laps_dir: Path
     mapbox_token: Optional[str]
     metrics_ts_dir: Path
+    speed_profile_dir: Path
     n_cluster: int
 
 
@@ -58,6 +59,7 @@ def load_config() -> Config:
     raw_strava_dir = data_dir / "raw" / "strava"
     laps_dir = data_dir / "laps"
     metrics_ts_dir = data_dir / "metrics_ts"
+    speed_profile_dir = data_dir / "speed_profil"
 
     # Load n_cluster with default of 5
     n_cluster_str = os.getenv("N_CLUSTER", "5")
@@ -71,6 +73,7 @@ def load_config() -> Config:
     _ensure_dir(raw_strava_dir)
     _ensure_dir(laps_dir)
     _ensure_dir(metrics_ts_dir)
+    _ensure_dir(speed_profile_dir)
 
     return Config(
         strava_client_id=strava_client_id,
@@ -83,6 +86,7 @@ def load_config() -> Config:
         laps_dir=laps_dir,
         mapbox_token=mapbox_token,
         metrics_ts_dir=metrics_ts_dir,
+        speed_profile_dir=speed_profile_dir,
         n_cluster=n_cluster,
     )
 

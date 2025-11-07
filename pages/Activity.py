@@ -11,11 +11,13 @@ from streamlit.logger import get_logger
 
 from graph.elevation import prepare_elevation_plot_data, render_elevation_profile, render_grade_histogram
 from graph.pacer_comparison import render_comparison_elevation_profile, render_delta_bar_chart
+from graph.speed_profile import create_speed_profile_chart
 from graph.timeseries import render_timeseries_charts
 from persistence.csv_storage import CsvStorage
 from persistence.repositories import ActivitiesRepo
 from services.activity_detail_service import ActivityDetail, ActivityDetailService
 from services.pacer_service import PacerService
+from services.speed_profile_service import SpeedProfileService
 from services.timeseries_service import TimeseriesService
 from utils.config import load_config, redact
 from utils.elevation_preprocessing import preprocess_for_elevation_profile
@@ -102,6 +104,7 @@ def main() -> None:
     set_locale("fr_FR")
     storage = CsvStorage(cfg.data_dir)
     ts_service = TimeseriesService(cfg)
+    speed_profile_service = SpeedProfileService(cfg)
     detail_service = ActivityDetailService(storage, cfg, ts_service)
     pacer_service = PacerService(storage, cfg)
     activities_repo = ActivitiesRepo(storage)
@@ -158,6 +161,24 @@ def main() -> None:
                     _render_elevation_profile(df)
             else:
                 st.caption("Pas de données timeseries pour cette activité.")
+            
+            # Speed profile section
+            st.subheader("Profils de vitesse maximale")
+            profile_df = speed_profile_service.load_speed_profile(detail.activity_id)
+            if profile_df is None:
+                # Try to compute on-demand
+                try:
+                    speed_profile_service.compute_and_store_speed_profile(detail.activity_id)
+                    profile_df = speed_profile_service.load_speed_profile(detail.activity_id)
+                except Exception as exc:
+                    logger.exception("Failed to compute speed profile: %s", exc)
+                    profile_df = None
+            
+            if profile_df is not None and not profile_df.empty:
+                chart = create_speed_profile_chart(profile_df, chart_width=CHART_WIDTH)
+                st.altair_chart(chart, use_container_width=True)
+            else:
+                st.caption("Impossible de charger ou calculer le profil de vitesse pour cette activité.")
         
         with tab2:
             _render_pacing_comparison(activity_id_str, linked_race_id, pacer_service, ts_service)
@@ -174,6 +195,24 @@ def main() -> None:
                 _render_elevation_profile(df)
         else:
             st.caption("Pas de données timeseries pour cette activité.")
+        
+        # Speed profile section
+        st.subheader("Profils de vitesse maximale")
+        profile_df = speed_profile_service.load_speed_profile(detail.activity_id)
+        if profile_df is None:
+            # Try to compute on-demand
+            try:
+                speed_profile_service.compute_and_store_speed_profile(detail.activity_id)
+                profile_df = speed_profile_service.load_speed_profile(detail.activity_id)
+            except Exception as exc:
+                logger.exception("Failed to compute speed profile: %s", exc)
+                profile_df = None
+        
+        if profile_df is not None and not profile_df.empty:
+            chart = create_speed_profile_chart(profile_df, chart_width=CHART_WIDTH)
+            st.altair_chart(chart, use_container_width=True)
+        else:
+            st.caption("Impossible de charger ou calculer le profil de vitesse pour cette activité.")
 
     st.subheader("Trace sur la carte")
     map_choice = _select_map_style(mapbox_token)

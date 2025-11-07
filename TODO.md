@@ -4,10 +4,6 @@
 
 - On linking, recompute the weekly activites of the week containing the linked activity
 
-## Settings
-
-- Add a button to recompute the weekly metrics and daily metrics from the activities, planned sessions and settings.
-
 ## ANalytics
 
 - Estimation of Threshold
@@ -20,7 +16,7 @@
 
 ## Activites analytics
 
-- Compute automatic split ascend, flat and descent with metrics in each one of them, segment fusion easy in UI
+- Compute automatic split ascend, flat and descent with metrics in each one of them, segment fusion easy in UI -> store them and make comparison over time. 
 - Similar activities for an activity -> recent similar activities.
 
 ## Dashboard
@@ -38,6 +34,7 @@
 ## Pacing comparison
 - Add expected time to spend to each aid station based.
 - Compute the missing speed/speed-eq directly in the pacer tools and save it.
+- Some errors between gpx expected and actual gpx but I don't think I can improve it much.
 
 ## Small fix
 

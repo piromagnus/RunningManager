@@ -17,6 +17,7 @@ import scipy.stats as stats
 from haversine import haversine
 from sklearn.cluster import KMeans
 
+import config
 from utils.config import Config
 
 
@@ -55,6 +56,8 @@ class SpeedProfileService:
             self.config = config
             self.metrics_ts_dir = config.metrics_ts_dir
             self.metrics_ts_dir.mkdir(parents=True, exist_ok=True)
+            self.speed_profile_dir = config.speed_profile_dir
+            self.speed_profile_dir.mkdir(parents=True, exist_ok=True)
 
     # ------------------------------------------------------------------
     # Preprocessing Functions
@@ -562,4 +565,288 @@ class SpeedProfileService:
             return pd.read_csv(path)
         except Exception:
             return None
+
+    # ------------------------------------------------------------------
+    # Speed Equivalent (Minetti Energy Cost Model)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def minetti_energy_cost_walking(grade: float) -> float:
+        """
+        Calculate energy cost of walking at a given grade using Minetti et al. (2002).
+        
+        Energy cost formula: Cw(i) = 280.5i^5 - 58.7i^4 - 76.8i^3 + 51.9i^2 + 19.6i + 2.5
+        
+        Parameters:
+        grade (float): Grade as decimal (e.g., 0.1 for 10% grade)
+        
+        Returns:
+        float: Energy cost per unit distance
+        """
+        # Clamp grade to valid range [-0.5, 0.5]
+        if grade >= 0.5:
+            grade = 0.5
+        elif grade <= -0.5:
+            grade = -0.5
+        
+        return (
+            280.5 * grade**5 -
+            58.7 * grade**4 -
+            76.8 * grade**3 +
+            51.9 * grade**2 +
+            19.6 * grade +
+            2.5
+        )
+
+    @staticmethod
+    def minetti_energy_cost_running(grade: float) -> float:
+        """
+        Calculate energy cost of running at a given grade using Minetti et al. (2002).
+        
+        Energy cost formula: Cr(i) = 155.4i^5 - 30.4i^4 - 43.3i^3 + 46.3i^2 + 19.5i + 3.6
+        
+        Parameters:
+        grade (float): Grade as decimal (e.g., 0.1 for 10% grade)
+        
+        Returns:
+        float: Energy cost per unit distance
+        """
+        # Clamp grade to valid range [-0.5, 0.5]
+        if grade >= 0.5:
+            grade = 0.5
+        elif grade <= -0.5:
+            grade = -0.5
+        
+        return (
+            155.4 * grade**5 -
+            30.4 * grade**4 -
+            43.3 * grade**3 +
+            46.3 * grade**2 +
+            19.5 * grade +
+            3.6
+        )
+
+    @staticmethod
+    def compute_speed_eq_column(df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Add speed_eq_km_h column using Minetti energy cost model.
+        
+        Equivalent speed represents the speed on flat ground that would require
+        the same energy expenditure as the actual speed on the given grade.
+        
+        Calculation: speed_eq = speed * (C(grade) / C(0))
+        - For walking (speed <= 6 km/h): C(0) = 2.5
+        - For running (speed > 6 km/h): C(0) = 3.6
+        
+        Parameters:
+        df (pd.DataFrame): DataFrame with speed_km_h and grade columns
+        
+        Returns:
+        pd.DataFrame: DataFrame with added speed_eq_km_h column
+        """
+        df = df.copy()
+        
+        # Constants for energy cost on flat ground
+        ENERGY_COST_WALKING_FLAT = 2.5
+        ENERGY_COST_RUNNING_FLAT = 3.6
+        WALKING_THRESHOLD = 6.0  # km/h
+        
+        # Ensure grade_ma_10 exists (should be computed by preprocess_timeseries)
+        if "grade_ma_10" not in df.columns:
+            if "grade" in df.columns:
+                df = SpeedProfileService.moving_average(df, window_size=10, col="grade")
+            else:
+                # No grade data, treat as flat (grade = 0)
+                df["grade_ma_10"] = 0.0
+        
+        def calculate_speed_eq(row: pd.Series) -> float:
+            speed = row.get("speed_km_h", np.nan)
+            grade = row.get("grade_ma_10", 0.0)
+            
+            if pd.isna(speed) or speed <= 0:
+                return np.nan
+            
+            # Handle NaN grade as flat (0.0)
+            if pd.isna(grade):
+                grade = 0.0
+            
+            # Classify as walking or running
+            if speed <= WALKING_THRESHOLD:
+                cost_at_grade = SpeedProfileService.minetti_energy_cost_walking(grade)
+                cost_flat = ENERGY_COST_WALKING_FLAT
+            else:
+                cost_at_grade = SpeedProfileService.minetti_energy_cost_running(grade)
+                cost_flat = ENERGY_COST_RUNNING_FLAT
+            
+            # Calculate equivalent speed: speed_eq = speed * (C(grade) / C(0))
+            if cost_flat <= 0:
+                return speed  # Fallback to original speed
+            
+            speed_eq = max(0.0, speed * (cost_at_grade / cost_flat))
+            return speed_eq
+        
+        df["speed_eq_km_h"] = df.apply(calculate_speed_eq, axis=1)
+        return df
+
+    def compute_max_speed_profiles(
+        self, df: pd.DataFrame, window_sizes: List[int]
+    ) -> pd.DataFrame:
+        """
+        Compute maximum rolling average speed profiles for both raw speed and equivalent speed.
+        
+        For each window size, computes centered rolling mean and records the maximum value
+        for both speed_km_h and speed_eq_km_h.
+        
+        Parameters:
+        df (pd.DataFrame): Preprocessed timeseries DataFrame with speed_km_h
+        window_sizes (List[int]): List of window sizes in seconds
+        
+        Returns:
+        pd.DataFrame: DataFrame with columns windowSec, maxSpeedKmh, maxSpeedEqKmh
+        """
+        df = df.copy()
+        
+        # Ensure speed_km_h is smoothed
+        if "speed_km_h_ma_10" not in df.columns:
+            df = self.moving_average(df, window_size=10, col="speed_km_h")
+            df = df.rename(columns={"speed_km_h_ma_10": "speed_km_h_smooth"})
+        else:
+            df = df.rename(columns={"speed_km_h_ma_10": "speed_km_h_smooth"})
+        
+        # Ensure grade_ma_10 exists for speed_eq computation
+        if "grade_ma_10" not in df.columns:
+            if "grade" in df.columns:
+                df = self.moving_average(df, window_size=10, col="grade")
+            else:
+                df["grade_ma_10"] = 0.0
+        
+        # Compute speed_eq_km_h
+        df = self.compute_speed_eq_column(df)
+        
+        # Compute max profiles for each window size
+        results = []
+        for window_sec in window_sizes:
+            # Rolling mean for raw speed (centered)
+            rolling_speed = df["speed_km_h_smooth"].rolling(
+                window=window_sec, min_periods=1, center=True
+            ).mean()
+            max_speed = rolling_speed.max()
+            
+            # Rolling mean for equivalent speed (centered)
+            rolling_speed_eq = df["speed_eq_km_h"].rolling(
+                window=window_sec, min_periods=1, center=True
+            ).mean()
+            max_speed_eq = rolling_speed_eq.max()
+            
+            results.append({
+                "windowSec": window_sec,
+                "maxSpeedKmh": float(max_speed) if not pd.isna(max_speed) else 0.0,
+                "maxSpeedEqKmh": float(max_speed_eq) if not pd.isna(max_speed_eq) else 0.0,
+            })
+        
+        return pd.DataFrame(results)
+
+    # ------------------------------------------------------------------
+    # Speed Profile Persistence
+    # ------------------------------------------------------------------
+
+    def save_speed_profile(self, activity_id: str, profile_df: pd.DataFrame) -> Path:
+        """
+        Save speed profile DataFrame to CSV file.
+        
+        Parameters:
+        activity_id (str): Activity identifier
+        profile_df (pd.DataFrame): Profile DataFrame with windowSec, maxSpeedKmh, maxSpeedEqKmh
+        
+        Returns:
+        Path: Path to saved file
+        """
+        path = self.speed_profile_dir / f"{activity_id}.csv"
+        profile_df.to_csv(path, index=False)
+        return path
+
+    def load_speed_profile(self, activity_id: str) -> Optional[pd.DataFrame]:
+        """
+        Load speed profile from CSV file.
+        
+        Parameters:
+        activity_id (str): Activity identifier
+        
+        Returns:
+        Optional[pd.DataFrame]: Profile DataFrame or None if not found
+        """
+        path = self.speed_profile_dir / f"{activity_id}.csv"
+        if not path.exists():
+            return None
+        try:
+            return pd.read_csv(path)
+        except Exception:
+            return None
+
+    def compute_and_store_speed_profile(
+        self, activity_id: str, window_sizes: Optional[List[int]] = None
+    ) -> Optional[Path]:
+        """
+        Compute and store speed profile for an activity.
+        
+        Loads timeseries, preprocesses it, computes max speed profiles for all window sizes,
+        and persists the result. If profile already exists, returns path without recomputing
+        (idempotent).
+        
+        Parameters:
+        activity_id (str): Activity identifier
+        window_sizes (Optional[List[int]]): Window sizes in seconds. Uses PROFILE_WINDOW_SIZES if None.
+        
+        Returns:
+        Optional[Path]: Path to saved profile CSV, or None if computation failed
+        """
+        if window_sizes is None:
+            window_sizes = config.PROFILE_WINDOW_SIZES
+        
+        # Check if profile already exists
+        existing_profile = self.load_speed_profile(activity_id)
+        if existing_profile is not None:
+            return self.speed_profile_dir / f"{activity_id}.csv"
+        
+        # Load timeseries
+        timeseries_path = self.config.timeseries_dir / f"{activity_id}.csv"
+        if not timeseries_path.exists():
+            return None
+        
+        try:
+            df = pd.read_csv(timeseries_path)
+        except Exception:
+            return None
+        
+        if df.empty:
+            return None
+        
+        # Preprocess timeseries
+        df_processed = self.preprocess_timeseries(df)
+        
+        # If preprocessing failed (no GPS data), fall back to using paceKmh directly
+        if df_processed.empty or "speed_km_h" not in df_processed.columns:
+            if "paceKmh" not in df.columns:
+                return None
+            # Use paceKmh directly - minimal preprocessing
+            df_processed = df.copy()
+            df_processed["speed_km_h"] = pd.to_numeric(df_processed["paceKmh"], errors="coerce")
+            df_processed = df_processed.dropna(subset=["speed_km_h"])
+            df_processed = df_processed[df_processed["speed_km_h"] > 0]
+            df_processed = self.time_from_timestamp(df_processed)
+            df_processed = self.duration(df_processed)
+            # Filter unrealistic speeds
+            df_processed = df_processed[df_processed["speed_km_h"] < 40].reset_index(drop=True)
+            # Add grade column (0.0 if missing)
+            if "grade" not in df_processed.columns:
+                df_processed["grade"] = 0.0
+        
+        if df_processed.empty or "speed_km_h" not in df_processed.columns:
+            return None
+        
+        # Compute max speed profiles
+        profile_df = self.compute_max_speed_profiles(df_processed, window_sizes)
+        
+        # Save profile
+        return self.save_speed_profile(activity_id, profile_df)
 

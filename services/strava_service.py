@@ -206,6 +206,12 @@ class StravaService:
                     self.lap_metrics.compute_and_store(athlete_id, detail)
                 except Exception:
                     LOGGER.exception("Failed to compute lap metrics for activity %s", activity_id)
+                # Compute speed profile if timeseries exists
+                if has_timeseries:
+                    try:
+                        self.speed_profile_service.compute_and_store_speed_profile(activity_id)
+                    except Exception:
+                        LOGGER.exception("Failed to compute speed profile for activity %s", activity_id)
                 existing_raw_ids.add(activity_id)
                 imported_from_api.append(activity_id)
             else:
@@ -323,6 +329,17 @@ class StravaService:
                     except Exception:
                         pass
         
+        # Clear speed profile files for all activities with timeseries (force recomputation)
+        speed_profile_dir = self.config.speed_profile_dir
+        if speed_profile_dir.exists():
+            for activity_id in activity_ids:
+                speed_profile_path = speed_profile_dir / f"{activity_id}.csv"
+                if speed_profile_path.exists():
+                    try:
+                        speed_profile_path.unlink()
+                    except Exception:
+                        pass
+        
         # Recompute metrics for rebuilt activities (includes hrSpeedShift)
         if activity_ids:
             MetricsComputationService(self.storage).recompute_for_activities(activity_ids)
@@ -366,6 +383,12 @@ class StravaService:
                 if result is not None:
                     self.speed_profile_service.save_metrics_ts(activity_id, result)
                     all_recomputed.append(activity_id)
+                
+                # Recompute speed profile
+                try:
+                    self.speed_profile_service.compute_and_store_speed_profile(activity_id)
+                except Exception:
+                    LOGGER.exception("Failed to recompute speed profile for activity %s", activity_id)
             except Exception:
                 LOGGER.exception("Failed to recompute metrics_ts for activity %s", activity_id)
         
