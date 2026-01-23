@@ -8,6 +8,8 @@ __pycache__/
 .idea/
 data/tokens*
 data/raw/
+data/speed_profil/
+data/metrics_ts/
 data/timeseries/
 data/laps/
 .python-version
