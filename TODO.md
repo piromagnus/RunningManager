@@ -12,7 +12,14 @@
 - Time in HR range (either custom or via Mips) for each week
 - Ratio Funda vs Intense.
 - Score of the race (with a betrail/ITRA/UTMB like )
--
+
+
+
+## Interaval analysis
+- Magnetic hysteresis : The path in the the HR-Speed plane is not the same for starting and stopping. The space between the two path can be seen as a sort of FC recup
+- Memorise the shift between HR and Speed and look for a correlation with the fitness level.
+- Try to keep only the interval part on the analysis.
+- Create the 2 path curves for each interval
 
 ## Activites analytics
 
