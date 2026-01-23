@@ -422,7 +422,69 @@ class SpeedProfileService:
     def process_timeseries(
         self, activity_id: str, strategy: str = "cluster", n_clusters: Optional[int] = None
     ) -> Optional[SpeedProfileResult]:
-        """Process a full timeseries file and return analysis results."""
+        """
+        Processes a complete timeseries data file for a given activity and returns analysis results according
+        to the chosen strategy ("cluster" or "profile").
+
+        This function performs a sequence of operations to transform timeseries data (such as HR and speed traces
+        from running or cycling activities) into summarized analytical results, ready for further analysis or visualization. The
+        function is robust, applying fallback strategies if certain fields are missing, and covers both clustering-based 
+        and profile-based approaches. The steps are as follows:
+
+        1. Load the Timeseries Data:
+            - Try reading the timeseries CSV corresponding to the provided `activity_id` from the configured directory.
+            - If the file does not exist, or loading fails, or is missing HR data, return None.
+
+        2. Preprocessing:
+            - Attempt to preprocess the timeseries using GPS-derived speeds (via `preprocess_timeseries`). This typically 
+              refines or creates the `speed_km_h` column from raw GPS data.
+            - If GPS-based speed cannot be computed, fall back to using the `paceKmh` column directly (if available).
+                - Convert `paceKmh` to `speed_km_h`, remove rows with missing or nonpositive speeds or HR, recompute time 
+                  and duration columns, and filter for realistic speed ranges.
+
+        3. Validation:
+            - After preprocessing, check that the dataframe is non-empty and contains both HR and speed columns. 
+              If not, return None.
+
+        4. Heart Rate / Speed Shift Computation:
+            - Compute the temporal shift (best_offset) between heart rate (HR) and speed signals to maximize their correlation.
+
+        5. Data Smoothing and Filtering:
+            - Filter data to HR values above 120 bpm (to focus on active segments).
+            - Smooth the HR and speed signals using a moving average (window=10).
+            - Rename the smoothed columns for clarity and shift HR by the calculated offset for alignment.
+
+        6. Analysis Strategy:
+            - If `strategy` is "cluster":
+                - Call `cluster_based_analysis` to segment data into HR/speed clusters, fit a regression line per cluster, 
+                  and summarize each segment.
+                - Return a `SpeedProfileResult` object comprising shift, correlation, cluster labels, smooth HR/speed, 
+                  and cluster-wise regression results.
+            - If `strategy` is "profile":
+                - Call `profile_based_analysis` to compute the relationship between HR and speed profiles across 
+                  multiple rolling window sizes.
+                - Additionally, calculate maximum average speed and HR per window size.
+                - Return a `SpeedProfileResult` object summarizing profile-based regression, as well as the computed 
+                  profiles for further review or plotting.
+
+        Args:
+            activity_id (str): Identifier for the activity whose timeseries should be processed. This references a specific CSV file.
+            strategy (str, optional): Which analysis method to use: 
+                - "cluster": HR/Speed clustering analysis.
+                - "profile": Profile-based (rolling average) analysis.
+                Default is "cluster".
+            n_clusters (Optional[int], optional): Number of clusters for cluster-based analysis. If not provided, uses
+                the value from the configuration.
+
+        Returns:
+            Optional[SpeedProfileResult]:
+                - Returns a populated SpeedProfileResult containing the computed analysis, or None if the process failed at any stage.
+
+        Detailed Notes:
+            - Both analysis strategies return timeseries-aligned HR/speed data and regression outputs.
+            - This function handles missing GPS or speed data gracefully, defaulting to fallback columns when appropriate.
+            - Returns are always consistent in typing; None is only returned on hard failures (missing data/columns).
+        """
         if n_clusters is None:
             n_clusters = self.config.n_cluster
         path = self.config.timeseries_dir / f"{activity_id}.csv"

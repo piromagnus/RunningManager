@@ -3,6 +3,7 @@ SPDX-License-Identifier: GPL-3.0-or-later
 """
 
 import datetime as dt
+import math
 from pathlib import Path
 
 import streamlit as st
@@ -92,44 +93,110 @@ strava_days_default = coerce_int(existing_settings.get("stravaSyncDays"), 14)
 bike_eq_dist_default = coerce_float(existing_settings.get("bikeEqDistance"), 0.3)
 bike_eq_ascent_default = coerce_float(existing_settings.get("bikeEqAscent"), 0.02)
 bike_eq_descent_default = coerce_float(existing_settings.get("bikeEqDescent"), 0.0)
+ski_eq_dist_default = coerce_float(existing_settings.get("skiEqDistance"), 1.0)
+ski_eq_ascent_default = coerce_float(existing_settings.get("skiEqAscent"), distance_eq_default)
+ski_eq_descent_default = coerce_float(existing_settings.get("skiEqDescent"), 0.0)
+
+
+def _float_changed(old: float, new: float) -> bool:
+    return not math.isclose(float(old), float(new), rel_tol=1e-9, abs_tol=1e-9)
 
 
 st.subheader("Coach Settings")
 units = st.selectbox("Units", ["metric"], index=0, help="Metric units only in MVP")
-distance_eq = st.number_input(
-    "Distance-eq factor (km per meter ascent)",
-    min_value=0.0,
-    max_value=0.1,
-    value=float(distance_eq_default),
-    step=0.001,
-    help="Default: 0.01 (100 m ascent = 1.0 km)",
+
+st.markdown("#### Paramètres DistEq")
+dist_eq_profiles = {
+    "TRAIL_RUN": "Trail running",
+    "RIDE": "Cyclisme",
+    "BACKCOUNTRY_SKI": "Ski de rando",
+}
+dist_eq_profile = st.selectbox(
+    "Profil d'activité pour DistEq",
+    options=list(dist_eq_profiles.keys()),
+    format_func=lambda key: dist_eq_profiles[key],
 )
 
-st.markdown("#### Équivalences vélo (DistEq)")
-bike_eq_distance = st.number_input(
-    "Facteur distance (vélo)",
-    min_value=0.0,
-    max_value=5.0,
-    value=float(bike_eq_dist_default),
-    step=0.01,
-    help="Contribution de la distance pour le vélo (par défaut 0.30).",
-)
-bike_eq_ascent = st.number_input(
-    "Facteur D+ (vélo)",
-    min_value=0.0,
-    max_value=1.0,
-    value=float(bike_eq_ascent_default),
-    step=0.001,
-    help="Contribution du dénivelé positif pour le vélo (par défaut 0.02).",
-)
-bike_eq_descent = st.number_input(
-    "Facteur D- (vélo)",
-    min_value=0.0,
-    max_value=1.0,
-    value=float(bike_eq_descent_default),
-    step=0.001,
-    help="Contribution du dénivelé négatif pour le vélo (par défaut 0.00).",
-)
+distance_eq = float(distance_eq_default)
+bike_eq_distance = float(bike_eq_dist_default)
+bike_eq_ascent = float(bike_eq_ascent_default)
+bike_eq_descent = float(bike_eq_descent_default)
+ski_eq_distance = float(ski_eq_dist_default)
+ski_eq_ascent = float(ski_eq_ascent_default)
+ski_eq_descent = float(ski_eq_descent_default)
+
+if dist_eq_profile == "TRAIL_RUN":
+    distance_eq = st.number_input(
+        "Distance-eq factor (km per meter ascent)",
+        min_value=0.0,
+        max_value=0.1,
+        value=float(distance_eq_default),
+        step=0.001,
+        help="Default: 0.01 (100 m ascent = 1.0 km)",
+        key="dist_eq_factor",
+    )
+elif dist_eq_profile == "RIDE":
+    st.markdown("##### Équivalences vélo (DistEq)")
+    bike_eq_distance = st.number_input(
+        "Facteur distance (vélo)",
+        min_value=0.0,
+        max_value=5.0,
+        value=float(bike_eq_dist_default),
+        step=0.01,
+        help="Contribution de la distance pour le vélo (par défaut 0.30).",
+        key="bike_eq_distance",
+    )
+    bike_eq_ascent = st.number_input(
+        "Facteur D+ (vélo)",
+        min_value=0.0,
+        max_value=1.0,
+        value=float(bike_eq_ascent_default),
+        step=0.001,
+        format="%.3f",
+        help="Contribution du dénivelé positif pour le vélo (par défaut 0.02).",
+        key="bike_eq_ascent",
+    )
+    bike_eq_descent = st.number_input(
+        "Facteur D- (vélo)",
+        min_value=0.0,
+        max_value=1.0,
+        value=float(bike_eq_descent_default),
+        step=0.001,
+        format="%.3f",
+        help="Contribution du dénivelé négatif pour le vélo (par défaut 0.00).",
+        key="bike_eq_descent",
+    )
+else:
+    st.markdown("##### Équivalences ski de rando (DistEq)")
+    ski_eq_distance = st.number_input(
+        "Facteur distance (ski de rando)",
+        min_value=0.0,
+        max_value=5.0,
+        value=float(ski_eq_dist_default),
+        step=0.01,
+        help="Contribution de la distance pour le ski de rando (par défaut 1.00).",
+        key="ski_eq_distance",
+    )
+    ski_eq_ascent = st.number_input(
+        "Facteur D+ (ski de rando)",
+        min_value=0.0,
+        max_value=1.0,
+        value=float(ski_eq_ascent_default),
+        step=0.001,
+        format="%.3f",
+        help="Contribution du dénivelé positif pour le ski de rando (par défaut 0.01).",
+        key="ski_eq_ascent",
+    )
+    ski_eq_descent = st.number_input(
+        "Facteur D- (ski de rando)",
+        min_value=0.0,
+        max_value=1.0,
+        value=float(ski_eq_descent_default),
+        step=0.001,
+        format="%.3f",
+        help="Contribution du dénivelé négatif pour le ski de rando (par défaut 0.00).",
+        key="ski_eq_descent",
+    )
 strava_sync_days = st.number_input(
     "Jours à synchroniser avec Strava",
     min_value=1,
@@ -153,10 +220,41 @@ if st.button("Save Settings"):
         "bikeEqDistance": float(bike_eq_distance),
         "bikeEqAscent": float(bike_eq_ascent),
         "bikeEqDescent": float(bike_eq_descent),
+        "skiEqDistance": float(ski_eq_distance),
+        "skiEqAscent": float(ski_eq_ascent),
+        "skiEqDescent": float(ski_eq_descent),
     }
+    categories_to_recompute: set[str] = set()
+    if _float_changed(distance_eq_default, payload["distanceEqFactor"]):
+        categories_to_recompute.update(["RUN", "TRAIL_RUN", "HIKE"])
+    if any(
+        _float_changed(old, new)
+        for old, new in (
+            (bike_eq_dist_default, payload["bikeEqDistance"]),
+            (bike_eq_ascent_default, payload["bikeEqAscent"]),
+            (bike_eq_descent_default, payload["bikeEqDescent"]),
+        )
+    ):
+        categories_to_recompute.add("RIDE")
+    if any(
+        _float_changed(old, new)
+        for old, new in (
+            (ski_eq_dist_default, payload["skiEqDistance"]),
+            (ski_eq_ascent_default, payload["skiEqAscent"]),
+            (ski_eq_descent_default, payload["skiEqDescent"]),
+        )
+    ):
+        categories_to_recompute.add("BACKCOUNTRY_SKI")
     settings_repo.update("coach-1", payload)
     existing_settings.update(payload)
-    st.success("Settings saved")
+    if categories_to_recompute:
+        metrics_service.recompute_for_categories(sorted(categories_to_recompute))
+        st.success(
+            "Settings saved. Recalcul DistEq appliqué à: "
+            + ", ".join(sorted(categories_to_recompute))
+        )
+    else:
+        st.success("Settings saved")
 
 if st.button("Recompute weekly & daily metrics"):
     metrics_service.recompute_all()

@@ -40,6 +40,7 @@ CATEGORY_OPTIONS = {
     "TRAIL_RUN": "Trail",
     "HIKE": "Randonnée",
     "RIDE": "Cyclisme",
+    "BACKCOUNTRY_SKI": "Ski de rando",
 }
 
 METRIC_CONFIG = {

@@ -11,6 +11,7 @@ from typing import Any, Dict
 
 import streamlit as st
 
+from services.metrics_service import MetricsComputationService
 from services.session_templates_service import SessionTemplatesService
 
 
@@ -24,6 +25,7 @@ def render_template_actions(
     state: Dict[str, Any],
     templates_service: SessionTemplatesService,
     list_templates_cache_clear_func,
+    metrics_service: MetricsComputationService | None = None,
 ) -> None:
     """Render action buttons for template management.
 
@@ -37,6 +39,7 @@ def render_template_actions(
         state: Session state dictionary
         templates_service: SessionTemplatesService instance
         list_templates_cache_clear_func: Function to clear templates cache
+        metrics_service: Optional MetricsComputationService instance
     """
     col_save, col_save_new, col_schedule, col_delete = st.columns([1, 1, 1, 1])
     with col_save:
@@ -128,6 +131,8 @@ def render_template_actions(
                     templates_service.apply_to_calendar(
                         template_id, athlete_id, schedule_date, notes=session_notes
                     )
+                    if metrics_service:
+                        metrics_service.recompute_planned_for_athlete(str(athlete_id))
                     list_templates_cache_clear_func()
                     st.session_state["planner_templates_refresh"] = True
                     st.success("Modèle planifié et appliqué au calendrier.")

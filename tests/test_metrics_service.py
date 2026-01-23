@@ -5,6 +5,8 @@ SPDX-License-Identifier: GPL-3.0-or-later
 import json
 from pathlib import Path
 
+import pytest
+
 from persistence.csv_storage import CsvStorage
 from persistence.repositories import (
     ActivitiesMetricsRepo,
@@ -175,3 +177,44 @@ def test_recompute_metrics(tmp_path):
     assert float(first_day["distanceKm"]) > 0.0
     assert float(first_day["distanceEqKm"]) >= float(first_day["distanceKm"])
     assert float(first_day["acuteDistanceKm"]) >= float(first_day["distanceKm"])
+
+
+def test_ski_distance_eq_applied(tmp_path):
+    storage = _bootstrap(tmp_path)
+    settings = SettingsRepo(storage)
+    settings.update(
+        "coach-1",
+        {
+            "coachId": "coach-1",
+            "skiEqDistance": 0.8,
+            "skiEqAscent": 0.02,
+            "skiEqDescent": 0.0,
+        },
+    )
+    activities_repo = ActivitiesRepo(storage)
+    activities_repo.create(
+        {
+            "activityId": "ski-1",
+            "athleteId": "ath-1",
+            "source": "manual",
+            "sportType": "BackcountrySki",
+            "startTime": "2025-02-12T09:00:00Z",
+            "distanceKm": 12.0,
+            "elapsedSec": 4200,
+            "movingSec": 4000,
+            "ascentM": 500.0,
+            "avgHr": 145.0,
+            "maxHr": 170.0,
+            "hasTimeseries": False,
+            "polyline": "",
+            "rawJsonPath": "",
+        }
+    )
+
+    MetricsComputationService(storage).recompute_athlete("ath-1")
+
+    metrics = ActivitiesMetricsRepo(storage).list()
+    row = metrics[metrics["activityId"].astype(str) == "ski-1"].iloc[0]
+    expected = 12.0 * 0.8 + 500.0 * 0.02
+    assert row["category"] == "BACKCOUNTRY_SKI"
+    assert pytest.approx(float(row["distanceEqKm"]), rel=1e-6) == expected

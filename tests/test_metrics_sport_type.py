@@ -65,3 +65,61 @@ def test_activity_sport_type_inferred_from_raw(tmp_path: Path) -> None:
     row = df[df["activityId"].astype(str) == act_id].iloc[0]
     assert row["sportType"] == "TrailRun"
     assert row["category"] == "TRAIL_RUN"
+
+
+def test_activity_sport_type_backcountry_ski_category(tmp_path: Path) -> None:
+    storage = CsvStorage(base_dir=tmp_path)
+    activities = ActivitiesRepo(storage)
+    activities.create(
+        {
+            "activityId": "ski-1",
+            "athleteId": "ath-1",
+            "source": "manual",
+            "sportType": "BackcountrySki",
+            "startTime": "2025-01-10T08:00:00Z",
+            "distanceKm": 15.0,
+            "elapsedSec": 5400,
+            "movingSec": 5200,
+            "ascentM": 300.0,
+            "avgHr": 140.0,
+            "maxHr": 165.0,
+            "hasTimeseries": False,
+            "polyline": "",
+            "rawJsonPath": "",
+        }
+    )
+
+    MetricsComputationService(storage).recompute_athlete("ath-1")
+
+    df = pd.read_csv(tmp_path / "activities_metrics.csv")
+    row = df[df["activityId"].astype(str) == "ski-1"].iloc[0]
+    assert row["category"] == "BACKCOUNTRY_SKI"
+
+
+def test_activity_sport_type_virtual_ride_category(tmp_path: Path) -> None:
+    storage = CsvStorage(base_dir=tmp_path)
+    activities = ActivitiesRepo(storage)
+    activities.create(
+        {
+            "activityId": "ride-1",
+            "athleteId": "ath-1",
+            "source": "manual",
+            "sportType": "VirtualRide",
+            "startTime": "2025-01-11T08:00:00Z",
+            "distanceKm": 25.0,
+            "elapsedSec": 3600,
+            "movingSec": 3500,
+            "ascentM": 200.0,
+            "avgHr": 130.0,
+            "maxHr": 160.0,
+            "hasTimeseries": False,
+            "polyline": "",
+            "rawJsonPath": "",
+        }
+    )
+
+    MetricsComputationService(storage).recompute_athlete("ath-1")
+
+    df = pd.read_csv(tmp_path / "activities_metrics.csv")
+    row = df[df["activityId"].astype(str) == "ride-1"].iloc[0]
+    assert row["category"] == "RIDE"

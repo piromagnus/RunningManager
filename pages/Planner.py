@@ -28,6 +28,7 @@ from utils.ui_helpers import get_dialog_factory
 from persistence.csv_storage import CsvStorage
 from persistence.repositories import PlannedSessionsRepo, AthletesRepo, ThresholdsRepo
 from services.templates_service import TemplatesService
+from services.metrics_service import MetricsComputationService
 from services.planner_service import PlannerService
 from services.planner_presenter import build_card_view_model, build_empty_state_placeholder
 from services.session_templates_service import SessionTemplatesService
@@ -47,6 +48,7 @@ thr_repo = ThresholdsRepo(storage)
 tmpl = TemplatesService(storage)
 planner = PlannerService(storage)
 session_templates = SessionTemplatesService(storage)
+metrics_service = MetricsComputationService(storage)
 
 
 
@@ -728,6 +730,7 @@ with st.expander("Create/Edit session", expanded=bool(edit_ctx)):
                 else:
                     sid = sessions_repo.create(row)
                     st.success(f"Session added: {sid}")
+                metrics_service.recompute_planned_for_athlete(str(athlete_id))
                 if should_prompt:
                     planner_state.get("template_context", {})["prompt_ack"] = True
                     st.session_state["planner_template_prompt_data"] = {
@@ -751,6 +754,7 @@ with st.expander("Create/Edit session", expanded=bool(edit_ctx)):
     with col_delete:
         if existing and st.button("🗑️ Delete", help="Delete session"):
             sessions_repo.delete(existing["plannedSessionId"])
+            metrics_service.recompute_planned_for_athlete(str(athlete_id))
             get_sessions_df_cached.clear()
             st.session_state["planner_edit"] = None
             _reset_planner_state()
@@ -959,6 +963,7 @@ if athlete_id:
                     for _, row in df_in_week.iterrows():
                         sessions_repo.delete(str(row.get("plannedSessionId")))
                 tmpl.apply_week_template(athlete_id, options[sel], week_start.date(), sessions_repo)
+                metrics_service.recompute_planned_for_athlete(str(athlete_id))
                 get_sessions_df_cached.clear()
                 st.success("Template applied")
                 st.rerun()

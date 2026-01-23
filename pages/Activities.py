@@ -10,14 +10,18 @@ from typing import Callable, Optional
 
 import streamlit as st
 
+from persistence.csv_storage import CsvStorage
+from persistence.repositories import AthletesRepo
+from services.activity_feed_service import (
+    ActivityFeedItem,
+    ActivityFeedService,
+    PlannedSessionCard,
+)
+from services.linking_service import LinkingService
+from services.metrics_service import MetricsComputationService
 from utils.config import load_config
 from utils.formatting import fmt_decimal, fmt_km, fmt_m, set_locale
 from utils.styling import apply_theme
-from persistence.csv_storage import CsvStorage
-from persistence.repositories import AthletesRepo
-from services.activity_feed_service import ActivityFeedItem, ActivityFeedService, PlannedSessionCard
-from services.linking_service import LinkingService
-
 
 st.set_page_config(page_title="Running Manager - Activités", layout="wide")
 apply_theme()
@@ -177,6 +181,7 @@ def main() -> None:
     ath_repo = AthletesRepo(storage)
     feed_service = ActivityFeedService(storage)
     link_service = LinkingService(storage)
+    metrics_service = MetricsComputationService(storage)
 
     st.markdown(_CARD_STYLES, unsafe_allow_html=True)
 
@@ -198,7 +203,7 @@ def main() -> None:
     active_types: Optional[set[str]]
     if sport_types:
         label_map = {code: _format_sport_type(code) for code in sport_types}
-        preferred_defaults = {"RUN", "TRAIL_RUN", "TRAILRUN", "HIKE", "RIDE", "BIKE"}
+        preferred_defaults = {"RUN", "TRAIL_RUN", "TRAILRUN", "HIKE", "RIDE", "BIKE","BACKCOUNTRY_SKI"}
         default_codes = []
         for code in sport_types:
             normalized = code.replace("_", "").upper()
@@ -258,7 +263,7 @@ def main() -> None:
         st.stop()
 
     for item in feed_items:
-        _render_activity_card(item)
+        _render_activity_card(item, metrics_service)
 
     if len(filtered) > batch_limit:
         if st.button("Charger plus", type="secondary"):
@@ -413,7 +418,9 @@ def _format_candidate_label(candidate) -> str:
     return f"{label_date} · {distance} · {duration} · {score}"
 
 
-def _render_activity_card(item: ActivityFeedItem) -> None:
+def _render_activity_card(
+    item: ActivityFeedItem, metrics_service: MetricsComputationService
+) -> None:
     status_icon = ""
     if item.linked:
         tick = "✅"
@@ -520,18 +527,29 @@ def _render_activity_card(item: ActivityFeedItem) -> None:
         f'<div class="{container_class}">{header_html}{meta_html}{metrics_html}</div>',
         unsafe_allow_html=True,
     )
-    if st.button(
-        "Ouvrir l'activité",
-        key=f"open-{item.activity_id}",
-        type="secondary",
-        use_container_width=True,
-    ):
-        st.session_state["activity_view_id"] = item.activity_id
-        st.session_state["activity_view_athlete"] = item.athlete_id
-        qp = st.query_params
-        qp["activityId"] = item.activity_id
-        qp["athleteId"] = item.athlete_id
-        st.switch_page("pages/Activity.py")
+    col_open, col_recompute = st.columns(2)
+    with col_open:
+        if st.button(
+            "Ouvrir l'activité",
+            key=f"open-{item.activity_id}",
+            type="secondary",
+            use_container_width=True,
+        ):
+            st.session_state["activity_view_id"] = item.activity_id
+            st.session_state["activity_view_athlete"] = item.athlete_id
+            qp = st.query_params
+            qp["activityId"] = item.activity_id
+            qp["athleteId"] = item.athlete_id
+            st.switch_page("pages/Activity.py")
+    with col_recompute:
+        if st.button(
+            "Recalculer métriques",
+            key=f"recompute-{item.activity_id}",
+            use_container_width=True,
+        ):
+            metrics_service.recompute_single_activity(item.activity_id)
+            st.success("Métriques recalculées.")
+            _trigger_rerun()
 
 
 main()
