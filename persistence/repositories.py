@@ -442,9 +442,29 @@ class SettingsRepo(BaseRepo):
                 "bikeEqDistance",  # multiplier for bike distance contribution
                 "bikeEqAscent",  # multiplier for bike ascent contribution
                 "bikeEqDescent",  # multiplier for bike descent contribution
+                "skiEqDistance",  # multiplier for ski distance contribution
+                "skiEqAscent",  # multiplier for ski ascent contribution
+                "skiEqDescent",  # multiplier for ski descent contribution
             ],
             id_column="coachId",
         )
+
+    def _migrate_headers_if_needed(self) -> None:
+        path = self._path()
+        if not path.exists():
+            return
+        df = self.storage.read_csv(self.file_name)
+        if any(h not in df.columns for h in self.headers):
+            df = _ensure_headers(df, self.headers)
+            self.storage.write_csv(self.file_name, df)
+
+    def create(self, row: Dict[str, Any]) -> str:
+        self._migrate_headers_if_needed()
+        return super().create(row)
+
+    def update(self, entity_id: str, updates: Dict[str, Any]) -> None:
+        self._migrate_headers_if_needed()
+        super().update(entity_id, updates)
 
 
 class TokensRepo(BaseRepo):

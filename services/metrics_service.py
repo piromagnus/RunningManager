@@ -33,8 +33,8 @@ from utils.coercion import safe_float, safe_int
 from utils.config import load_config
 from utils.time import iso_week_start, to_date
 
-PRIMARY_CATEGORIES = {"RUN", "TRAIL_RUN", "HIKE", "RIDE"}
-TRAINING_LOAD_CATEGORIES = {"RUN", "TRAIL_RUN", "HIKE"}
+PRIMARY_CATEGORIES = {"RUN", "TRAIL_RUN", "HIKE", "RIDE", "BACKCOUNTRY_SKI"}
+TRAINING_LOAD_CATEGORIES = {"RUN", "TRAIL_RUN", "HIKE", "BACKCOUNTRY_SKI"}
 
 
 
@@ -56,6 +56,7 @@ class MetricsComputationService:
         self.config = load_config()
         self.speed_profile_service = SpeedProfileService(self.config)
         self._bike_eq_cache: Optional[Tuple[float, float, float]] = None
+        self._ski_eq_cache: Optional[Tuple[float, float, float]] = None
 
     # ------------------------------------------------------------------
     # Public API
@@ -78,6 +79,90 @@ class MetricsComputationService:
             return
         athlete_ids = sorted(set(subset["athleteId"].astype(str)))
         self._recompute_for_athletes(athlete_ids, replace_all=False)
+
+    def recompute_single_activity(self, activity_id: str) -> None:
+        if not activity_id:
+            return
+        activities_df = self.activities.list()
+        if activities_df.empty or "activityId" not in activities_df.columns:
+            return
+        activities_df = activities_df.copy()
+        activities_df["activityId"] = activities_df["activityId"].astype(str)
+        target = activities_df[activities_df["activityId"] == str(activity_id)]
+        if target.empty:
+            return
+        athlete_id = str(target.iloc[0].get("athleteId") or "")
+        if not athlete_id:
+            return
+        hr_profiles = self._load_hr_profiles()
+        metrics_df = self._compute_activity_metrics(
+            athlete_id=athlete_id,
+            activities_df=target,
+            hr_profile=hr_profiles.get(athlete_id),
+        )
+        if metrics_df.empty:
+            return
+        row = metrics_df.iloc[0].to_dict()
+        self.activity_metrics.update(str(activity_id), row)
+
+        # Refresh weekly/daily aggregates for that athlete without reprocessing all activities.
+        planned_metrics_df = self.planned_metrics.list(athleteId=athlete_id)
+        actual_metrics_df = self.activity_metrics.list(athleteId=athlete_id)
+        weekly_df = self._build_weekly_metrics(
+            athlete_id=athlete_id,
+            actual_metrics_df=actual_metrics_df,
+            planned_metrics_df=planned_metrics_df,
+        )
+        daily_df = self._build_daily_metrics(
+            athlete_id=athlete_id,
+            actual_metrics_df=actual_metrics_df,
+        )
+        self._persist_frame(self.weekly_repo, [weekly_df], {athlete_id}, replace_all=False)
+        self._persist_frame(self.daily_repo, [daily_df], {athlete_id}, replace_all=False)
+
+    def recompute_for_categories(
+        self, categories: Sequence[str], athlete_id: Optional[str] = None
+    ) -> None:
+        if not categories:
+            return
+        targets = {str(category).upper() for category in categories if category}
+        if not targets:
+            return
+        activities_df = (
+            self.activities.list(athleteId=athlete_id) if athlete_id else self.activities.list()
+        )
+        if activities_df.empty or "activityId" not in activities_df.columns:
+            return
+        activity_ids: set[str] = set()
+        for _, row in activities_df.iterrows():
+            activity_id = str(row.get("activityId") or "")
+            if not activity_id:
+                continue
+            _, category = self._resolve_activity_category(row)
+            if category in targets:
+                activity_ids.add(activity_id)
+        if activity_ids:
+            self.recompute_for_activities(sorted(activity_ids))
+
+    def recompute_planned_for_athlete(self, athlete_id: str) -> None:
+        if not athlete_id:
+            return
+        planned_df = self.sessions.list(athleteId=athlete_id)
+        hr_profiles = self._load_hr_profiles()
+        planned_metrics_df = self._compute_planned_metrics(
+            athlete_id=athlete_id,
+            planned_df=planned_df,
+            hr_profile=hr_profiles.get(athlete_id),
+        )
+        self._persist_frame(self.planned_metrics, [planned_metrics_df], {athlete_id}, False)
+
+        actual_metrics_df = self.activity_metrics.list(athleteId=athlete_id)
+        weekly_df = self._build_weekly_metrics(
+            athlete_id=athlete_id,
+            actual_metrics_df=actual_metrics_df,
+            planned_metrics_df=planned_metrics_df,
+        )
+        self._persist_frame(self.weekly_repo, [weekly_df], {athlete_id}, False)
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -194,6 +279,8 @@ class MetricsComputationService:
             sport_type, category = self._resolve_activity_category(row)
             if category == "RIDE":
                 distance_eq_km = self._compute_bike_distance_eq(activity_id, distance_km, ascent_m)
+            elif category == "BACKCOUNTRY_SKI":
+                distance_eq_km = self._compute_ski_distance_eq(activity_id, distance_km, ascent_m)
             else:
                 distance_eq_km = self.planner.compute_distance_eq_km(distance_km, ascent_m)
 
@@ -366,8 +453,18 @@ class MetricsComputationService:
             return "TRAIL_RUN"
         if st_lower in {"hike", "hiking"}:
             return "HIKE"
-        if st_lower in {"ride", "cycling", "bike", "biking"}:
+        if st_lower in {"ride", "virtualride", "virtual_ride", "virtual ride", "cycling", "bike", "biking"}:
             return "RIDE"
+        if st_lower in {
+            "backcountryski",
+            "backcountry_ski",
+            "backcountry ski",
+            "ski_touring",
+            "skitouring",
+            "ski touring",
+            "ski tour",
+        } or ("ski" in st_lower and any(key in st_lower for key in ("backcountry", "touring"))):
+            return "BACKCOUNTRY_SKI"
         return "OTHER"
 
     @staticmethod
@@ -639,10 +736,52 @@ class MetricsComputationService:
         self._bike_eq_cache = (float(dist), float(asc), float(desc))
         return self._bike_eq_cache
 
+    def _ski_eq_factors(self) -> Tuple[float, float, float]:
+        if self._ski_eq_cache is not None:
+            return self._ski_eq_cache
+        settings = self.settings.get("coach-1") or {}
+        if "skiEqDistance" in settings:
+            dist = max(float(safe_float(settings.get("skiEqDistance"))), 0.0)
+        else:
+            dist = 1.0
+        if "skiEqAscent" in settings:
+            asc = max(float(safe_float(settings.get("skiEqAscent"))), 0.0)
+        elif "distanceEqFactor" in settings:
+            asc = max(float(safe_float(settings.get("distanceEqFactor"))), 0.0)
+        else:
+            asc = 0.01
+        if "skiEqDescent" in settings:
+            desc = max(float(safe_float(settings.get("skiEqDescent"))), 0.0)
+        else:
+            desc = 0.0
+        self._ski_eq_cache = (float(dist), float(asc), float(desc))
+        return self._ski_eq_cache
+
     def _compute_bike_distance_eq(
         self, activity_id: str, distance_km: float, ascent_m: float
     ) -> float:
         dist_f, asc_f, desc_f = self._bike_eq_factors()
+        distance = max(float(distance_km or 0.0), 0.0)
+        ascent = max(float(ascent_m or 0.0), 0.0)
+        descent = 0.0
+        if desc_f > 0 and activity_id:
+            ts_path = self.storage.base_dir / "timeseries" / f"{activity_id}.csv"
+            if ts_path.exists():
+                try:
+                    ts = pd.read_csv(ts_path)
+                    if "elevationM" in ts.columns:
+                        elevation = pd.to_numeric(ts["elevationM"], errors="coerce").ffill()
+                        diffs = elevation.diff()
+                        if diffs is not None and not diffs.empty:
+                            descent = float((-diffs[diffs < 0].sum()) if (diffs < 0).any() else 0.0)
+                except Exception:
+                    descent = 0.0
+        return distance * dist_f + ascent * asc_f + descent * desc_f
+
+    def _compute_ski_distance_eq(
+        self, activity_id: str, distance_km: float, ascent_m: float
+    ) -> float:
+        dist_f, asc_f, desc_f = self._ski_eq_factors()
         distance = max(float(distance_km or 0.0), 0.0)
         ascent = max(float(ascent_m or 0.0), 0.0)
         descent = 0.0

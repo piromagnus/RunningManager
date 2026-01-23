@@ -12,6 +12,7 @@ import streamlit as st
 
 from persistence.csv_storage import CsvStorage
 from persistence.repositories import AthletesRepo, PlannedSessionsRepo
+from services.metrics_service import MetricsComputationService
 from services.planner_service import PlannerService
 from services.session_templates_service import SessionTemplatesService
 from utils.config import load_config
@@ -39,6 +40,7 @@ ath_repo = AthletesRepo(storage)
 sessions_repo = PlannedSessionsRepo(storage)
 planner = PlannerService(storage)
 templates_service = SessionTemplatesService(storage)
+metrics_service = MetricsComputationService(storage)
 
 
 @st.cache_data(ttl=10)
@@ -189,6 +191,7 @@ render_template_actions(
     state,
     templates_service,
     list_templates.clear,
+    metrics_service,
 )
 
 if st.button("↩︎ Retour au planner", key="creator-back"):

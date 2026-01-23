@@ -11,7 +11,7 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 import pandas as pd
 
 from persistence.csv_storage import CsvStorage
-from persistence.repositories import WeeklyMetricsRepo, LinksRepo, SettingsRepo
+from persistence.repositories import LinksRepo, SettingsRepo, WeeklyMetricsRepo
 
 
 def _to_numeric(df: pd.DataFrame, columns: Iterable[str]) -> pd.DataFrame:
@@ -383,9 +383,9 @@ class AnalyticsService:
         """Recompute weekly planned vs actual for a given date range.
 
         - Actuals: from activities_metrics.csv filtered by athlete and selected categories.
-          For DistEq metric, bike (RIDE) activities use bike equivalence factors from settings.
-          Descent contribution defaults to 0 unless a timeseries is available and a non-zero
-          descent factor is configured (best-effort computation).
+          For DistEq metric, bike (RIDE) and ski de rando (BACKCOUNTRY_SKI) activities use
+          their equivalence factors from settings. Descent contribution defaults to 0 unless a
+          timeseries is available and a non-zero descent factor is configured (best-effort).
         - Planned: from planned_metrics.csv by planned date (not rescheduled), summed per ISO week.
         - Returns DataFrame with columns: weekStart, isoYear, isoWeek, planned_value, actual_value.
         """
@@ -446,6 +446,7 @@ class AnalyticsService:
         actual_col = actual_col_map.get(metric_label, "distanceKm")
 
         bike_eq = self._load_bike_eq_factors()
+        ski_eq = self._load_ski_eq_factors()
 
         if not acts_df.empty:
             acts_df = acts_df[acts_df.get("athleteId") == athlete_id].copy()
@@ -461,12 +462,16 @@ class AnalyticsService:
                 (acts_df["date"] >= pd.Timestamp(start_date))
                 & (acts_df["date"] <= pd.Timestamp(end_date))
             ]
-            # If DistEq and category RIDE, override per-activity value
+            # If DistEq and category RIDE/BACKCOUNTRY_SKI, override per-activity value
             if metric_label == "DistEq":
                 acts_df["_value"] = acts_df.apply(
-                    lambda r: self._bike_disteq_value(r, bike_eq)
-                    if str(r.get("category", "")).upper() == "RIDE"
-                    else float(r.get("distanceEqKm") or 0.0),
+                    lambda r: (
+                        self._bike_disteq_value(r, bike_eq)
+                        if str(r.get("category", "")).upper() == "RIDE"
+                        else self._ski_disteq_value(r, ski_eq)
+                        if str(r.get("category", "")).upper() == "BACKCOUNTRY_SKI"
+                        else float(r.get("distanceEqKm") or 0.0)
+                    ),
                     axis=1,
                 )
                 value_series = acts_df["_value"].astype(float)
@@ -509,6 +514,14 @@ class AnalyticsService:
         desc = self._safe_float(settings.get("bikeEqDescent"), 0.0)
         return dist, asc, desc
 
+    def _load_ski_eq_factors(self) -> Tuple[float, float, float]:
+        settings = self.settings_repo.get("coach-1") or {}
+        dist = self._safe_float(settings.get("skiEqDistance"), 1.0)
+        asc_default = self._safe_float(settings.get("distanceEqFactor"), 0.01)
+        asc = self._safe_float(settings.get("skiEqAscent"), asc_default)
+        desc = self._safe_float(settings.get("skiEqDescent"), 0.0)
+        return dist, asc, desc
+
     @staticmethod
     def _safe_float(value: object, default: float) -> float:
         try:
@@ -525,6 +538,29 @@ class AnalyticsService:
         descent_m = 0.0
         if desc_f > 0:
             # Optional: best-effort compute descent from timeseries if available
+            aid = str(row.get("activityId") or "")
+            if aid:
+                ts_path = self.storage.base_dir / "timeseries" / f"{aid}.csv"
+                if ts_path.exists():
+                    try:
+                        ts = pd.read_csv(ts_path)
+                        if "elevationM" in ts.columns:
+                            diffs = (
+                                pd.to_numeric(ts["elevationM"], errors="coerce")
+                                .fillna(method="ffill")
+                                .diff()
+                            )
+                            descent_m = float((-diffs[diffs < 0].sum()) if not diffs.empty else 0.0)
+                    except Exception:
+                        descent_m = 0.0
+        return distance_km * dist_f + ascent_m * asc_f - descent_m * desc_f
+
+    def _ski_disteq_value(self, row: pd.Series, factors: Tuple[float, float, float]) -> float:
+        dist_f, asc_f, desc_f = factors
+        distance_km = self._safe_float(row.get("distanceKm"), 0.0)
+        ascent_m = self._safe_float(row.get("ascentM"), 0.0)
+        descent_m = 0.0
+        if desc_f > 0:
             aid = str(row.get("activityId") or "")
             if aid:
                 ts_path = self.storage.base_dir / "timeseries" / f"{aid}.csv"

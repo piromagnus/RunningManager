@@ -107,7 +107,7 @@ mask = (daily_metrics["date"].dt.normalize() >= pd.Timestamp(start_date)) & (
 daily_metrics = daily_metrics[mask]
 
 # Global activity category filter (applies to all charts below)
-cat_options = ["RUN", "TRAIL_RUN", "HIKE", "RIDE"]
+cat_options = ["RUN", "TRAIL_RUN", "HIKE", "RIDE", "BACKCOUNTRY_SKI"]
 default_cat_selection = [cat for cat in cat_options if cat != "RIDE"]
 selected_cats = st.multiselect(
     "Types d'activités",
