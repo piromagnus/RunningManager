@@ -18,9 +18,13 @@ def config(tmp_path: Path) -> Config:
     timeseries_dir = tmp_path / "timeseries"
     raw_dir = tmp_path / "raw" / "strava"
     laps_dir = tmp_path / "laps"
+    metrics_ts_dir = tmp_path / "metrics_ts"
+    speed_profile_dir = tmp_path / "speed_profil"
     timeseries_dir.mkdir(parents=True, exist_ok=True)
     raw_dir.mkdir(parents=True, exist_ok=True)
     laps_dir.mkdir(parents=True, exist_ok=True)
+    metrics_ts_dir.mkdir(parents=True, exist_ok=True)
+    speed_profile_dir.mkdir(parents=True, exist_ok=True)
     return Config(
         strava_client_id=None,
         strava_client_secret=None,
@@ -31,6 +35,9 @@ def config(tmp_path: Path) -> Config:
         raw_strava_dir=raw_dir,
         laps_dir=laps_dir,
         mapbox_token=None,
+        metrics_ts_dir=metrics_ts_dir,
+        speed_profile_dir=speed_profile_dir,
+        n_cluster=5,
     )
 
 

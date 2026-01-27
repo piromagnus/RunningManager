@@ -14,12 +14,18 @@ import streamlit as st
 
 from config import METRICS as CONFIG_METRICS
 from graph.hr_speed import create_hr_speed_chart
+from graph.speed_profile import create_speed_profile_chart, create_speed_profile_cloud_chart
 from graph.speed_scatter import create_speedeq_scatter_chart
 from graph.training_load import create_training_load_chart
 from persistence.csv_storage import CsvStorage
 from persistence.repositories import AthletesRepo
 from services.analytics_service import AnalyticsService
-from services.dashboard_data_service import load_daily_metrics, load_hr_speed_data
+from services.dashboard_data_service import (
+    load_aggregated_speed_profile,
+    load_daily_metrics,
+    load_hr_speed_data,
+    load_speed_profile_cloud,
+)
 from services.speed_profile_service import SpeedProfileService
 from utils.config import load_config
 from utils.dashboard_state import (
@@ -148,8 +154,10 @@ available_metrics: list[str] = [m for m in CONFIG_METRICS if m in metric_definit
 for metric_key in metric_definitions.keys():
     if metric_key not in available_metrics:
         available_metrics.append(metric_key)
-# Shared tabs for the two charts
-tab_charge, tab_speed, tab_hr_speed = st.tabs(["Charge", "SpeedEq", "FC vs Vitesse"])
+# Shared tabs for the charts
+tab_charge, tab_speed, tab_hr_speed, tab_speed_profile, tab_speed_profile_cloud = st.tabs(
+    ["Charge", "SpeedEq", "FC vs Vitesse", "Profil de vitesse", "Nuage de vitesse max"]
+)
 
 with tab_charge:
     st.subheader("Charge d'entraînement")
@@ -474,4 +482,91 @@ with tab_hr_speed:
         if slope is not None and intercept is not None and r_squared is not None:
             formula_text = f"FC = {slope:.2f} × Vitesse + {intercept:.2f}\nR² = {r_squared:.3f}"
             st.caption(formula_text)
+        st.altair_chart(chart, use_container_width=True)
+
+# --- Max Speed Profile ---
+with tab_speed_profile:
+    st.subheader("Profil de vitesse max")
+
+    @st.cache_data(ttl=3600)
+    def _cached_load_speed_profile(
+        athlete_id: str,
+        start_date: pd.Timestamp,
+        end_date: pd.Timestamp,
+        categories: List[str],
+    ) -> pd.DataFrame:
+        """Cached wrapper for load_aggregated_speed_profile."""
+        return load_aggregated_speed_profile(
+            storage, speed_profile_service, cfg, athlete_id, start_date, end_date, categories
+        )
+
+    profile_df = _cached_load_speed_profile(athlete_id, start_date, end_date, selected_cats)
+
+    if profile_df.empty:
+        st.info("Aucune donnée de profil de vitesse disponible pour la période sélectionnée.")
+    else:
+        window_min = float(profile_df["windowSec"].min())
+        window_max = float(profile_df["windowSec"].max())
+        domain_min = max(1.0, window_min - 1.0)
+        chart = create_speed_profile_chart(
+            profile_df, CHART_WIDTH, x_domain=(domain_min, window_max)
+        )
+        st.altair_chart(chart, use_container_width=True)
+
+# --- Max Speed Profile Cloud ---
+with tab_speed_profile_cloud:
+    st.subheader("Nuage de vitesse max")
+    show_speed_eq = st.checkbox(
+        "Afficher la vitesse équivalente",
+        value=False,
+        help="Décochez pour afficher la vitesse brute.",
+    )
+
+    @st.cache_data(ttl=3600)
+    def _cached_load_speed_profile_cloud(
+        athlete_id: str,
+        start_date: pd.Timestamp,
+        end_date: pd.Timestamp,
+        categories: List[str],
+    ) -> pd.DataFrame:
+        """Cached wrapper for load_speed_profile_cloud."""
+        return load_speed_profile_cloud(
+            storage, speed_profile_service, cfg, athlete_id, start_date, end_date, categories
+        )
+
+    cloud_df = _cached_load_speed_profile_cloud(athlete_id, start_date, end_date, selected_cats)
+
+    if cloud_df.empty:
+        st.info("Aucune donnée de nuage de vitesse disponible pour la période sélectionnée.")
+    else:
+        window_options = sorted(cloud_df["windowSec"].dropna().unique().tolist())
+        if not window_options:
+            st.info("Aucune fenêtre disponible pour le nuage de vitesse.")
+            st.stop()
+
+        def _format_window_label(window_sec: float) -> str:
+            if window_sec >= 3600:
+                return f"{window_sec / 3600:.1f} h"
+            if window_sec >= 60:
+                return f"{window_sec / 60:.0f} min"
+            return f"{window_sec:.0f} s"
+
+        min_window, max_window = st.select_slider(
+            "Fenêtres",
+            options=window_options,
+            value=(window_options[0], window_options[-1]),
+            format_func=_format_window_label,
+        )
+        cloud_df = cloud_df[
+            (cloud_df["windowSec"] >= min_window) & (cloud_df["windowSec"] <= max_window)
+        ]
+        if cloud_df.empty:
+            st.info("Aucune donnée dans la plage de fenêtres sélectionnée.")
+            st.stop()
+
+        speed_type = "eq" if show_speed_eq else "raw"
+        domain_min = max(1.0, float(min_window) - 1.0)
+        chart = create_speed_profile_cloud_chart(
+            cloud_df, CHART_WIDTH, speed_type=speed_type, x_domain=(domain_min, max_window)
+        )
         st.altair_chart(chart, use_container_width=True)

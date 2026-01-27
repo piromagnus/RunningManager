@@ -68,17 +68,71 @@ class MetricsComputationService:
         self._recompute_for_athletes([athlete_id], replace_all=False)
 
     def recompute_for_activities(self, activity_ids: Sequence[str]) -> None:
+        """Recompute metrics for specific activities only.
+
+        This method is optimized to compute activity metrics only for the
+        specified activities, then rebuild daily/weekly aggregates from
+        the full metrics tables. This is more efficient than recomputing
+        all activities for the affected athletes.
+        """
         if not activity_ids:
             return
         df = self.activities.list()
         if df.empty or "activityId" not in df.columns:
             return
-        activity_ids = {str(aid) for aid in activity_ids}
-        subset = df[df["activityId"].astype(str).isin(activity_ids)]
+        activity_id_set = {str(aid) for aid in activity_ids}
+        subset = df[df["activityId"].astype(str).isin(activity_id_set)]
         if subset.empty or "athleteId" not in subset.columns:
             return
+
+        hr_profiles = self._load_hr_profiles()
         athlete_ids = sorted(set(subset["athleteId"].astype(str)))
-        self._recompute_for_athletes(athlete_ids, replace_all=False)
+
+        # Compute metrics only for the specified activities (not all)
+        for athlete_id in athlete_ids:
+            athlete_subset = subset[subset["athleteId"].astype(str) == athlete_id]
+            if athlete_subset.empty:
+                continue
+
+            # Compute metrics for just the new activities
+            new_metrics_df = self._compute_activity_metrics(
+                athlete_id=athlete_id,
+                activities_df=athlete_subset,
+                hr_profile=hr_profiles.get(athlete_id),
+            )
+
+            # Upsert new activity metrics into existing table
+            if not new_metrics_df.empty:
+                existing_metrics = self.activity_metrics.list()
+                if existing_metrics.empty:
+                    merged_metrics = new_metrics_df
+                else:
+                    # Remove existing rows for these activity IDs
+                    existing_metrics = existing_metrics[
+                        ~existing_metrics["activityId"].astype(str).isin(activity_id_set)
+                    ]
+                    merged_metrics = pd.concat(
+                        [existing_metrics, new_metrics_df], ignore_index=True
+                    )
+                merged_metrics = merged_metrics[self.activity_metrics.headers]
+                self.storage.write_csv(self.activity_metrics.file_name, merged_metrics)
+
+            # Rebuild daily/weekly from full metrics tables (required for rolling windows)
+            actual_metrics_df = self.activity_metrics.list(athleteId=athlete_id)
+            planned_metrics_df = self.planned_metrics.list(athleteId=athlete_id)
+
+            weekly_df = self._build_weekly_metrics(
+                athlete_id=athlete_id,
+                actual_metrics_df=actual_metrics_df,
+                planned_metrics_df=planned_metrics_df,
+            )
+            daily_df = self._build_daily_metrics(
+                athlete_id=athlete_id,
+                actual_metrics_df=actual_metrics_df,
+            )
+
+            self._persist_frame(self.weekly_repo, [weekly_df], {athlete_id}, replace_all=False)
+            self._persist_frame(self.daily_repo, [daily_df], {athlete_id}, replace_all=False)
 
     def recompute_single_activity(self, activity_id: str) -> None:
         if not activity_id:

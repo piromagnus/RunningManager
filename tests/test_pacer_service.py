@@ -159,9 +159,10 @@ def test_save_and_load_race(pacer_service: PacerService):
     # Load race
     loaded = pacer_service.load_race(race_id)
     assert loaded is not None
-    loaded_name, loaded_aid, loaded_segments = loaded
+    loaded_name, loaded_aid, loaded_segments, loaded_times = loaded
     assert loaded_name == race_name
     assert loaded_aid == aid_stations_km
+    assert loaded_times == [1260.0, 1260.0, 1260.0]
     assert len(loaded_segments) == len(segments_df)
     assert loaded_segments.iloc[0]["segmentId"] == 0
 
