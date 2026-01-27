@@ -9,7 +9,7 @@ Visualization components using Altair and Matplotlib.
 | `training_load.py` | Acute/chronic training load charts |
 | `analytics.py` | Planned vs actual bar charts |
 | `elevation.py` | Elevation profile with grade coloring |
-| `timeseries.py` | Activity timeseries (HR, pace, elevation) |
+| `timeseries.py` | Activity timeseries (HR, speed, elevation, SpeedEq) |
 | `hr_speed.py` | HR vs Speed scatter with regression |
 | `speed_scatter.py` | SpeedEq scatter visualization |
 | `speed_profile.py` | Speed profile charts |
@@ -47,9 +47,8 @@ GRADE_COLOR_MAPPING = {
 ```
 
 ### timeseries.py
-- `render_hr_chart(df)`: Heart rate over time
-- `render_pace_chart(df)`: Pace over distance
-- `render_elevation_chart(df)`: Elevation profile
+- `render_timeseries_charts(ts_service, activity_id, speed_profile_service=None)`: Dict of charts
+- Charts: HR, speed, elevation, SpeedEq (10s smoothing)
 
 ### hr_speed.py
 - `render_hr_speed_scatter(df)`: Weighted regression scatter

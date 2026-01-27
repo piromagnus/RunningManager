@@ -150,69 +150,15 @@ def main() -> None:
         tab1, tab2 = st.tabs(["📊 Time series", "🎯 Comparaison pacing vs réel"])
         
         with tab1:
-            st.subheader("Timeseries")
-            charts = render_timeseries_charts(ts_service, detail.activity_id)
-            if charts:
-                for chart in charts:
-                    st.altair_chart(chart)
-                # Render elevation profile if we have GPS data
-                df = ts_service.load(detail.activity_id)
-                if df is not None and not df.empty and "lat" in df.columns and "lon" in df.columns:
-                    _render_elevation_profile(df)
-            else:
-                st.caption("Pas de données timeseries pour cette activité.")
-            
-            # Speed profile section
-            st.subheader("Profils de vitesse maximale")
-            profile_df = speed_profile_service.load_speed_profile(detail.activity_id)
-            if profile_df is None:
-                # Try to compute on-demand
-                try:
-                    speed_profile_service.compute_and_store_speed_profile(detail.activity_id)
-                    profile_df = speed_profile_service.load_speed_profile(detail.activity_id)
-                except Exception as exc:
-                    logger.exception("Failed to compute speed profile: %s", exc)
-                    profile_df = None
-            
-            if profile_df is not None and not profile_df.empty:
-                chart = create_speed_profile_chart(profile_df, chart_width=CHART_WIDTH)
-                st.altair_chart(chart, use_container_width=True)
-            else:
-                st.caption("Impossible de charger ou calculer le profil de vitesse pour cette activité.")
+            _render_timeseries_section(ts_service, speed_profile_service, detail.activity_id)
+            _render_speed_profile_section(speed_profile_service, detail.activity_id)
         
         with tab2:
             _render_pacing_comparison(activity_id_str, linked_race_id, pacer_service, ts_service)
     else:
         # No pacing linked - show classic timeseries
-        st.subheader("Timeseries")
-        charts = render_timeseries_charts(ts_service, detail.activity_id)
-        if charts:
-            for chart in charts:
-                st.altair_chart(chart)
-            # Render elevation profile if we have GPS data
-            df = ts_service.load(detail.activity_id)
-            if df is not None and not df.empty and "lat" in df.columns and "lon" in df.columns:
-                _render_elevation_profile(df)
-        else:
-            st.caption("Pas de données timeseries pour cette activité.")
-        
-        # Speed profile section
-        st.subheader("Profils de vitesse maximale")
-        profile_df = speed_profile_service.load_speed_profile(detail.activity_id)
-        if profile_df is None:
-            # Try to compute on-demand
-            try:
-                speed_profile_service.compute_and_store_speed_profile(detail.activity_id)
-                profile_df = speed_profile_service.load_speed_profile(detail.activity_id)
-            except Exception as exc:
-                logger.exception("Failed to compute speed profile: %s", exc)
-                profile_df = None
-        
-        if profile_df is not None and not profile_df.empty:
-            chart = create_speed_profile_chart(profile_df, chart_width=CHART_WIDTH)
-            st.altair_chart(chart, use_container_width=True)
-        else:
-            st.caption("Impossible de charger ou calculer le profil de vitesse pour cette activité.")
+        _render_timeseries_section(ts_service, speed_profile_service, detail.activity_id)
+        _render_speed_profile_section(speed_profile_service, detail.activity_id)
 
     st.subheader("Trace sur la carte")
     map_choice = _select_map_style(mapbox_token)
@@ -487,6 +433,67 @@ def _render_summary(detail: ActivityDetail) -> None:
     for (label, value), col in zip(metrics, cols):
         with col:
             st.metric(label, value)
+
+
+def _render_timeseries_section(
+    ts_service: TimeseriesService,
+    speed_profile_service: SpeedProfileService,
+    activity_id: str,
+) -> None:
+    st.subheader("Timeseries")
+    charts = render_timeseries_charts(ts_service, activity_id, speed_profile_service)
+    if charts:
+        _render_timeseries_grid(charts)
+        df = ts_service.load(activity_id)
+        if df is not None and not df.empty and "lat" in df.columns and "lon" in df.columns:
+            _render_elevation_profile(df)
+    else:
+        st.caption("Pas de données timeseries pour cette activité.")
+
+
+def _render_timeseries_grid(charts: dict[str, object]) -> None:
+    col1, col2 = st.columns(2)
+    with col1:
+        hr_chart = charts.get("hr")
+        if hr_chart is not None:
+            st.altair_chart(hr_chart, use_container_width=True)
+    with col2:
+        speed_chart = charts.get("speed")
+        if speed_chart is not None:
+            st.altair_chart(speed_chart, use_container_width=True)
+
+    col3, col4 = st.columns(2)
+    with col3:
+        elevation_chart = charts.get("elevation")
+        if elevation_chart is not None:
+            st.altair_chart(elevation_chart, use_container_width=True)
+    with col4:
+        speed_eq_chart = charts.get("speed_eq")
+        if speed_eq_chart is not None:
+            st.altair_chart(speed_eq_chart, use_container_width=True)
+        elif "speed" in charts:
+            st.caption("SpeedEq indisponible (données GPS insuffisantes).")
+
+
+def _render_speed_profile_section(
+    speed_profile_service: SpeedProfileService,
+    activity_id: str,
+) -> None:
+    st.subheader("Profils de vitesse maximale")
+    profile_df = speed_profile_service.load_speed_profile(activity_id)
+    if profile_df is None:
+        try:
+            speed_profile_service.compute_and_store_speed_profile(activity_id)
+            profile_df = speed_profile_service.load_speed_profile(activity_id)
+        except Exception as exc:
+            logger.exception("Failed to compute speed profile: %s", exc)
+            profile_df = None
+
+    if profile_df is not None and not profile_df.empty:
+        chart = create_speed_profile_chart(profile_df, chart_width=CHART_WIDTH)
+        st.altair_chart(chart, use_container_width=True)
+    else:
+        st.caption("Impossible de charger ou calculer le profil de vitesse pour cette activité.")
 
 
 def _select_map_style(mapbox_token: str | None) -> dict:
