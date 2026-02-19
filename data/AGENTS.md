@@ -26,7 +26,7 @@ CSV-backed persistence layer for Running Manager. All data uses `.` as decimal s
 | Path | Description |
 |------|-------------|
 | `timeseries/{activityId}.csv` | Per-activity streams (hr, pace, elevation, lat/lon) |
-| `metrics_ts/{activityId}.csv` | Preprocessed timeseries for analytics |
+| `metrics_ts/{activityId}.csv` | Preprocessed timeseries: HR analysis (hr_smooth, hr_shifted, speed_smooth, cluster) + elevation (speedeq_smooth, grade_ma_10, elevationM_ma_5, cumulated_distance) |
 | `speed_profil/{activityId}.csv` | Speed profile data per activity |
 | `raw/strava/{activityId}.json` | Cached Strava API responses |
 | `race_pacing/` | Race pacing segment data |

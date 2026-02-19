@@ -123,12 +123,10 @@ SPDX-License-Identifier: GPL-3.0-or-later
 
 ## Agent Checklist
 
-1. Get task from Taskmaster MCP server
-2. Read relevant AGENTS.md files for context
+1. Read relevant AGENTS.md files for context
 3. Implement minimally; preserve formatting and headers
 4. Add license headers to new Python files
 5. Add/adjust tests; run `pytest`
-6. Update task status in MCP server
 
 ## Maintaining AGENTS.md Files
 
@@ -157,8 +155,3 @@ SPDX-License-Identifier: GPL-3.0-or-later
 - Bypassing locking on CSV writes (always use `CsvStorage`)
 - Mixing UI formatting into persistence layer
 
-## Task Workflows (Taskmaster)
-
-- Use `.taskmaster/` for task management
-- Use MCP server to get/update tasks
-- Never modify files inside `.taskmaster/` directly

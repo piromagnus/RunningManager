@@ -10,7 +10,7 @@ Domain services for planning, analytics, metrics, and external integrations.
 | `metrics_service.py` | Full metrics pipeline (activities, daily, weekly) |
 | `analytics_service.py` | Weekly/daily data loading, planned vs actual |
 | `interval_utils.py` | Interval step normalization and serialization |
-| `timeseries_service.py` | Activity timeseries loading |
+| `timeseries_service.py` | Activity timeseries loading + cached metrics |
 | `strava_service.py` | Strava OAuth, sync, caching |
 | `garmin_import_service.py` | Garmin import (stub) |
 | `garmin_export_service.py` | TCX export for intervals |
@@ -23,6 +23,18 @@ Domain services for planning, analytics, metrics, and external integrations.
 | `session_templates_service.py` | Template payload management |
 | `speed_profile_service.py` | Speed profile computation |
 | `pacer_service.py` | Race pacing calculations |
+| `speed_profile/preprocessing.py` | GPS preprocessing helpers |
+| `speed_profile/hr_speed_analysis.py` | HR vs speed analysis helpers |
+| `speed_profile/minetti.py` | Minetti energy cost formulas |
+| `speed_profile/profile_computation.py` | Speed profile computations |
+| `speed_profile/persistence.py` | Speed profile CSV persistence |
+| `pacer/segmentation.py` | Pacer segmentation + metrics helpers |
+| `pacer/segment_merger.py` | Segment merging strategies |
+| `pacer/preprocessing.py` | Pacer GPX preprocessing |
+| `pacer/aid_station_stats.py` | Aid station stats helpers |
+| `pacer/race_persistence.py` | Race pacing CSV persistence |
+| `pacer/activity_comparison.py` | Planned vs actual comparison + linking |
+| `pacer/__init__.py` | PacerService facade |
 | `planner_presenter.py` | Week planning presentation layer |
 | `serialization.py` | JSON serialization utilities |
 
@@ -53,6 +65,21 @@ Key metrics:
 ### AnalyticsService
 - `load_weekly_data(athlete_id, weeks)`: Weekly aggregates
 - `load_daily_data(athlete_id, start, end)`: Daily range data
+
+### SpeedProfileService
+- `preprocess_timeseries(df)`: GPS-based preprocessing (distance, speed, grade, elevation)
+- `compute_speed_eq_column(df)`: Add speed_eq_km_h using Minetti energy cost model
+- `process_timeseries(activity_id, strategy)`: Full HR/speed analysis with clustering
+- `save_metrics_ts(activity_id, result)`: Save HR analysis results (hr_smooth, hr_shifted, cluster)
+- `compute_and_save_elevation_metrics(activity_id)`: Compute elevation metrics, preserves existing HR columns
+- `compute_all_metrics_ts(activity_id)`: **Main entry point** - computes both HR analysis + elevation metrics
+- `load_elevation_metrics(activity_id)`: Load cached elevation metrics from metrics_ts
+- `get_or_compute_elevation_metrics(activity_id)`: Get cached metrics or compute and save
+
+### TimeseriesService
+- `load(activity_id)`: Load raw timeseries DataFrame
+- `load_metrics_ts(activity_id)`: Load cached metrics_ts DataFrame
+- `has_elevation_metrics(activity_id)`: Check if cached elevation metrics are available
 
 ## Session Types
 

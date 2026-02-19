@@ -12,6 +12,8 @@ Reusable Streamlit UI components for forms, selectors, and panels.
 | `template_actions.py` | Save/delete/schedule template actions |
 | `session_importer.py` | Import planned sessions as templates |
 | `comparison_panel.py` | Activity comparison display |
+| `comparison_table.py` | Detailed segment comparison table |
+| `week_view.py` | Planner week view renderer |
 
 ## session_forms.py
 
@@ -49,6 +51,14 @@ def render_*_form(
 
 - `render_comparison_panel(planned, actual)`: Side-by-side metrics
 - Shows planned vs actual distance, duration, ascent
+
+## comparison_table.py
+
+- `render_comparison_table(comparison_df, planned_segments_df, pacer_service)`: Segment detail table
+
+## week_view.py
+
+- `render_week_view(...)`: Planner week cards and totals
 
 ## Widget Patterns
 
