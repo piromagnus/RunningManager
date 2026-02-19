@@ -12,9 +12,10 @@ data/speed_profil
 data/metrics_ts
 data/timeseries
 data/laps
+data/hr_zones
+
 .python-version
 .venv/
 uv.lock
 requirements.lock.txt
 .cursor/mcp.json
-data/metrics_ts
