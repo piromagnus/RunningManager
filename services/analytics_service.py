@@ -12,6 +12,7 @@ import pandas as pd
 
 from persistence.csv_storage import CsvStorage
 from persistence.repositories import LinksRepo, SettingsRepo, WeeklyMetricsRepo
+from utils.metrics_formulas import compute_trimp_hr_reserve_from_profile
 
 
 def _to_numeric(df: pd.DataFrame, columns: Iterable[str]) -> pd.DataFrame:
@@ -77,26 +78,13 @@ class AnalyticsService:
         return float(seconds) / 3600.0
 
     @staticmethod
-    def compute_trimp(duration_sec: float, intensity_factor: float) -> float:
-        """
-        Compute TRIMP using duration expressed in hours rather than raw seconds.
-
-        Parameters
-        ----------
-        duration_sec: float
-            Session duration in seconds.
-        intensity_factor: float
-            Aggregated intensity multiplier (e.g. HR reserve weighting).
-
-        Returns
-        -------
-        float
-            TRIMP score.
-        """
-        if duration_sec <= 0 or intensity_factor <= 0:
-            return 0.0
-        hours = AnalyticsService.seconds_to_hours(duration_sec)
-        return hours * intensity_factor
+    def compute_trimp(
+        avg_hr: float,
+        duration_sec: float,
+        hr_profile: Optional[Tuple[float, float]],
+    ) -> float:
+        """Compute TRIMP using HR reserve weighting."""
+        return compute_trimp_hr_reserve_from_profile(avg_hr, duration_sec, hr_profile)
 
     def build_planned_vs_actual_segments(
         self,

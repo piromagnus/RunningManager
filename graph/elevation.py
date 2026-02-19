@@ -14,22 +14,11 @@ import pandas as pd
 import streamlit as st
 from streamlit.logger import get_logger
 
+from utils.constants import GRADE_COLOR_MAPPING
+from utils.grade_classification import classify_grade_elevation_8cat
 from utils.segments import merge_adjacent_same_color, merge_small_segments
 
 logger = get_logger(__name__)
-
-# Grade category color mapping
-GRADE_COLOR_MAPPING = {
-    "grade_lt_neg_0_5": "#001f3f",  # darkblue
-    "grade_lt_neg_0_25": "#004d26",  # darkgreen
-    "grade_lt_neg_0_05": "#22c55e",  # green
-    "grade_neutral": "#d1d5db",  # lightgray
-    "grade_lt_0_1": "#eab308",  # yellow
-    "grade_lt_0_25": "#f97316",  # orange
-    "grade_lt_0_5": "#dc2626",  # red
-    "grade_ge_0_5": "#000000",  # black
-    "unknown": "#808080",  # gray
-}
 
 GRADE_HISTOGRAM_COLORS = GRADE_COLOR_MAPPING
 
@@ -43,24 +32,7 @@ def get_grade_category(grade_val: float) -> str:
     Returns:
         Category string for grade classification
     """
-    if pd.isna(grade_val):
-        return "unknown"
-    if grade_val < -0.5:
-        return "grade_lt_neg_0_5"
-    elif -0.5 <= grade_val < -0.25:
-        return "grade_lt_neg_0_25"
-    elif -0.25 <= grade_val < -0.05:
-        return "grade_lt_neg_0_05"
-    elif -0.05 <= grade_val < 0.05:
-        return "grade_neutral"
-    elif 0.05 <= grade_val < 0.1:
-        return "grade_lt_0_1"
-    elif 0.1 <= grade_val < 0.25:
-        return "grade_lt_0_25"
-    elif 0.25 <= grade_val < 0.5:
-        return "grade_lt_0_5"
-    else:
-        return "grade_ge_0_5"
+    return classify_grade_elevation_8cat(grade_val)
 
 
 def prepare_elevation_plot_data(metrics_df: pd.DataFrame) -> pd.DataFrame | None:

@@ -20,25 +20,18 @@ from services.activity_feed_service import (
 from services.linking_service import LinkingService
 from services.metrics_service import MetricsComputationService
 from utils.config import load_config
-from utils.formatting import fmt_decimal, fmt_km, fmt_m, set_locale
+from utils.constants import SESSION_TYPE_LABELS_FR
+from utils.formatting import fmt_decimal, fmt_km, fmt_m, format_duration, set_locale
 from utils.styling import apply_theme
 
 st.set_page_config(page_title="Running Manager - Activités", layout="wide")
 apply_theme()
 st.title("Flux d'activités")
 
-SESSION_TYPE_LABELS = {
-    "FUNDAMENTAL_ENDURANCE": "Endurance fondamentale",
-    "LONG_RUN": "Sortie longue",
-    "INTERVAL_SIMPLE": "Séance d'intervalles",
-    "RACE": "Course",
-}
-
-
 def _format_session_type_label(raw: Optional[str]) -> str:
     if not raw:
         return "Session"
-    return SESSION_TYPE_LABELS.get(raw.upper(), raw.replace("_", " ").title())
+    return SESSION_TYPE_LABELS_FR.get(raw.upper(), raw.replace("_", " ").title())
 
 
 def _escape_text(value: Optional[str]) -> str:
@@ -47,84 +40,11 @@ def _escape_text(value: Optional[str]) -> str:
     return escape(str(value)).replace("\n", "<br/>")
 
 
-_CARD_STYLES = """
-<style>
-.planned-strip {display:flex; gap:0.75rem; overflow-x:auto; padding-bottom:0.5rem;}
-.planned-card {min-width:220px; border-radius:12px; padding:0.85rem; box-shadow:0 6px 14px rgba(8,47,73,0.28); border:1px solid transparent;}
-.planned-card h4 {font-size:0.98rem; margin:0 0 0.35rem 0; color:#f8fafc;}
-.planned-card .secondary {font-size:0.82rem;}
-.planned-card .date {font-size:0.78rem; color:#e2e8f0;}
-.planned-card .race-name {margin-top:0.25rem; font-size:0.8rem; color:#fcd34d; font-weight:600;}
-.planned-card .notes {margin-top:0.3rem; font-size:0.78rem; color:#e2e8f0; opacity:0.9;}
-.planned-card .metrics {margin-top:0.35rem; font-size:0.88rem; color:#f8fafc;}
-.planned-card.status-future {background:linear-gradient(135deg, rgba(14,116,144,0.95), rgba(8,47,73,0.95)); border-color:rgba(14,165,233,0.5);}
-.planned-card.status-future .secondary {color:#a5f3fc;}
-.planned-card.status-today {background:linear-gradient(135deg, rgba(22,163,74,0.95), rgba(5,46,22,0.95)); border-color:rgba(34,197,94,0.6);}
-.planned-card.status-today .secondary {color:#bbf7d0;}
-.planned-card.status-week {background:linear-gradient(135deg, rgba(249,115,22,0.95), rgba(124,45,18,0.95)); border-color:rgba(251,146,60,0.6);}
-.planned-card.status-week .secondary {color:#fed7aa;}
-.planned-card.status-past {background:linear-gradient(135deg, rgba(220,38,38,0.95), rgba(127,29,29,0.95)); border-color:rgba(248,113,113,0.6);}
-.planned-card.status-past .secondary {color:#fecaca;}
-.planned-card.race {background:linear-gradient(135deg, rgba(253,224,71,0.92), rgba(202,138,4,0.9)); border-color:rgba(250,204,21,0.65); box-shadow:0 6px 18px rgba(202,138,4,0.35);}
-.planned-card.race .secondary {color:#fde68a;}
-.planned-card.race .date {color:#fef3c7;}
-.planned-card.race .notes {color:#fff9c2;}
-.planned-card-button {margin-top:0.55rem;}
-.planned-card-button button {width:100%; font-weight:600; border-width:1px;}
-.planned-card-button.status-future button {background:#22d3ee; color:#082f49; border-color:#0ea5e9;}
-.planned-card-button.status-future button:hover {background:#0ea5e9; color:#f8fafc;}
-.planned-card-button.status-today button {background:#22c55e; color:#052e16; border-color:#16a34a;}
-.planned-card-button.status-today button:hover {background:#16a34a; color:#f0fdf4;}
-.planned-card-button.status-week button {background:#fb923c; color:#451a03; border-color:#f97316;}
-.planned-card-button.status-week button:hover {background:#f97316; color:#fff7ed;}
-.planned-card-button.status-past button {background:#ef4444; color:#450a0a; border-color:#dc2626;}
-.planned-card-button.status-past button:hover {background:#dc2626; color:#fef2f2;}
-.activity-card {border:1px solid rgba(228,204,160,0.25); border-radius:12px; padding:1rem 1rem 0.75rem 1rem; margin-bottom:0.9rem; background:rgba(41,61,86,0.88);}
-.activity-card.linked {border:2px solid #60ac84; box-shadow:0 0 0 1px rgba(96,172,132,0.35);}
-.activity-card .header {display:flex; justify-content:space-between; align-items:flex-start; gap:0.75rem;}
-.activity-card .header .title-block {display:flex; flex-direction:column; gap:0.1rem;}
-.activity-card .header h3 {margin:0; font-size:1.15rem; color:#e4cca0;}
-.activity-card .header .subtitle-line {margin-top:0.1rem; font-size:0.9rem; color:#d4acb4;}
-.activity-card.race {background:linear-gradient(135deg, rgba(253,224,71,0.92), rgba(202,138,4,0.9)); border:2px solid rgba(250,204,21,0.65); box-shadow:0 6px 18px rgba(202,138,4,0.35);}
-.activity-card.race .header h3 {color:#fef3c7;}
-.activity-card.race .header .subtitle-line {color:#fde68a;}
-.activity-card.race .meta .meta-line {color:#fff7d6;}
-.activity-card.race .meta .notes {color:#fff9c2;}
-.activity-card .header .status {font-size:1.4rem;}
-.activity-card .header .status span {display:inline-flex; align-items:center;}
-.activity-card .header .status span[title] {cursor:help;}
-.activity-card .meta {color:#d4acb4; font-size:0.82rem; margin-bottom:0.75rem; display:flex; flex-direction:column; gap:0.35rem;}
-.activity-card .meta .meta-line {display:flex; align-items:center; gap:0.35rem;}
-.activity-card .meta .activity-name {color:#e4cca0; font-weight:600;}
-.activity-card .meta .race-name {color:#fcd34d; font-weight:600;}
-.activity-card .meta .notes {color:#e2e8f0; font-size:0.78rem; opacity:0.9;}
-.activity-card .metrics {display:flex; flex-wrap:wrap; gap:1.4rem; margin-bottom:0.5rem;}
-.metric {display:flex; flex-direction:column;}
-.metric .label {font-size:0.72rem; text-transform:uppercase; color:#d4acb4; letter-spacing:0.05em;}
-.metric .value {font-size:1.05rem; color:#f8fafc;}
-.activity-tag {display:inline-flex; align-items:center; gap:0.4rem; font-size:0.78rem; color:#f8fafc;}
-.activity-tag span {background:#04813c; color:#f8fafc; padding:0.25rem 0.5rem; border-radius:8px; font-size:0.72rem; text-transform:uppercase; letter-spacing:0.05em;}
-</style>
-"""
-
 
 def _trigger_rerun() -> None:
     rerun = getattr(st, "experimental_rerun", None) or getattr(st, "rerun", None)
     if rerun:
         rerun()
-
-
-def _format_duration(seconds: Optional[float]) -> str:
-    if seconds in (None, "", float("nan")):
-        return "-"
-    total = int(float(seconds))
-    hours, remainder = divmod(total, 3600)
-    minutes, secs = divmod(remainder, 60)
-    if hours:
-        return f"{hours}h{minutes:02d}"
-    if minutes:
-        return f"{minutes}m{secs:02d}"
-    return f"{secs}s"
 
 
 def _format_datetime(ts: Optional[dt.datetime]) -> str:
@@ -183,8 +103,6 @@ def main() -> None:
     link_service = LinkingService(storage)
     metrics_service = MetricsComputationService(storage)
 
-    st.markdown(_CARD_STYLES, unsafe_allow_html=True)
-
     ath_df = ath_repo.list()
     if ath_df.empty:
         st.warning("Aucun athlète disponible.")
@@ -216,7 +134,10 @@ def main() -> None:
             "Types d'activités",
             options=[label_map[code] for code in sport_types],
             default=default_labels,
-            help="Filtre les cartes du flux par type d'activité. Vider la sélection pour afficher toutes les activités.",
+            help=(
+                "Filtre les cartes du flux par type d'activité. Vider la sélection pour "
+                "afficher toutes les activités."
+            ),
         )
         if selected_labels:
             active_types = {code for code, label in label_map.items() if label in selected_labels}
@@ -286,7 +207,9 @@ def _render_planned_strip(
                 if card.planned_distance_km is not None:
                     metrics_parts.append(fmt_km(card.planned_distance_km))
                 if card.planned_duration_sec is not None:
-                    metrics_parts.append(_format_duration(card.planned_duration_sec))
+                    metrics_parts.append(
+                        format_duration(card.planned_duration_sec, include_seconds=True)
+                    )
                 if card.planned_ascent_m is not None:
                     metrics_parts.append(fmt_m(card.planned_ascent_m))
                 metrics = " • ".join(metrics_parts) if metrics_parts else "—"
@@ -409,7 +332,7 @@ def _format_candidate_label(candidate) -> str:
         except Exception:
             label_date = start.strftime("%d/%m/%Y %H:%M")
     distance = fmt_km(candidate.distance_km) if candidate.distance_km is not None else "-"
-    duration = _format_duration(candidate.moving_sec)
+    duration = format_duration(candidate.moving_sec, include_seconds=True)
     score = (
         f"{fmt_decimal(candidate.match_score * 100, 1)}% de correspondance"
         if candidate.match_score is not None
@@ -492,9 +415,9 @@ def _render_activity_card(
         ("Distance", fmt_km(item.distance_km) if item.distance_km is not None else "-"),
         (
             "Durée",
-            _format_duration(item.moving_sec)
+            format_duration(item.moving_sec, include_seconds=True)
             if item.moving_sec is not None
-            else _format_duration(item.elapsed_sec),
+            else format_duration(item.elapsed_sec, include_seconds=True),
         ),
         ("D+", fmt_m(item.ascent_m) if item.ascent_m is not None else "-"),
         ("FC moy", fmt_decimal(item.avg_hr, 0) if item.avg_hr is not None else "-"),

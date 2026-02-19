@@ -13,8 +13,7 @@ import pandas as pd
 
 from services.speed_profile_service import SpeedProfileService
 from services.timeseries_service import TimeseriesService
-
-SMOOTHING_WINDOW_SECONDS = 10
+from utils.constants import SMOOTHING_WINDOW_SECONDS
 
 
 def _smooth_series(series: pd.Series, window_size: int = SMOOTHING_WINDOW_SECONDS) -> pd.Series:
@@ -38,10 +37,35 @@ def _prepare_timeseries_df(df: pd.DataFrame) -> pd.DataFrame:
 def _build_speed_eq_chart(
     df: pd.DataFrame,
     speed_profile_service: SpeedProfileService | None,
+    activity_id: str | None = None,
     window_size: int = SMOOTHING_WINDOW_SECONDS,
 ) -> alt.Chart | None:
     if speed_profile_service is None:
         speed_profile_service = SpeedProfileService(config=None)
+
+    # Try to load cached elevation metrics with speedeq_smooth
+    if activity_id is not None and speed_profile_service.config is not None:
+        cached_df = speed_profile_service.load_elevation_metrics(activity_id)
+        if cached_df is not None and "speedeq_smooth" in cached_df.columns:
+            # Use cached speedeq_smooth - need to add timestamp for time axis
+            if "timestamp" in df.columns:
+                # Align cached data with original timestamps
+                if len(cached_df) <= len(df):
+                    df_aligned = df.iloc[: len(cached_df)].copy()
+                    df_aligned["speedeq_smooth"] = cached_df["speedeq_smooth"].values
+                    df_aligned = _prepare_timeseries_df(df_aligned)
+                    if not df_aligned.empty and df_aligned["speedeq_smooth"].notna().any():
+                        return (
+                            alt.Chart(df_aligned)
+                            .mark_line(color="#f97316")
+                            .encode(
+                                x=alt.X("minutes:Q", title="Temps (min)"),
+                                y=alt.Y("speedeq_smooth:Q", title="Vitesse équivalente (km/h)"),
+                            )
+                            .properties(height=180)
+                        )
+
+    # Fall back to computing from scratch
     try:
         speed_eq_df = speed_profile_service.preprocess_timeseries(df)
     except Exception:
@@ -153,7 +177,7 @@ def render_timeseries_charts(
                 .properties(height=180)
             )
 
-    speed_eq_chart = _build_speed_eq_chart(df, speed_profile_service)
+    speed_eq_chart = _build_speed_eq_chart(df, speed_profile_service, activity_id)
     if speed_eq_chart is not None:
         charts["speed_eq"] = speed_eq_chart
 

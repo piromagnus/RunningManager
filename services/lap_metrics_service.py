@@ -6,7 +6,6 @@ Per-activity lap metrics computation and storage.
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -18,6 +17,7 @@ from persistence.repositories import AthletesRepo
 from services.planner_service import PlannerService
 from utils.config import Config
 from utils.coercion import safe_float_optional, safe_int_optional
+from utils.metrics_formulas import compute_trimp_hr_reserve_from_profile
 
 
 @dataclass
@@ -172,17 +172,10 @@ class LapMetricsService:
         moving_sec: Optional[float],
         hr_profile: Optional[Tuple[float, float]],
     ) -> Optional[float]:
-        if hr_profile is None or avg_hr is None or moving_sec in (None, 0):
+        if avg_hr is None or moving_sec in (None, 0):
             return None
-        hr_rest, hr_max = hr_profile
-        if hr_max <= hr_rest or avg_hr <= hr_rest:
-            return None
-        hr_ratio = (avg_hr - hr_rest) / (hr_max - hr_rest)
-        hr_ratio = max(0.0, min(hr_ratio, 1.2))
-        if hr_ratio <= 0:
-            return None
-        duration_hours = moving_sec / 3600.0
-        return duration_hours * hr_ratio * 0.64 * math.exp(1.92 * hr_ratio)
+        trimp = compute_trimp_hr_reserve_from_profile(avg_hr, moving_sec, hr_profile)
+        return trimp if trimp > 0 else None
 
     @staticmethod
     def _classify_lap(

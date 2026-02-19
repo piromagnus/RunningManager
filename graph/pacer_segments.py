@@ -11,17 +11,9 @@ import pandas as pd
 import streamlit as st
 from streamlit.logger import get_logger
 
+from utils.constants import PACER_SEGMENT_COLORS
+
 logger = get_logger(__name__)
-
-# Pacer-specific grade category color mapping
-PACER_COLOR_MAPPING = {
-    "steep_up": "#dc2626",  # red
-    "run_up": "#f97316",  # orange
-    "flat": "#d1d5db",  # lightgray
-    "down": "#22c55e",  # green
-    "steep_down": "#004d26",  # darkgreen
-}
-
 
 def render_pacer_segments(
     metrics_df: pd.DataFrame, segments_df: pd.DataFrame, aid_stations_km: list[float]
@@ -85,7 +77,7 @@ def render_pacer_segments(
     for idx, seg in segments_df.iterrows():
         # Get segment type and color
         seg_type = seg.get("type", "unknown")
-        color = PACER_COLOR_MAPPING.get(seg_type, "#808080")
+        color = PACER_SEGMENT_COLORS.get(seg_type, "#808080")
         
         start_km = float(seg["startKm"])
         end_km = float(seg["endKm"])

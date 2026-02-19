@@ -11,7 +11,7 @@ import pandas as pd
 import streamlit as st
 from streamlit.logger import get_logger
 
-from graph.pacer_segments import PACER_COLOR_MAPPING
+from utils.constants import PACER_SEGMENT_COLORS
 
 logger = get_logger(__name__)
 
@@ -73,7 +73,7 @@ def render_comparison_elevation_profile(
 
     for idx, seg in comparison_df.iterrows():
         seg_type = seg.get("type", "unknown")
-        color = PACER_COLOR_MAPPING.get(seg_type, "#808080")
+        color = PACER_SEGMENT_COLORS.get(seg_type, "#808080")
 
         # Use actual distances from comparison_df (GPS-matched)
         start_km = float(seg["startKm"])

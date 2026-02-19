@@ -6,19 +6,22 @@ Speed profile analysis service for HR vs Speed correlation and clustering.
 
 from __future__ import annotations
 
-import itertools
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
-import scipy.stats as stats
-from haversine import haversine
-from sklearn.cluster import KMeans
 
-import config
+from services.speed_profile import (
+    hr_speed_analysis,
+    minetti,
+    persistence,
+    preprocessing,
+    profile_computation,
+)
 from utils.config import Config
+from utils.constants import PROFILE_WINDOW_SIZES
 
 
 @dataclass
@@ -51,6 +54,7 @@ class SpeedProfileService:
     """Service for analyzing speed profiles and HR vs Speed relationships."""
 
     def __init__(self, config: Optional[Config] = None):
+        self.profile_window_sizes = PROFILE_WINDOW_SIZES
 
         if config is not None:
             self.config = config
@@ -66,310 +70,103 @@ class SpeedProfileService:
     @staticmethod
     def moving_average(df: pd.DataFrame, window_size: int, col: str) -> pd.DataFrame:
         """Compute the moving average of a column over a specified window size."""
-        df = df.copy()
-        df[f"{col}_ma_{window_size}"] = (
-            df[col].rolling(window=window_size, min_periods=1, center=True).mean()
-        )
-        return df
+        return preprocessing.moving_average(df, window_size, col)
 
     @staticmethod
     def distance(df: pd.DataFrame, lat_col: str = "lat", lon_col: str = "lon") -> pd.DataFrame:
         """Compute the distance between 2 consecutive rows based on latitude and longitude."""
-        df = df.copy()
-        df["distance"] = [
-            haversine((lat1, lon1), (lat2, lon2))
-            for lat1, lon1, lat2, lon2 in zip(
-                df[lat_col].shift(), df[lon_col].shift(), df[lat_col], df[lon_col]
-            )
-        ]
-        return df
+        return preprocessing.distance(df, lat_col=lat_col, lon_col=lon_col)
 
     @staticmethod
     def cumulated_distance(df: pd.DataFrame, distance_col: str = "distance") -> pd.DataFrame:
         """Compute the cumulated distance based on the distance column."""
-        df = df.copy()
-        df["cumulated_distance"] = df[distance_col].cumsum()
-        return df
+        return preprocessing.cumulated_distance(df, distance_col=distance_col)
 
     @staticmethod
     def time_from_timestamp(df: pd.DataFrame, timestamp_col: str = "timestamp") -> pd.DataFrame:
         """Convert the timestamp column to a datetime object."""
-        df = df.copy()
-        df[timestamp_col] = pd.to_datetime(df[timestamp_col])
-        df["time"] = df[timestamp_col].dt.time
-        return df
+        return preprocessing.time_from_timestamp(df, timestamp_col=timestamp_col)
 
     @staticmethod
     def duration(df: pd.DataFrame, timestamp_col: str = "timestamp") -> pd.DataFrame:
         """Compute the duration of the dataframe based on the timestamp column."""
-        df = df.copy()
-        df["duration"] = df[timestamp_col].diff().fillna(pd.Timedelta(seconds=0))
-        df["cumulated_duration"] = df["duration"].cumsum()
-        df["duration_seconds"] = df["duration"].dt.total_seconds()
-        df["cumulated_duration_seconds"] = df["duration_seconds"].cumsum()
-        return df
+        return preprocessing.duration(df, timestamp_col=timestamp_col)
 
     @staticmethod
     def activity_duration_seconds(df: pd.DataFrame) -> float:
         """Return activity duration in seconds, falling back to sample count."""
-        if df.empty:
-            return 0.0
-
-        if "cumulated_duration_seconds" in df.columns:
-            durations = pd.to_numeric(df["cumulated_duration_seconds"], errors="coerce").dropna()
-            if not durations.empty:
-                duration = float(durations.iloc[-1])
-                if duration > 0:
-                    return duration
-
-        if "duration_seconds" in df.columns:
-            durations = pd.to_numeric(df["duration_seconds"], errors="coerce").dropna()
-            if not durations.empty:
-                duration = float(durations.sum())
-                if duration > 0:
-                    return duration
-
-        if "timestamp" in df.columns:
-            timestamps = pd.to_datetime(df["timestamp"], errors="coerce")
-            if timestamps.notna().any():
-                duration = float((timestamps.max() - timestamps.min()).total_seconds())
-                if duration > 0:
-                    return duration
-
-        return float(len(df))
+        return preprocessing.activity_duration_seconds(df)
 
     @staticmethod
-    def speed(df: pd.DataFrame, distance_col: str = "distance", time_col: str = "duration_seconds") -> pd.DataFrame:
+    def speed(
+        df: pd.DataFrame,
+        distance_col: str = "distance",
+        time_col: str = "duration_seconds",
+    ) -> pd.DataFrame:
         """Compute the speed of the dataframe based on the distance and time columns."""
-        df = df.copy()
-        mean_time = df.loc[df[time_col] > 0, time_col].mean()
-        if pd.isna(mean_time) or mean_time == 0:
-            mean_time = 1.0
-        df[time_col] = df[time_col].replace(0, mean_time)
-        df["speed_m_s"] = 1000 * df[distance_col] / df[time_col]
-        df["speed_km_h"] = 3.6 * df["speed_m_s"]
-        return df
+        return preprocessing.speed(df, distance_col=distance_col, time_col=time_col)
 
     @staticmethod
     def elevation(df: pd.DataFrame, elevation_col: str = "elevationM_ma_5") -> pd.DataFrame:
         """Compute the elevation difference of the dataframe based on the elevation column."""
-        df = df.copy()
-        df["elevation_difference"] = df[elevation_col].diff().fillna(0)
-        df["elevation_cumulated"] = df["elevation_difference"].cumsum()
-        df["elevation_gain"] = df["elevation_difference"].apply(lambda x: x if x > 0 else 0).cumsum()
-        df["elevation_loss"] = df["elevation_difference"].apply(lambda x: -x if x < 0 else 0).cumsum()
-        return df
+        return preprocessing.elevation(df, elevation_col=elevation_col)
 
     @staticmethod
-    def grade(df: pd.DataFrame, distance_col: str = "distance", elevation_col: str = "elevation_difference") -> pd.DataFrame:
+    def grade(
+        df: pd.DataFrame,
+        distance_col: str = "distance",
+        elevation_col: str = "elevation_difference",
+    ) -> pd.DataFrame:
         """Compute the grade of the dataframe based on the distance and elevation columns."""
-        df = df.copy()
-        df["grade"] = df[elevation_col] / (df[distance_col] * 1000)
-        df["grade"] = df["grade"].replace([np.inf, -np.inf], 0)
-        df["grade"] = df["grade"].fillna(0)
-        return df
+        return preprocessing.grade(df, distance_col=distance_col, elevation_col=elevation_col)
 
     def preprocess_timeseries(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Preprocess timeseries data following the notebook workflow.
-        
-        Requires lat/lon columns for GPS-based distance computation.
-        If GPS data is missing or insufficient, returns empty DataFrame.
+        """Preprocess activity timeseries (time-referenced pipeline).
+
+        This pipeline is for real activities: it uses timestamps as the reference unit
+        to compute durations and speeds. It requires GPS data and valid timestamps to
+        derive time-based metrics (duration, speed) along with grade.
+
+        If GPS data is missing or insufficient, returns an empty DataFrame.
         """
-        df = df.copy()
-
-        # Check if we have GPS data
-        if "lat" not in df.columns or "lon" not in df.columns:
-            return pd.DataFrame()
-        
-        # Check if GPS data is present and valid
-        if df["lat"].isna().all() or df["lon"].isna().all():
-            return pd.DataFrame()
-
-        # Apply moving average to lat/lon
-        df = self.moving_average(df, window_size=5, col="lat")
-        df = self.moving_average(df, window_size=5, col="lon")
-        df = self.moving_average(df, window_size=5, col="elevationM")
-        # Compute distance
-        df = self.distance(df, lat_col="lat_ma_5", lon_col="lon_ma_5")
-
-        # Filter out very small distances
-        df = df[df["distance"] > 1e-5].reset_index(drop=True)
-        
-        if df.empty:
-            return pd.DataFrame()
-
-        # Interpolate distance
-        df["distance"] = df["distance"].interpolate(method="linear")
-
-        # Compute elevation
-        df = self.elevation(df, elevation_col="elevationM_ma_5")
-
-        # Convert timestamp and compute duration
-        df = self.time_from_timestamp(df)
-        df = self.duration(df)
-
-        # Compute cumulated distance
-        df = self.cumulated_distance(df)
-
-        # Apply moving average to distance
-        df = self.moving_average(df, window_size=10, col="distance")
-
-        # Compute speed
-        df = self.speed(df, distance_col="distance", time_col="duration_seconds")
-
-        # Filter out unrealistic speeds
-        df = df[df["speed_km_h"] < 40].reset_index(drop=True)
-
-        # Compute grade
-        df = self.grade(df, distance_col="distance_ma_10", elevation_col="elevation_difference")
-
-        return df
+        return preprocessing.preprocess_timeseries(df)
 
     # ------------------------------------------------------------------
     # Shift Computation
     # ------------------------------------------------------------------
 
     def compute_hr_speed_shift(
-        self, df: pd.DataFrame, hr_col: str = "hr", speed_col: str = "speed_km_h", min_hr: int = 120
+        self,
+        df: pd.DataFrame,
+        hr_col: str = "hr",
+        speed_col: str = "speed_km_h",
+        min_hr: int = 120,
     ) -> Tuple[int, float]:
         """Compute optimal HR shift for maximum correlation with speed."""
-        df = df.copy()
-
-        # Filter by minimum HR
-        df = df[df[hr_col] > min_hr].copy()
-
-        if df.empty:
-            return 0, 0.0
-
-        # Apply smoothing
-        df = self.moving_average(df, window_size=10, col=hr_col)
-        df = self.moving_average(df, window_size=10, col=speed_col)
-
-        # Rename columns
-        df.rename(columns={"hr_ma_10": "hr_smooth", f"{speed_col}_ma_10": "speed_smooth"}, inplace=True)
-
-        hr_smooth_col = "hr_smooth"
-        speed_smooth_col = "speed_smooth"
-
-        # Find best offset
-        best_correlation = 0.0
-        best_offset = 0
-
-        for offset in range(-60, 61):
-            shifted_hr = df[hr_smooth_col].shift(offset)
-            valid_data = pd.concat([df[speed_smooth_col], shifted_hr], axis=1).dropna()
-            if len(valid_data) > 0:
-                correlation = valid_data.corr().iloc[0, 1]
-                if not pd.isna(correlation) and abs(correlation) > abs(best_correlation):
-                    best_correlation = correlation
-                    best_offset = offset
-
-        return best_offset, best_correlation
+        return hr_speed_analysis.compute_hr_speed_shift(
+            df,
+            hr_col=hr_col,
+            speed_col=speed_col,
+            min_hr=min_hr,
+        )
 
     # ------------------------------------------------------------------
     # Cluster-Based Analysis (Strategy 1)
     # ------------------------------------------------------------------
 
     def cluster_based_analysis(
-        self, df: pd.DataFrame, best_offset: int, n_clusters: int = 7, r_threshold: float = 0.95
+        self,
+        df: pd.DataFrame,
+        best_offset: int,
+        n_clusters: int = 7,
+        r_threshold: float = 0.95,
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, float, float, float, float]:
         """Perform cluster-based HR vs Speed analysis.
         
         Expects df to already be filtered (hr > 120) and smoothed.
         """
-        df = df.copy()
-
-        if df.empty or "hr_shifted" not in df.columns or "speed_smooth" not in df.columns:
-            return np.array([]), np.array([]), np.array([]), 0.0, 0.0, 0.0, 0.0
-
-        # Reset index to ensure sequential indices (0, 1, 2, ...)
-        df = df.reset_index(drop=True)
-
-        # Prepare data for clustering
-        X = df[["hr_shifted", "speed_smooth"]].dropna()
-        if len(X) < n_clusters:
-            return np.array([]), np.array([]), np.array([]), 0.0, 0.0, 0.0, 0.0
-
-        # Perform clustering
-        kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
-        clusters = kmeans.fit_predict(X.values)
-
-        # Map clusters back to full dataframe (NaN where data was missing)
-        # X.index now contains sequential indices matching df's reset index
-        clusters_full = np.full(len(df), -1, dtype=int)
-        valid_indices = X.index.values
-        # Ensure indices are within bounds
-        valid_indices = valid_indices[(valid_indices >= 0) & (valid_indices < len(df))]
-        if len(valid_indices) == len(clusters):
-            clusters_full[valid_indices] = clusters
-        else:
-            # Fallback: if length mismatch, use positional mapping
-            clusters_full[:len(clusters)] = clusters[:len(clusters_full)]
-
-        cluster_centers = kmeans.cluster_centers_
-
-        # Linear regression on cluster centers
-        if len(cluster_centers) < 2:
-            return (
-                clusters_full,
-                cluster_centers,
-                np.arange(len(cluster_centers)),
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-            )
-
-        slope, intercept, r_value, p_value, std_err = stats.linregress(cluster_centers[:, 0], cluster_centers[:, 1])
-
-        # Filter clusters if R² is below threshold
-        if abs(r_value) < r_threshold and len(cluster_centers) > 1:
-            n_centers = len(cluster_centers)
-            remove_count = max(1, int(n_centers * 0.2))
-
-            best_r_squared = -1
-            best_filtered_centers = None
-            best_keep_mask = None
-
-            for clusters_to_remove in itertools.combinations(range(n_centers), remove_count):
-                keep_mask = np.ones(n_centers, dtype=bool)
-                keep_mask[list(clusters_to_remove)] = False
-
-                current_centers = cluster_centers[keep_mask]
-
-                if len(current_centers) > 1:
-                    s, i, r, _, se = stats.linregress(current_centers[:, 0], current_centers[:, 1])
-                    current_r_squared = r**2
-
-                    if current_r_squared > best_r_squared:
-                        best_r_squared = current_r_squared
-                        best_filtered_centers = current_centers
-                        best_keep_mask = keep_mask
-
-            if best_filtered_centers is not None:
-                filtered_cluster_centers = best_filtered_centers
-                filtered_cluster_ids = np.arange(n_clusters)[best_keep_mask]
-                # Recompute regression on filtered centers
-                slope, intercept, r_value, p_value, std_err = stats.linregress(
-                    filtered_cluster_centers[:, 0], filtered_cluster_centers[:, 1]
-                )
-            else:
-                filtered_cluster_centers = cluster_centers
-                filtered_cluster_ids = np.arange(n_clusters)
-        else:
-            filtered_cluster_centers = cluster_centers
-            filtered_cluster_ids = np.arange(n_clusters)
-
-        r_squared = r_value**2
-
-        return (
-            clusters_full,
-            filtered_cluster_centers,
-            filtered_cluster_ids,
-            slope,
-            intercept,
-            r_squared,
-            std_err,
+        return hr_speed_analysis.cluster_based_analysis(
+            df, best_offset, n_clusters=n_clusters, r_threshold=r_threshold
         )
 
     # ------------------------------------------------------------------
@@ -377,83 +174,21 @@ class SpeedProfileService:
     # ------------------------------------------------------------------
 
     def compute_profile(
-        self, df: pd.DataFrame, col: str, additional_col: Optional[str], window_sizes: List[int], best_offset: int
+        self,
+        df: pd.DataFrame,
+        col: str,
+        additional_col: Optional[str],
+        window_sizes: List[int],
+        best_offset: int,
     ) -> Tuple[Dict[int, float], Dict[int, float]]:
         """Compute max average speeds/HRs for different window sizes."""
-        max_avg_values = {}
-        max_avg_additional_values = {}
-        activity_duration_sec = self.activity_duration_seconds(df)
-
-        for window_size in window_sizes:
-            if window_size > activity_duration_sec:
-                max_avg_values[window_size] = np.nan
-                if additional_col is not None:
-                    max_avg_additional_values[window_size] = np.nan
-                continue
-
-            rolling_avg = df[col].rolling(window=window_size, min_periods=1, center=True).mean()
-            max_avg = rolling_avg.max()
-            max_avg_idx = rolling_avg.idxmax()
-
-            max_avg_values[window_size] = max_avg
-
-            if additional_col is not None:
-                if pd.notna(max_avg_idx):
-                    half_window = window_size // 2
-                    start_idx = max(0, int(max_avg_idx) - half_window)
-                    end_idx = min(len(df), int(max_avg_idx) + half_window + 1)
-                    additional_avg = df.loc[start_idx:end_idx, additional_col].mean()
-                else:
-                    additional_avg = None
-                max_avg_additional_values[window_size] = additional_avg
-
-        return max_avg_values, max_avg_additional_values
+        return hr_speed_analysis.compute_profile(df, col, additional_col, window_sizes, best_offset)
 
     def profile_based_analysis(
         self, df: pd.DataFrame, best_offset: int, window_sizes: Optional[List[int]] = None
     ) -> Tuple[float, float, float, float]:
         """Perform profile-based HR vs Speed analysis."""
-        if window_sizes is None:
-            window_sizes = [
-                15, 20, 30, 60, 120, 180, 240, 300, 360, 420, 480, 540, 600, 660, 720, 780, 840, 900, 960, 1020,
-                1080, 1140, 1200, 1320, 1440, 1560, 1680, 1920, 2160, 2400, 2640, 2880, 3120, 3360, 3600,
-            ]
-
-        df = df.copy()
-
-        # Filter and smooth
-        df = df[df["hr"] > 120].copy()
-        if df.empty:
-            return 0.0, 0.0, 0.0, 0.0
-
-        df = self.moving_average(df, window_size=10, col="hr")
-        df = self.moving_average(df, window_size=10, col="speed_km_h")
-        df.rename(columns={"hr_ma_10": "hr_smooth", "speed_km_h_ma_10": "speed_smooth"}, inplace=True)
-
-        # Apply shift
-        df["hr_shifted"] = df["hr_smooth"].shift(best_offset)
-
-        # Compute profiles
-        max_avg_speeds, max_avg_additional_values = self.compute_profile(
-            df, "speed_smooth", "hr_shifted", window_sizes, best_offset
-        )
-        max_avg_hrs, _ = self.compute_profile(df, "hr_shifted", None, window_sizes, best_offset)
-
-        # Linear regression on profile data
-        x_values = list(max_avg_hrs.values())
-        y_values = list(max_avg_speeds.values())
-        valid_pairs = [
-            (x, y) for x, y in zip(x_values, y_values) if pd.notna(x) and pd.notna(y)
-        ]
-
-        if len(valid_pairs) < 2:
-            return 0.0, 0.0, 0.0, 0.0
-
-        x_values, y_values = zip(*valid_pairs)
-        slope, intercept, r_value, p_value, std_err = stats.linregress(x_values, y_values)
-        r_squared = r_value**2
-
-        return slope, intercept, r_squared, std_err
+        return hr_speed_analysis.profile_based_analysis(df, best_offset, window_sizes)
 
     # ------------------------------------------------------------------
     # Full Processing
@@ -466,9 +201,11 @@ class SpeedProfileService:
         Processes a complete timeseries data file for a given activity and returns analysis results according
         to the chosen strategy ("cluster" or "profile").
 
-        This function performs a sequence of operations to transform timeseries data (such as HR and speed traces
-        from running or cycling activities) into summarized analytical results, ready for further analysis or visualization. The
-        function is robust, applying fallback strategies if certain fields are missing, and covers both clustering-based 
+        This function performs a sequence of operations to transform timeseries data (such as
+        HR and speed traces from running or cycling activities) into summarized analytical
+        results, ready for further analysis or visualization. The function is robust,
+        applying fallback strategies if certain fields are missing, and covers both
+        clustering-based
         and profile-based approaches. The steps are as follows:
 
         1. Load the Timeseries Data:
@@ -476,18 +213,22 @@ class SpeedProfileService:
             - If the file does not exist, or loading fails, or is missing HR data, return None.
 
         2. Preprocessing:
-            - Attempt to preprocess the timeseries using GPS-derived speeds (via `preprocess_timeseries`). This typically 
+            - Attempt to preprocess the timeseries using GPS-derived speeds
+              (via `preprocess_timeseries`). This typically
               refines or creates the `speed_km_h` column from raw GPS data.
             - If GPS-based speed cannot be computed, fall back to using the `paceKmh` column directly (if available).
-                - Convert `paceKmh` to `speed_km_h`, remove rows with missing or nonpositive speeds or HR, recompute time 
+                - Convert `paceKmh` to `speed_km_h`, remove rows with missing or
+                  nonpositive speeds or HR, recompute time
                   and duration columns, and filter for realistic speed ranges.
 
         3. Validation:
-            - After preprocessing, check that the dataframe is non-empty and contains both HR and speed columns. 
+            - After preprocessing, check that the dataframe is non-empty and contains both
+              HR and speed columns.
               If not, return None.
 
         4. Heart Rate / Speed Shift Computation:
-            - Compute the temporal shift (best_offset) between heart rate (HR) and speed signals to maximize their correlation.
+            - Compute the temporal shift (best_offset) between heart rate (HR) and speed
+              signals to maximize their correlation.
 
         5. Data Smoothing and Filtering:
             - Filter data to HR values above 120 bpm (to focus on active segments).
@@ -496,20 +237,25 @@ class SpeedProfileService:
 
         6. Analysis Strategy:
             - If `strategy` is "cluster":
-                - Call `cluster_based_analysis` to segment data into HR/speed clusters, fit a regression line per cluster, 
+                - Call `cluster_based_analysis` to segment data into HR/speed clusters,
+                  fit a regression line per cluster,
                   and summarize each segment.
-                - Return a `SpeedProfileResult` object comprising shift, correlation, cluster labels, smooth HR/speed, 
+                - Return a `SpeedProfileResult` object comprising shift, correlation,
+                  cluster labels, smooth HR/speed,
                   and cluster-wise regression results.
             - If `strategy` is "profile":
-                - Call `profile_based_analysis` to compute the relationship between HR and speed profiles across 
+                - Call `profile_based_analysis` to compute the relationship between HR and
+                  speed profiles across
                   multiple rolling window sizes.
                 - Additionally, calculate maximum average speed and HR per window size.
-                - Return a `SpeedProfileResult` object summarizing profile-based regression, as well as the computed 
+                - Return a `SpeedProfileResult` object summarizing profile-based regression,
+                  as well as the computed
                   profiles for further review or plotting.
 
         Args:
-            activity_id (str): Identifier for the activity whose timeseries should be processed. This references a specific CSV file.
-            strategy (str, optional): Which analysis method to use: 
+            activity_id (str): Identifier for the activity whose timeseries should be
+                processed. This references a specific CSV file.
+            strategy (str, optional): Which analysis method to use:
                 - "cluster": HR/Speed clustering analysis.
                 - "profile": Profile-based (rolling average) analysis.
                 Default is "cluster".
@@ -518,11 +264,13 @@ class SpeedProfileService:
 
         Returns:
             Optional[SpeedProfileResult]:
-                - Returns a populated SpeedProfileResult containing the computed analysis, or None if the process failed at any stage.
+                - Returns a populated SpeedProfileResult containing the computed analysis,
+                  or None if the process failed at any stage.
 
         Detailed Notes:
             - Both analysis strategies return timeseries-aligned HR/speed data and regression outputs.
-            - This function handles missing GPS or speed data gracefully, defaulting to fallback columns when appropriate.
+            - This function handles missing GPS or speed data gracefully, defaulting to
+              fallback columns when appropriate.
             - Returns are always consistent in typing; None is only returned on hard failures (missing data/columns).
         """
         if n_clusters is None:
@@ -636,37 +384,65 @@ class SpeedProfileService:
 
     def save_metrics_ts(self, activity_id: str, result: SpeedProfileResult) -> Path:
         """Save processed metrics to metrics_ts folder."""
-        path = self.metrics_ts_dir / f"{activity_id}.csv"
+        return persistence.save_metrics_ts(self, activity_id, result)
 
-        # Prepare data for saving - ensure all arrays have same length
-        min_len = len(result.hr_smooth)
-        if result.speed_smooth is not None:
-            min_len = min(min_len, len(result.speed_smooth))
-        if result.hr_shifted is not None:
-            min_len = min(min_len, len(result.hr_shifted))
+    def compute_and_save_elevation_metrics(self, activity_id: str) -> Optional[Path]:
+        """Compute and save elevation-related metrics to metrics_ts for caching.
+        
+        Computes speedeq_smooth, grade_ma_10, elevationM_ma_5, cumulated_distance,
+        and other metrics needed for elevation profile visualization.
+        Also preserves existing HR-related columns (hr_smooth, hr_shifted, cluster) if present.
+        
+        Parameters:
+        activity_id (str): Activity identifier
+        
+        Returns:
+        Optional[Path]: Path to saved metrics_ts CSV, or None if computation failed
+        """
+        return persistence.compute_and_save_elevation_metrics(self, activity_id)
 
-        data = {
-            "hr_smooth": result.hr_smooth.values[:min_len],
-            "speed_smooth": result.speed_smooth.values[:min_len],
-            "hr_shifted": result.hr_shifted.values[:min_len],
-        }
+    def compute_all_metrics_ts(self, activity_id: str) -> Optional[Path]:
+        """Compute and save all metrics_ts data: HR analysis + elevation metrics.
+        
+        This is the main entry point for computing complete metrics_ts files.
+        It computes both HR-related metrics (hr_smooth, hr_shifted, cluster) and
+        elevation metrics (speedeq_smooth, grade_ma_10, elevationM_ma_5, etc.)
+        
+        Parameters:
+        activity_id (str): Activity identifier
+        
+        Returns:
+        Optional[Path]: Path to saved metrics_ts CSV, or None if computation failed
+        """
+        return persistence.compute_all_metrics_ts(self, activity_id)
 
-        if result.clusters is not None and len(result.clusters) >= min_len:
-            data["cluster"] = result.clusters[:min_len]
+    def load_elevation_metrics(self, activity_id: str) -> Optional[pd.DataFrame]:
+        """Load elevation metrics from metrics_ts if available.
+        
+        Checks if the cached metrics_ts file contains the required elevation columns.
+        
+        Parameters:
+        activity_id (str): Activity identifier
+        
+        Returns:
+        Optional[pd.DataFrame]: Cached elevation metrics DataFrame or None
+        """
+        return persistence.load_elevation_metrics(self, activity_id)
 
-        df_save = pd.DataFrame(data)
-        df_save.to_csv(path, index=False)
-        return path
+    def get_or_compute_elevation_metrics(self, activity_id: str) -> Optional[pd.DataFrame]:
+        """Get elevation metrics from cache or compute and save them.
+        
+        Parameters:
+        activity_id (str): Activity identifier
+        
+        Returns:
+        Optional[pd.DataFrame]: Elevation metrics DataFrame or None
+        """
+        return persistence.get_or_compute_elevation_metrics(self, activity_id)
 
     def load_metrics_ts(self, activity_id: str) -> Optional[pd.DataFrame]:
         """Load processed metrics from metrics_ts folder."""
-        path = self.metrics_ts_dir / f"{activity_id}.csv"
-        if not path.exists():
-            return None
-        try:
-            return pd.read_csv(path)
-        except Exception:
-            return None
+        return persistence.load_metrics_ts(self, activity_id)
 
     # ------------------------------------------------------------------
     # Speed Equivalent (Minetti Energy Cost Model)
@@ -685,20 +461,7 @@ class SpeedProfileService:
         Returns:
         float: Energy cost per unit distance
         """
-        # Clamp grade to valid range [-0.5, 0.5]
-        if grade >= 0.5:
-            grade = 0.5
-        elif grade <= -0.5:
-            grade = -0.5
-        
-        return (
-            280.5 * grade**5 -
-            58.7 * grade**4 -
-            76.8 * grade**3 +
-            51.9 * grade**2 +
-            19.6 * grade +
-            2.5
-        )
+        return minetti.minetti_energy_cost_walking(grade)
 
     @staticmethod
     def minetti_energy_cost_running(grade: float) -> float:
@@ -713,20 +476,7 @@ class SpeedProfileService:
         Returns:
         float: Energy cost per unit distance
         """
-        # Clamp grade to valid range [-0.5, 0.5]
-        if grade >= 0.5:
-            grade = 0.5
-        elif grade <= -0.5:
-            grade = -0.5
-        
-        return (
-            155.4 * grade**5 -
-            30.4 * grade**4 -
-            43.3 * grade**3 +
-            46.3 * grade**2 +
-            19.5 * grade +
-            3.6
-        )
+        return minetti.minetti_energy_cost_running(grade)
 
     @staticmethod
     def compute_speed_eq_column(df: pd.DataFrame) -> pd.DataFrame:
@@ -746,49 +496,7 @@ class SpeedProfileService:
         Returns:
         pd.DataFrame: DataFrame with added speed_eq_km_h column
         """
-        df = df.copy()
-        
-        # Constants for energy cost on flat ground
-        ENERGY_COST_WALKING_FLAT = 2.5
-        ENERGY_COST_RUNNING_FLAT = 3.6
-        WALKING_THRESHOLD = 6.0  # km/h
-        
-        # Ensure grade_ma_10 exists (should be computed by preprocess_timeseries)
-        if "grade_ma_10" not in df.columns:
-            if "grade" in df.columns:
-                df = SpeedProfileService.moving_average(df, window_size=10, col="grade")
-            else:
-                # No grade data, treat as flat (grade = 0)
-                df["grade_ma_10"] = 0.0
-        
-        def calculate_speed_eq(row: pd.Series) -> float:
-            speed = row.get("speed_km_h", np.nan)
-            grade = row.get("grade_ma_10", 0.0)
-            
-            if pd.isna(speed) or speed <= 0:
-                return np.nan
-            
-            # Handle NaN grade as flat (0.0)
-            if pd.isna(grade):
-                grade = 0.0
-            
-            # Classify as walking or running
-            if speed <= WALKING_THRESHOLD:
-                cost_at_grade = SpeedProfileService.minetti_energy_cost_walking(grade)
-                cost_flat = ENERGY_COST_WALKING_FLAT
-            else:
-                cost_at_grade = SpeedProfileService.minetti_energy_cost_running(grade)
-                cost_flat = ENERGY_COST_RUNNING_FLAT
-            
-            # Calculate equivalent speed: speed_eq = speed * (C(grade) / C(0))
-            if cost_flat <= 0:
-                return speed  # Fallback to original speed
-            
-            speed_eq = max(0.0, speed * (cost_at_grade / cost_flat))
-            return speed_eq
-        
-        df["speed_eq_km_h"] = df.apply(calculate_speed_eq, axis=1)
-        return df
+        return profile_computation.compute_speed_eq_column(df)
 
     def compute_max_speed_profiles(
         self, df: pd.DataFrame, window_sizes: List[int]
@@ -806,118 +514,13 @@ class SpeedProfileService:
         Returns:
         pd.DataFrame: DataFrame with columns windowSec, maxSpeedKmh, maxSpeedEqKmh
         """
-        df = df.copy()
-        
-        # Ensure speed_km_h is smoothed
-        if "speed_km_h_ma_10" not in df.columns:
-            df = self.moving_average(df, window_size=10, col="speed_km_h")
-            df = df.rename(columns={"speed_km_h_ma_10": "speed_km_h_smooth"})
-        else:
-            df = df.rename(columns={"speed_km_h_ma_10": "speed_km_h_smooth"})
-        
-        # Ensure grade_ma_10 exists for speed_eq computation
-        if "grade_ma_10" not in df.columns:
-            if "grade" in df.columns:
-                df = self.moving_average(df, window_size=10, col="grade")
-            else:
-                df["grade_ma_10"] = 0.0
-        
-        # Compute speed_eq_km_h
-        df = self.compute_speed_eq_column(df)
-        
-        # Compute max profiles for each window size
-        results = []
-        activity_duration_sec = self.activity_duration_seconds(df)
-        for window_sec in window_sizes:
-            if window_sec > activity_duration_sec:
-                max_speed = np.nan
-                max_speed_eq = np.nan
-            else:
-                # Rolling mean for raw speed (centered)
-                rolling_speed = df["speed_km_h_smooth"].rolling(
-                    window=window_sec, min_periods=1, center=True
-                ).mean()
-                max_speed = rolling_speed.max()
-
-                # Rolling mean for equivalent speed (centered)
-                rolling_speed_eq = df["speed_eq_km_h"].rolling(
-                    window=window_sec, min_periods=1, center=True
-                ).mean()
-                max_speed_eq = rolling_speed_eq.max()
-            
-            results.append({
-                "windowSec": window_sec,
-                "maxSpeedKmh": None if pd.isna(max_speed) else float(max_speed),
-                "maxSpeedEqKmh": None if pd.isna(max_speed_eq) else float(max_speed_eq),
-            })
-        
-        return pd.DataFrame(results)
+        return profile_computation.compute_max_speed_profiles(df, window_sizes)
 
     def compute_speed_profile_cloud(
         self, df: pd.DataFrame, window_sizes: List[int]
     ) -> pd.DataFrame:
         """Compute per-window max speeds with associated HR values."""
-        if df.empty or "speed_km_h" not in df.columns:
-            return pd.DataFrame()
-
-        df = df.copy()
-        if "hr" not in df.columns:
-            df["hr"] = np.nan
-
-        df["speed_km_h"] = pd.to_numeric(df["speed_km_h"], errors="coerce")
-        df["hr"] = pd.to_numeric(df["hr"], errors="coerce")
-        if df["speed_km_h"].isna().all():
-            return pd.DataFrame()
-
-        if "speed_km_h_ma_10" not in df.columns:
-            df = self.moving_average(df, window_size=10, col="speed_km_h")
-            df = df.rename(columns={"speed_km_h_ma_10": "speed_km_h_smooth"})
-        else:
-            df = df.rename(columns={"speed_km_h_ma_10": "speed_km_h_smooth"})
-
-        if "hr_ma_10" not in df.columns:
-            df = self.moving_average(df, window_size=10, col="hr")
-            df = df.rename(columns={"hr_ma_10": "hr_smooth"})
-        else:
-            df = df.rename(columns={"hr_ma_10": "hr_smooth"})
-
-        if "grade_ma_10" not in df.columns:
-            if "grade" in df.columns:
-                df = self.moving_average(df, window_size=10, col="grade")
-            else:
-                df["grade_ma_10"] = 0.0
-
-        df = self.compute_speed_eq_column(df)
-
-        max_speeds, hr_at_max_speeds = self.compute_profile(
-            df, "speed_km_h_smooth", "hr_smooth", window_sizes, 0
-        )
-        max_speed_eqs, hr_at_max_speed_eqs = self.compute_profile(
-            df, "speed_eq_km_h", "hr_smooth", window_sizes, 0
-        )
-
-        rows = []
-        for window_sec in window_sizes:
-            max_speed = max_speeds.get(window_sec)
-            max_speed_eq = max_speed_eqs.get(window_sec)
-            hr_at_max_speed = hr_at_max_speeds.get(window_sec)
-            hr_at_max_speed_eq = hr_at_max_speed_eqs.get(window_sec)
-
-            rows.append(
-                {
-                    "windowSec": window_sec,
-                    "maxSpeedKmh": float(max_speed) if pd.notna(max_speed) else None,
-                    "maxSpeedEqKmh": float(max_speed_eq) if pd.notna(max_speed_eq) else None,
-                    "hrAtMaxSpeed": float(hr_at_max_speed)
-                    if pd.notna(hr_at_max_speed)
-                    else None,
-                    "hrAtMaxSpeedEq": float(hr_at_max_speed_eq)
-                    if pd.notna(hr_at_max_speed_eq)
-                    else None,
-                }
-            )
-
-        return pd.DataFrame(rows)
+        return profile_computation.compute_speed_profile_cloud(df, window_sizes)
 
     # ------------------------------------------------------------------
     # Speed Profile Persistence
@@ -934,9 +537,7 @@ class SpeedProfileService:
         Returns:
         Path: Path to saved file
         """
-        path = self.speed_profile_dir / f"{activity_id}.csv"
-        profile_df.to_csv(path, index=False)
-        return path
+        return persistence.save_speed_profile(self, activity_id, profile_df)
 
     def load_speed_profile(self, activity_id: str) -> Optional[pd.DataFrame]:
         """
@@ -948,13 +549,7 @@ class SpeedProfileService:
         Returns:
         Optional[pd.DataFrame]: Profile DataFrame or None if not found
         """
-        path = self.speed_profile_dir / f"{activity_id}.csv"
-        if not path.exists():
-            return None
-        try:
-            return pd.read_csv(path)
-        except Exception:
-            return None
+        return persistence.load_speed_profile(self, activity_id)
 
     def compute_and_store_speed_profile(
         self, activity_id: str, window_sizes: Optional[List[int]] = None
@@ -973,53 +568,5 @@ class SpeedProfileService:
         Returns:
         Optional[Path]: Path to saved profile CSV, or None if computation failed
         """
-        if window_sizes is None:
-            window_sizes = config.PROFILE_WINDOW_SIZES
-        
-        # Check if profile already exists
-        existing_profile = self.load_speed_profile(activity_id)
-        if existing_profile is not None:
-            return self.speed_profile_dir / f"{activity_id}.csv"
-        
-        # Load timeseries
-        timeseries_path = self.config.timeseries_dir / f"{activity_id}.csv"
-        if not timeseries_path.exists():
-            return None
-        
-        try:
-            df = pd.read_csv(timeseries_path)
-        except Exception:
-            return None
-        
-        if df.empty:
-            return None
-        
-        # Preprocess timeseries
-        df_processed = self.preprocess_timeseries(df)
-        
-        # If preprocessing failed (no GPS data), fall back to using paceKmh directly
-        if df_processed.empty or "speed_km_h" not in df_processed.columns:
-            if "paceKmh" not in df.columns:
-                return None
-            # Use paceKmh directly - minimal preprocessing
-            df_processed = df.copy()
-            df_processed["speed_km_h"] = pd.to_numeric(df_processed["paceKmh"], errors="coerce")
-            df_processed = df_processed.dropna(subset=["speed_km_h"])
-            df_processed = df_processed[df_processed["speed_km_h"] > 0]
-            df_processed = self.time_from_timestamp(df_processed)
-            df_processed = self.duration(df_processed)
-            # Filter unrealistic speeds
-            df_processed = df_processed[df_processed["speed_km_h"] < 40].reset_index(drop=True)
-            # Add grade column (0.0 if missing)
-            if "grade" not in df_processed.columns:
-                df_processed["grade"] = 0.0
-        
-        if df_processed.empty or "speed_km_h" not in df_processed.columns:
-            return None
-        
-        # Compute max speed profiles
-        profile_df = self.compute_max_speed_profiles(df_processed, window_sizes)
-        
-        # Save profile
-        return self.save_speed_profile(activity_id, profile_df)
+        return persistence.compute_and_store_speed_profile(self, activity_id, window_sizes)
 

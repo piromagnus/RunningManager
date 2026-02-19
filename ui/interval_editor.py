@@ -19,12 +19,10 @@ from services.interval_utils import (
     normalize_steps,
     serialize_steps,
 )
+from utils.constants import INTERVAL_TARGET_TYPES
 
 Steps = Dict[str, Any]
 Action = Dict[str, Any]
-
-TARGET_TYPES = ["pace", "hr", "threshold", "speed", "distance", "denivele", "sensation", "none"]
-
 
 def _state_key(prefix: str) -> str:
     return f"{prefix}-interval-editor-state"
@@ -95,12 +93,12 @@ def _target_inputs(
     threshold_names: List[str],
 ) -> None:
     target_type = action.get("targetType") or "pace"
-    if target_type not in TARGET_TYPES:
+    if target_type not in INTERVAL_TARGET_TYPES:
         target_type = "pace"
-    idx = TARGET_TYPES.index(target_type)
+    idx = INTERVAL_TARGET_TYPES.index(target_type)
     new_target = st.selectbox(
         "Cible",
-        TARGET_TYPES,
+        INTERVAL_TARGET_TYPES,
         index=idx,
         key=f"{key}-target-type",
     )

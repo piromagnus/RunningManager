@@ -85,3 +85,24 @@ def ensure_datetime(value: object) -> Optional[dt.datetime]:
     if isinstance(parsed, dt.datetime):
         return parsed
     return None
+
+
+def compute_segment_time(
+    distance_eq_km: float, distance_km: float, speed_eq_kmh: float, speed_kmh: float
+) -> int:
+    """Compute segment time from speed.
+
+    Args:
+        distance_eq_km: Distance-equivalent in km
+        distance_km: Actual distance in km
+        speed_eq_kmh: Speed-equivalent in km/h (takes precedence)
+        speed_kmh: Speed in km/h
+
+    Returns:
+        Time in seconds
+    """
+    if speed_eq_kmh > 0:
+        return int(round(3600 * distance_eq_km / speed_eq_kmh))
+    if speed_kmh > 0:
+        return int(round(3600 * distance_km / speed_kmh))
+    return 0

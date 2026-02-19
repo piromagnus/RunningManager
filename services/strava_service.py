@@ -25,22 +25,19 @@ from services.lap_metrics_service import LapMetricsService
 from services.metrics_service import MetricsComputationService
 from services.speed_profile_service import SpeedProfileService
 from utils.config import Config
+from utils.constants import (
+    STRAVA_API_BASE,
+    STRAVA_AUTH_URL,
+    STRAVA_DAILY_LIMIT,
+    STRAVA_DEFAULT_SCOPE,
+    STRAVA_PROVIDER,
+    STRAVA_RATE_LIMIT_15MIN,
+    STRAVA_STREAM_KEYS,
+    STRAVA_TOKEN_URL,
+)
 from utils.crypto import decrypt_text, encrypt_text, get_fernet
 
 LOGGER = logging.getLogger(__name__)
-
-API_BASE = "https://www.strava.com/api/v3"
-TOKEN_URL = "https://www.strava.com/oauth/token"
-AUTH_URL = "https://www.strava.com/oauth/authorize"
-TOKEN_URL = f"{API_BASE}/oauth/token"
-STRAVA_PROVIDER = "strava"
-DEFAULT_SCOPE = "activity:read,activity:read_all"
-STREAM_KEYS = "time,distance,altitude,heartrate,cadence,latlng,velocity_smooth"
-
-# Strava documented rate limits
-RATE_LIMIT_PER_15_MIN = 100
-DAILY_LIMIT = 1000
-
 
 @dataclass
 class StravaService:
@@ -73,12 +70,12 @@ class StravaService:
             "client_id": self.config.strava_client_id,
             "response_type": "code",
             "redirect_uri": self.config.strava_redirect_uri,
-            "scope": DEFAULT_SCOPE,
+            "scope": STRAVA_DEFAULT_SCOPE,
             "state": state,
             "approval_prompt": approval_prompt,
         }
         query = "&".join(f"{k}={requests.utils.quote(str(v))}" for k, v in params.items())
-        return f"{AUTH_URL}?{query}"
+        return f"{STRAVA_AUTH_URL}?{query}"
 
     def exchange_code(self, athlete_id: str, code: str) -> Dict[str, Any]:
         payload = {
@@ -88,7 +85,7 @@ class StravaService:
             "grant_type": "authorization_code",
             "redirect_uri": self._require_redirect_uri(),
         }
-        response = self._request_json("POST", TOKEN_URL, data=payload)
+        response = self._request_json("POST", STRAVA_TOKEN_URL, data=payload)
         tokens = self._extract_tokens(response)
         self._save_tokens(athlete_id, tokens)
         print(f"[Strava] Token exchange succeeded for athlete {athlete_id}")
@@ -130,10 +127,12 @@ class StravaService:
         est_page_requests = (total + 199) // 200
         est_detail_requests = missing * 2
         est_total_requests = est_detail_requests + est_page_requests
-        windows_needed = (est_total_requests + RATE_LIMIT_PER_15_MIN - 1) // RATE_LIMIT_PER_15_MIN
+        windows_needed = (
+            est_total_requests + STRAVA_RATE_LIMIT_15MIN - 1
+        ) // STRAVA_RATE_LIMIT_15MIN
         additional_waits = max(0, windows_needed - 1)
         additional_waits = min(additional_waits, 9)  # soft cap (per-day window)
-        hits_daily = est_total_requests > DAILY_LIMIT
+        hits_daily = est_total_requests > STRAVA_DAILY_LIMIT
 
         preview = {
             "total_in_range": total,
@@ -378,10 +377,9 @@ class StravaService:
                 metrics_ts_path = metrics_ts_dir / f"{activity_id}.csv"
                 if metrics_ts_path.exists():
                     metrics_ts_path.unlink()
-                # Process and save metrics_ts
-                result = self.speed_profile_service.process_timeseries(activity_id, strategy="cluster")
-                if result is not None:
-                    self.speed_profile_service.save_metrics_ts(activity_id, result)
+                # Process and save all metrics_ts (HR analysis + elevation metrics)
+                path = self.speed_profile_service.compute_all_metrics_ts(activity_id)
+                if path is not None:
                     all_recomputed.append(activity_id)
                 
                 # Recompute speed profile
@@ -418,7 +416,7 @@ class StravaService:
             "grant_type": "refresh_token",
             "refresh_token": refresh_token,
         }
-        response = self._request_json("POST", TOKEN_URL, data=payload)
+        response = self._request_json("POST", STRAVA_TOKEN_URL, data=payload)
         tokens = self._extract_tokens(response)
         if "refresh_token" not in tokens:
             tokens["refresh_token"] = refresh_token
@@ -436,7 +434,7 @@ class StravaService:
             }
             data = self._request_json(
                 "GET",
-                f"{API_BASE}/athlete/activities",
+                f"{STRAVA_API_BASE}/athlete/activities",
                 headers=self._auth_headers(access_token),
                 params=params,
             )
@@ -453,15 +451,15 @@ class StravaService:
     def _get_activity(self, access_token: str, activity_id: str) -> Dict[str, Any]:
         return self._request_json(
             "GET",
-            f"{API_BASE}/activities/{activity_id}",
+            f"{STRAVA_API_BASE}/activities/{activity_id}",
             headers=self._auth_headers(access_token),
         )
 
     def _get_streams(self, access_token: str, activity_id: str) -> Dict[str, Any]:
-        params = {"keys": STREAM_KEYS, "key_by_type": "true"}
+        params = {"keys": STRAVA_STREAM_KEYS, "key_by_type": "true"}
         return self._request_json(
             "GET",
-            f"{API_BASE}/activities/{activity_id}/streams",
+            f"{STRAVA_API_BASE}/activities/{activity_id}/streams",
             headers=self._auth_headers(access_token),
             params=params,
         )
@@ -740,8 +738,8 @@ class StravaService:
         now = self.now_fn()
         limit = headers.get("X-RateLimit-Limit") or headers.get("x-ratelimit-limit")
         usage = headers.get("X-RateLimit-Usage") or headers.get("x-ratelimit-usage")
-        short_limit = DAILY_LIMIT
-        daily_limit = DAILY_LIMIT
+        short_limit = STRAVA_DAILY_LIMIT
+        daily_limit = STRAVA_DAILY_LIMIT
         short_used = None
         daily_used = None
         try:
@@ -793,8 +791,8 @@ class StravaService:
         now = self.now_fn()
         short_used = 0
         daily_used = 0
-        short_limit = RATE_LIMIT_PER_15_MIN
-        daily_limit = DAILY_LIMIT
+        short_limit = STRAVA_RATE_LIMIT_15MIN
+        daily_limit = STRAVA_DAILY_LIMIT
         if path.exists() and path.stat().st_size > 0:
             try:
                 entries = json.loads(path.read_text(encoding="utf-8"))

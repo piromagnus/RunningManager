@@ -12,7 +12,12 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
-from config import METRICS as CONFIG_METRICS
+from utils.constants import (
+    CATEGORY_LABELS_FR,
+    CHART_WIDTH_DEFAULT,
+    METRIC_CONFIG,
+    METRICS as CONFIG_METRICS,
+)
 from graph.analytics import create_daily_bar_chart, create_weekly_bar_chart
 from persistence.csv_storage import CsvStorage
 from persistence.repositories import AthletesRepo, SettingsRepo
@@ -26,7 +31,7 @@ st.set_page_config(page_title="Running Manager - Analytics", layout="wide")
 apply_theme()
 st.title("Analytics")
 
-CHART_WIDTH = 860
+CHART_WIDTH = CHART_WIDTH_DEFAULT
 
 cfg = load_config()
 set_locale("fr_FR")
@@ -35,40 +40,19 @@ ath_repo = AthletesRepo(storage)
 settings_repo = SettingsRepo(storage)
 analytics = AnalyticsService(storage)
 
-CATEGORY_OPTIONS = {
-    "RUN": "Course",
-    "TRAIL_RUN": "Trail",
-    "HIKE": "Randonnée",
-    "RIDE": "Cyclisme",
-    "BACKCOUNTRY_SKI": "Ski de rando",
-}
+CATEGORY_OPTIONS = CATEGORY_LABELS_FR
 
-METRIC_CONFIG = {
-    "Time": {
-        "planned_col": "plannedTimeSec",
-        "category_suffix": "TimeSec",
-        "transform": analytics.seconds_to_hours,
-        "unit": "heures",
-    },
-    "Distance": {
-        "planned_col": "plannedDistanceKm",
-        "category_suffix": "DistanceKm",
-        "transform": None,
-        "unit": "km",
-    },
-    "Trimp": {
-        "planned_col": "plannedTrimp",
-        "category_suffix": "Trimp",
-        "transform": None,
-        "unit": "TRIMP",
-    },
-    "DistEq": {
-        "planned_col": "plannedDistanceEqKm",
-        "category_suffix": "DistanceEqKm",
-        "transform": None,
-        "unit": "km équivalent",
-    },
-}
+
+def _resolve_metric_config() -> dict[str, dict]:
+    resolved = {}
+    for key, cfg in METRIC_CONFIG.items():
+        transform = cfg.get("transform")
+        resolved_transform = analytics.seconds_to_hours if transform == "seconds_to_hours" else None
+        resolved[key] = {**cfg, "transform": resolved_transform}
+    return resolved
+
+
+METRIC_DEFINITIONS = _resolve_metric_config()
 
 def _load_saved_activity_types() -> list[str]:
     """Load allowed activity categories for analytics from settings.
@@ -188,7 +172,7 @@ if max_plan and max_plan > plan_range_end:
 
 metric_label_default = CONFIG_METRICS.index("DistEq") if "DistEq" in CONFIG_METRICS else 0
 metric_label = st.selectbox("Métrique", CONFIG_METRICS, index=metric_label_default)
-metric_cfg = METRIC_CONFIG[metric_label]
+metric_cfg = METRIC_DEFINITIONS[metric_label]
 
 # Precompute daily range dataframe (full days with zeros) for fallback/derivations
 value_column_map = {

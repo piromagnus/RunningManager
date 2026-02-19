@@ -13,10 +13,10 @@ from typing import List, Optional, Tuple
 import pandas as pd
 from sklearn.cluster import KMeans
 
-import config as app_config
 from persistence.csv_storage import CsvStorage
 from services.speed_profile_service import SpeedProfileService
 from utils.config import Config
+from utils.constants import PROFILE_WINDOW_SIZES
 
 
 def load_daily_metrics(storage: CsvStorage, athlete_id: str) -> pd.DataFrame:
@@ -518,7 +518,7 @@ def load_speed_profile_cloud(
     if acts_df.empty:
         return pd.DataFrame()
 
-    window_sizes = app_config.PROFILE_WINDOW_SIZES
+    window_sizes = PROFILE_WINDOW_SIZES
     cloud_rows = []
 
     for _, row in acts_df.iterrows():

@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import datetime as dt
 import json
-import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
@@ -31,12 +30,9 @@ from services.planner_service import PlannerService
 from services.speed_profile_service import SpeedProfileService
 from utils.coercion import safe_float, safe_int
 from utils.config import load_config
+from utils.constants import TRAINING_LOAD_CATEGORIES
+from utils.metrics_formulas import compute_trimp_hr_reserve_from_profile
 from utils.time import iso_week_start, to_date
-
-PRIMARY_CATEGORIES = {"RUN", "TRAIL_RUN", "HIKE", "RIDE", "BACKCOUNTRY_SKI"}
-TRAINING_LOAD_CATEGORIES = {"RUN", "TRAIL_RUN", "HIKE", "BACKCOUNTRY_SKI"}
-
-
 
 
 @dataclass
@@ -525,18 +521,7 @@ class MetricsComputationService:
     def _compute_trimp(
         avg_hr: float, time_sec: float, hr_profile: Optional[Tuple[float, float]]
     ) -> float:
-        # TODO : Add a gender based TRIMP formula if needed
-        if not hr_profile or avg_hr <= 0 or time_sec <= 0:
-            return 0.0
-        hr_rest, hr_max = hr_profile
-        if hr_max <= hr_rest:
-            return 0.0
-        hrr = (avg_hr - hr_rest) / (hr_max - hr_rest)
-        hrr = max(0.0, min(hrr, 1.2))
-        if hrr <= 0:
-            return 0.0
-        duration_hours = time_sec / 3600.0
-        return duration_hours * hrr * 0.64 * math.exp(1.92 * hrr)
+        return compute_trimp_hr_reserve_from_profile(avg_hr, time_sec, hr_profile)
 
     # ------------------------------------------------------------------
     # Weekly metrics ---------------------------------------------------

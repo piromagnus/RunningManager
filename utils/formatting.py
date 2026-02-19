@@ -14,17 +14,19 @@ from typing import Optional
 import pandas as pd
 from babel import numbers
 
-LOCALE = "fr_FR"
+from utils.constants import DISPLAY_LOCALE
+
+LOCALE = DISPLAY_LOCALE
 
 
-def set_locale(locale_str: str = "fr_FR") -> None:
+def set_locale(locale_str: str = DISPLAY_LOCALE) -> None:
     global LOCALE
     try:
         # Validate by formatting a simple number
         numbers.format_decimal(1.0, locale=locale_str)
         LOCALE = locale_str
     except Exception:
-        LOCALE = "fr_FR"
+        LOCALE = DISPLAY_LOCALE
 
 
 def _nbsp() -> str:

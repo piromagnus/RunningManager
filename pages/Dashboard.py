@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-from config import METRICS as CONFIG_METRICS
+from utils.constants import CATEGORY_ORDER, CHART_WIDTH_DASHBOARD, METRICS as CONFIG_METRICS
 from graph.hr_speed import create_hr_speed_chart
 from graph.speed_profile import create_speed_profile_chart, create_speed_profile_cloud_chart
 from graph.speed_scatter import create_speedeq_scatter_chart
@@ -41,7 +41,7 @@ st.set_page_config(page_title="Running Manager - Dashboard", layout="wide")
 apply_theme()
 st.title("Dashboard")
 
-CHART_WIDTH = 1100
+CHART_WIDTH = CHART_WIDTH_DASHBOARD
 
 cfg = load_config()
 set_locale("fr_FR")
@@ -113,7 +113,7 @@ mask = (daily_metrics["date"].dt.normalize() >= pd.Timestamp(start_date)) & (
 daily_metrics = daily_metrics[mask]
 
 # Global activity category filter (applies to all charts below)
-cat_options = ["RUN", "TRAIL_RUN", "HIKE", "RIDE", "BACKCOUNTRY_SKI"]
+cat_options = list(CATEGORY_ORDER)
 default_cat_selection = [cat for cat in cat_options if cat != "RIDE"]
 selected_cats = st.multiselect(
     "Types d'activités",

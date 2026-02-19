@@ -6,14 +6,18 @@ import pandas as pd
 
 from persistence.csv_storage import CsvStorage
 from services.analytics_service import AnalyticsService
+from utils.metrics_formulas import compute_trimp_hr_reserve_from_profile
 
 
-def test_compute_trimp_converts_seconds_to_hours(tmp_path):
+def test_compute_trimp_uses_hr_reserve(tmp_path):
     service = AnalyticsService(CsvStorage(tmp_path))
-    assert service.compute_trimp(3600, 120) == 120.0
-    # Zero or negative inputs should yield zero
-    assert service.compute_trimp(0, 120) == 0.0
-    assert service.compute_trimp(3600, 0) == 0.0
+    hr_profile = (60.0, 190.0)
+    expected = compute_trimp_hr_reserve_from_profile(150.0, 3600.0, hr_profile)
+    assert service.compute_trimp(150.0, 3600.0, hr_profile) == expected
+    # Missing or invalid inputs should yield zero
+    assert service.compute_trimp(0.0, 3600.0, hr_profile) == 0.0
+    assert service.compute_trimp(150.0, 0.0, hr_profile) == 0.0
+    assert service.compute_trimp(150.0, 3600.0, None) == 0.0
 
 
 def test_build_planned_vs_actual_segments_handles_above_and_below(tmp_path):
