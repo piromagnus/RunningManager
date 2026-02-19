@@ -103,11 +103,15 @@ def main() -> None:
         with tab1:
             _render_timeseries_section(ts_service, speed_profile_service, detail.activity_id)
             _render_speed_profile_section(speed_profile_service, detail.activity_id)
+            _render_timeseries_section(ts_service, speed_profile_service, detail.activity_id)
+            _render_speed_profile_section(speed_profile_service, detail.activity_id)
         
         with tab2:
             _render_pacing_comparison(activity_id_str, linked_race_id, pacer_service, ts_service)
     else:
         # No pacing linked - show classic timeseries
+        _render_timeseries_section(ts_service, speed_profile_service, detail.activity_id)
+        _render_speed_profile_section(speed_profile_service, detail.activity_id)
         _render_timeseries_section(ts_service, speed_profile_service, detail.activity_id)
         _render_speed_profile_section(speed_profile_service, detail.activity_id)
 

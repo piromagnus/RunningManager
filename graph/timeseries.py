@@ -12,6 +12,7 @@ import altair as alt
 import pandas as pd
 
 from services.speed_profile_service import SpeedProfileService
+from services.speed_profile_service import SpeedProfileService
 from services.timeseries_service import TimeseriesService
 from utils.constants import SMOOTHING_WINDOW_SECONDS
 
@@ -106,15 +107,20 @@ def render_timeseries_charts(
 
     Returns:
         dict[str, alt.Chart]: Mapping of chart keys to Altair charts
+        dict[str, alt.Chart]: Mapping of chart keys to Altair charts
     """
     df = ts_service.load(activity_id)
     if df is None or df.empty:
         return {}
+        return {}
 
+    df = _prepare_timeseries_df(df)
     df = _prepare_timeseries_df(df)
     if df.empty:
         return {}
+        return {}
 
+    charts: dict[str, alt.Chart] = {}
     charts: dict[str, alt.Chart] = {}
     if "hr" in df.columns and df["hr"].notna().any():
         hr_series = pd.to_numeric(df["hr"], errors="coerce")
@@ -135,7 +141,37 @@ def render_timeseries_charts(
                 )
                 .properties(height=180)
             )
+        hr_series = pd.to_numeric(df["hr"], errors="coerce")
+        df["hr_smooth"] = _smooth_series(hr_series)
+        if df["hr_smooth"].notna().any():
+            hr_max = float(df["hr_smooth"].max())
+            hr_axis_max = max(60.0, hr_max + 10.0)
+            charts["hr"] = (
+                alt.Chart(df)
+                .mark_line(color="#ef4444")
+                .encode(
+                    x=alt.X("minutes:Q", title="Temps (min)"),
+                    y=alt.Y(
+                        "hr_smooth:Q",
+                        title="FC (bpm)",
+                        scale=alt.Scale(domain=[60.0, hr_axis_max]),
+                    ),
+                )
+                .properties(height=180)
+            )
     if "paceKmh" in df.columns and df["paceKmh"].notna().any():
+        speed_series = pd.to_numeric(df["paceKmh"], errors="coerce")
+        df["speed_smooth"] = _smooth_series(speed_series)
+        if df["speed_smooth"].notna().any():
+            charts["speed"] = (
+                alt.Chart(df)
+                .mark_line(color="#3b82f6")
+                .encode(
+                    x=alt.X("minutes:Q", title="Temps (min)"),
+                    y=alt.Y("speed_smooth:Q", title="Vitesse (km/h)"),
+                )
+                .properties(height=180)
+            )
         speed_series = pd.to_numeric(df["paceKmh"], errors="coerce")
         df["speed_smooth"] = _smooth_series(speed_series)
         if df["speed_smooth"].notna().any():

@@ -522,6 +522,72 @@ class SpeedProfileService:
         """Compute per-window max speeds with associated HR values."""
         return profile_computation.compute_speed_profile_cloud(df, window_sizes)
 
+    def compute_speed_profile_cloud(
+        self, df: pd.DataFrame, window_sizes: List[int]
+    ) -> pd.DataFrame:
+        """Compute per-window max speeds with associated HR values."""
+        if df.empty or "speed_km_h" not in df.columns:
+            return pd.DataFrame()
+
+        df = df.copy()
+        if "hr" not in df.columns:
+            df["hr"] = np.nan
+
+        df["speed_km_h"] = pd.to_numeric(df["speed_km_h"], errors="coerce")
+        df["hr"] = pd.to_numeric(df["hr"], errors="coerce")
+        if df["speed_km_h"].isna().all():
+            return pd.DataFrame()
+
+        if "speed_km_h_ma_10" not in df.columns:
+            df = self.moving_average(df, window_size=10, col="speed_km_h")
+            df = df.rename(columns={"speed_km_h_ma_10": "speed_km_h_smooth"})
+        else:
+            df = df.rename(columns={"speed_km_h_ma_10": "speed_km_h_smooth"})
+
+        if "hr_ma_10" not in df.columns:
+            df = self.moving_average(df, window_size=10, col="hr")
+            df = df.rename(columns={"hr_ma_10": "hr_smooth"})
+        else:
+            df = df.rename(columns={"hr_ma_10": "hr_smooth"})
+
+        if "grade_ma_10" not in df.columns:
+            if "grade" in df.columns:
+                df = self.moving_average(df, window_size=10, col="grade")
+            else:
+                df["grade_ma_10"] = 0.0
+
+        df = self.compute_speed_eq_column(df)
+
+        max_speeds, hr_at_max_speeds = self.compute_profile(
+            df, "speed_km_h_smooth", "hr_smooth", window_sizes, 0
+        )
+        max_speed_eqs, hr_at_max_speed_eqs = self.compute_profile(
+            df, "speed_eq_km_h", "hr_smooth", window_sizes, 0
+        )
+
+        rows = []
+        for window_sec in window_sizes:
+            max_speed = max_speeds.get(window_sec)
+            max_speed_eq = max_speed_eqs.get(window_sec)
+            hr_at_max_speed = hr_at_max_speeds.get(window_sec)
+            hr_at_max_speed_eq = hr_at_max_speed_eqs.get(window_sec)
+
+            rows.append(
+                {
+                    "windowSec": window_sec,
+                    "maxSpeedKmh": float(max_speed) if pd.notna(max_speed) else None,
+                    "maxSpeedEqKmh": float(max_speed_eq) if pd.notna(max_speed_eq) else None,
+                    "hrAtMaxSpeed": float(hr_at_max_speed)
+                    if pd.notna(hr_at_max_speed)
+                    else None,
+                    "hrAtMaxSpeedEq": float(hr_at_max_speed_eq)
+                    if pd.notna(hr_at_max_speed_eq)
+                    else None,
+                }
+            )
+
+        return pd.DataFrame(rows)
+
     # ------------------------------------------------------------------
     # Speed Profile Persistence
     # ------------------------------------------------------------------
