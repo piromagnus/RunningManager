@@ -13,7 +13,6 @@ from typing import List, Optional, Tuple
 import pandas as pd
 from sklearn.cluster import KMeans
 
-import config as app_config
 from persistence.csv_storage import CsvStorage
 from services.speed_profile_service import SpeedProfileService
 from utils.config import Config

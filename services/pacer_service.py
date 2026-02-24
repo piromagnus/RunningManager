@@ -24,6 +24,7 @@ from services.planner_service import PlannerService
 from services.speed_profile_service import SpeedProfileService
 from utils.config import Config
 from utils.grade_classification import classify_grade_pacer_5cat
+from utils.time import compute_segment_time
 
 logger = get_logger(__name__)
 
@@ -81,6 +82,12 @@ class PacerService:
             Grade category string
         """
         return classify_grade_pacer_5cat(grade, cumulated_elevation_delta_per_km)
+
+    def compute_segment_time(
+        self, distance_eq_km: float, distance_km: float, speed_eq_kmh: float, speed_kmh: float
+    ) -> int:
+        """Compute segment time from speed, preserving legacy PacerService API."""
+        return compute_segment_time(distance_eq_km, distance_km, speed_eq_kmh, speed_kmh)
 
     def segment_course(
         self,
