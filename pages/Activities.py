@@ -154,7 +154,7 @@ def main() -> None:
     planned_cards = feed_service.get_unlinked_planned_sessions(
         athlete_id,
         reference_date=dt.date.today(),
-        lookback_days=7,
+        lookback_days=30,
         lookahead_days=21,
         max_items=8,
     )

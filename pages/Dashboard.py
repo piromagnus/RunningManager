@@ -12,8 +12,8 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-from utils.constants import CATEGORY_ORDER, CHART_WIDTH_DASHBOARD, METRICS as CONFIG_METRICS
 from graph.hr_speed import create_hr_speed_chart
+from graph.hr_zones import build_zone_colors, render_zone_borders_chart, render_zone_speed_evolution
 from graph.speed_profile import create_speed_profile_chart, create_speed_profile_cloud_chart
 from graph.speed_scatter import create_speedeq_scatter_chart
 from graph.training_load import create_training_load_chart
@@ -26,8 +26,12 @@ from services.dashboard_data_service import (
     load_hr_speed_data,
     load_speed_profile_cloud,
 )
+from services.hr_zones_service import HrZonesService
 from services.speed_profile_service import SpeedProfileService
+from services.timeseries_service import TimeseriesService
 from utils.config import load_config
+from utils.constants import CATEGORY_ORDER, CHART_WIDTH_DASHBOARD
+from utils.constants import METRICS as CONFIG_METRICS
 from utils.dashboard_state import (
     get_dashboard_date_range,
     set_dashboard_date_range,
@@ -49,6 +53,8 @@ storage = CsvStorage(base_dir=Path(cfg.data_dir))
 ath_repo = AthletesRepo(storage)
 analytics = AnalyticsService(storage)
 speed_profile_service = SpeedProfileService(cfg)
+ts_service = TimeseriesService(cfg)
+hr_zones_service = HrZonesService(storage, ts_service, speed_profile_service)
 
 athlete_id = select_athlete(ath_repo)
 if not athlete_id:
@@ -155,8 +161,24 @@ for metric_key in metric_definitions.keys():
     if metric_key not in available_metrics:
         available_metrics.append(metric_key)
 # Shared tabs for the charts
-tab_charge, tab_speed, tab_hr_speed, tab_speed_profile, tab_speed_profile_cloud = st.tabs(
-    ["Charge", "SpeedEq", "FC vs Vitesse", "Profil de vitesse", "Nuage de vitesse max"]
+(
+    tab_charge,
+    tab_speed,
+    tab_hr_speed,
+    tab_speed_profile,
+    tab_speed_profile_cloud,
+    tab_hr_borders,
+    tab_zone_speed,
+) = st.tabs(
+    [
+        "Charge",
+        "SpeedEq",
+        "FC vs Vitesse",
+        "Profil de vitesse",
+        "Nuage de vitesse max",
+        "Zones HR",
+        "Vitesse par zone",
+    ]
 )
 
 with tab_charge:
@@ -570,3 +592,119 @@ with tab_speed_profile_cloud:
             cloud_df, CHART_WIDTH, speed_type=speed_type, x_domain=(domain_min, max_window)
         )
         st.altair_chart(chart, use_container_width=True)
+
+with tab_hr_borders:
+    st.subheader("Evolution des frontières de zones HR")
+    acts_path = storage.base_dir / "activities_metrics.csv"
+    metrics_df = pd.read_csv(acts_path) if acts_path.exists() else pd.DataFrame()
+    if metrics_df.empty or "athleteId" not in metrics_df.columns:
+        st.info("Aucune donnée de frontière de zone HR disponible.")
+    else:
+        metrics_df = metrics_df[metrics_df["athleteId"].astype(str) == str(athlete_id)].copy()
+        if metrics_df.empty or "startDate" not in metrics_df.columns:
+            st.info("Aucune donnée de frontière de zone HR disponible.")
+        else:
+            metrics_df["startDate"] = pd.to_datetime(metrics_df["startDate"], errors="coerce")
+            metrics_df = metrics_df.dropna(subset=["startDate"])
+            metrics_df = metrics_df[
+                (metrics_df["startDate"].dt.date >= start_date)
+                & (metrics_df["startDate"].dt.date <= end_date)
+            ]
+            if selected_cats and "category" in metrics_df.columns:
+                allowed = {str(cat).upper() for cat in selected_cats}
+                metrics_df["category"] = metrics_df["category"].astype(str).str.upper()
+                metrics_df = metrics_df[metrics_df["category"].isin(allowed)]
+            border_cols = [
+                col
+                for col in metrics_df.columns
+                if col.startswith("hrZone_z") and col.endswith("_upper")
+            ]
+            if metrics_df.empty or not border_cols:
+                st.info("Aucune frontière HR calculée sur la période sélectionnée.")
+            else:
+                input_df = metrics_df[["startDate", *border_cols]].copy()
+                input_df["startDate"] = input_df["startDate"].dt.strftime("%Y-%m-%d")
+                chart = render_zone_borders_chart(input_df, chart_width=CHART_WIDTH)
+                if chart is None:
+                    st.info("Aucune frontière HR calculée sur la période sélectionnée.")
+                else:
+                    st.altair_chart(chart, use_container_width=True)
+
+with tab_zone_speed:
+    st.subheader("Evolution de la vitesse par zone HR")
+    metric_label = st.radio(
+        "Métrique",
+        options=["Vitesse", "Vitesse équivalente"],
+        index=0,
+        horizontal=True,
+        key="dashboard_zone_speed_metric",
+    )
+    view_label = st.radio(
+        "Vue",
+        options=["Agrégation hebdomadaire", "Par activité"],
+        index=0,
+        horizontal=True,
+        key="dashboard_zone_speed_view",
+    )
+    metric_key = "speed" if metric_label == "Vitesse" else "speedeq"
+
+    if view_label == "Agrégation hebdomadaire":
+        evolution_df = hr_zones_service.build_zone_speed_evolution(
+            athlete_id=athlete_id,
+            start_date=start_date,
+            end_date=end_date,
+            categories=selected_cats,
+        )
+        chart = render_zone_speed_evolution(
+            evolution_df,
+            metric=metric_key,
+            chart_width=CHART_WIDTH,
+        )
+        if chart is None:
+            st.info("Aucune donnée de vitesse par zone disponible sur la période.")
+        else:
+            st.altair_chart(chart, use_container_width=True)
+    else:
+        points_df = hr_zones_service.build_activity_zone_speed_points(
+            athlete_id=athlete_id,
+            start_date=start_date,
+            end_date=end_date,
+            categories=selected_cats,
+        )
+        field = "avg_speed_kmh" if metric_key == "speed" else "avg_speedeq_kmh"
+        y_title = "Vitesse (km/h)" if metric_key == "speed" else "Vitesse équivalente (km/h)"
+        if points_df.empty or field not in points_df.columns:
+            st.info("Aucune donnée de vitesse par zone disponible sur la période.")
+        else:
+            points_df = points_df.copy()
+            points_df["date"] = pd.to_datetime(points_df["date"], errors="coerce")
+            points_df[field] = pd.to_numeric(points_df[field], errors="coerce")
+            points_df = points_df.dropna(subset=["date", "zone_label", field]).sort_values("date")
+            if points_df.empty:
+                st.info("Aucune donnée de vitesse par zone disponible sur la période.")
+            else:
+                zones = points_df["zone_label"].astype(str).unique().tolist()
+                zone_domain = sorted(zones, key=lambda label: int(label[1:]))
+                zone_colors = build_zone_colors(len(zone_domain))
+                chart = (
+                    alt.Chart(points_df)
+                    .mark_circle(size=65, opacity=0.85)
+                    .encode(
+                        x=alt.X("date:T", title="Date"),
+                        y=alt.Y(f"{field}:Q", title=y_title),
+                        color=alt.Color(
+                            "zone_label:N",
+                            title="Zone",
+                            scale=alt.Scale(domain=zone_domain, range=zone_colors),
+                        ),
+                        tooltip=[
+                            alt.Tooltip("date:T", title="Date"),
+                            alt.Tooltip("activityId:N", title="Activité"),
+                            alt.Tooltip("zone_label:N", title="Zone"),
+                            alt.Tooltip(f"{field}:Q", title=y_title, format=".2f"),
+                            alt.Tooltip("time_seconds:Q", title="Temps (s)", format=".0f"),
+                        ],
+                    )
+                    .properties(height=320, width=CHART_WIDTH)
+                )
+                st.altair_chart(chart, use_container_width=True)

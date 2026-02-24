@@ -10,12 +10,18 @@ import streamlit as st
 from streamlit.logger import get_logger
 
 from graph.elevation import prepare_elevation_plot_data, render_elevation_profile, render_grade_histogram
+from graph.hr_zones import (
+    render_hr_zones_timeseries,
+    render_zone_speed_table,
+    render_zone_time_bars,
+)
 from graph.pacer_comparison import render_comparison_elevation_profile, render_delta_bar_chart
 from graph.speed_profile import create_speed_profile_chart
 from graph.timeseries import render_timeseries_charts
 from persistence.csv_storage import CsvStorage
 from persistence.repositories import ActivitiesRepo
 from services.activity_detail_service import ActivityDetail, ActivityDetailService
+from services.hr_zones_service import HrZonesService
 from services.pacer_service import PacerService
 from services.speed_profile_service import SpeedProfileService
 from services.timeseries_service import TimeseriesService
@@ -56,6 +62,7 @@ def main() -> None:
     storage = CsvStorage(cfg.data_dir)
     ts_service = TimeseriesService(cfg)
     speed_profile_service = SpeedProfileService(cfg)
+    hr_zones_service = HrZonesService(storage, ts_service, speed_profile_service)
     detail_service = ActivityDetailService(storage, cfg, ts_service)
     pacer_service = PacerService(storage, cfg)
     activities_repo = ActivitiesRepo(storage)
@@ -103,8 +110,7 @@ def main() -> None:
         with tab1:
             _render_timeseries_section(ts_service, speed_profile_service, detail.activity_id)
             _render_speed_profile_section(speed_profile_service, detail.activity_id)
-            _render_timeseries_section(ts_service, speed_profile_service, detail.activity_id)
-            _render_speed_profile_section(speed_profile_service, detail.activity_id)
+            _render_hr_zones_section(hr_zones_service, detail.activity_id)
         
         with tab2:
             _render_pacing_comparison(activity_id_str, linked_race_id, pacer_service, ts_service)
@@ -112,8 +118,7 @@ def main() -> None:
         # No pacing linked - show classic timeseries
         _render_timeseries_section(ts_service, speed_profile_service, detail.activity_id)
         _render_speed_profile_section(speed_profile_service, detail.activity_id)
-        _render_timeseries_section(ts_service, speed_profile_service, detail.activity_id)
-        _render_speed_profile_section(speed_profile_service, detail.activity_id)
+        _render_hr_zones_section(hr_zones_service, detail.activity_id)
 
     st.subheader("Trace sur la carte")
     map_choice = _select_map_style(mapbox_token)
@@ -332,6 +337,40 @@ def _render_speed_profile_section(
         st.altair_chart(chart, use_container_width=True)
     else:
         st.caption("Impossible de charger ou calculer le profil de vitesse pour cette activité.")
+
+
+def _render_hr_zones_section(hr_zones_service: HrZonesService, activity_id: str) -> None:
+    st.subheader("Zones HR (GMM)")
+    try:
+        computed = hr_zones_service.get_or_compute_zones(activity_id)
+    except Exception as exc:
+        logger.exception("Failed to load HR zones: %s", exc)
+        computed = None
+
+    if computed is None:
+        st.caption("Pas de données HR exploitables pour cette activité.")
+        return
+
+    zones_ts_df, summary_df = computed
+    col1, col2 = st.columns(2)
+    with col1:
+        timeseries_chart = render_hr_zones_timeseries(zones_ts_df)
+        if timeseries_chart is not None:
+            st.altair_chart(timeseries_chart, use_container_width=True)
+        else:
+            st.caption("Visualisation HR par zone indisponible.")
+    with col2:
+        time_chart = render_zone_time_bars(summary_df)
+        if time_chart is not None:
+            st.altair_chart(time_chart, use_container_width=True)
+        else:
+            st.caption("Répartition du temps par zone indisponible.")
+
+    speed_table = render_zone_speed_table(summary_df)
+    if speed_table.empty:
+        st.caption("Aucune statistique de vitesse disponible par zone.")
+    else:
+        st.dataframe(speed_table, use_container_width=True)
 
 
 def _select_map_style(mapbox_token: str | None) -> dict:
