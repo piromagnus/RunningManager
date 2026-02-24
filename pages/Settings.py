@@ -10,8 +10,11 @@ import streamlit as st
 
 from persistence.csv_storage import CsvStorage
 from persistence.repositories import AthletesRepo, SettingsRepo, TokensRepo
+from services.hr_zones_service import HrZonesService
 from services.metrics_service import MetricsComputationService
+from services.speed_profile_service import SpeedProfileService
 from services.strava_service import StravaService
+from services.timeseries_service import TimeseriesService
 from utils.coercion import coerce_float, coerce_int
 from utils.config import load_config
 from utils.formatting import set_locale
@@ -96,107 +99,194 @@ bike_eq_descent_default = coerce_float(existing_settings.get("bikeEqDescent"), 0
 ski_eq_dist_default = coerce_float(existing_settings.get("skiEqDistance"), 1.0)
 ski_eq_ascent_default = coerce_float(existing_settings.get("skiEqAscent"), distance_eq_default)
 ski_eq_descent_default = coerce_float(existing_settings.get("skiEqDescent"), 0.0)
+n_cluster_default = max(2, coerce_int(existing_settings.get("nCluster"), cfg.n_cluster))
+hr_zone_count_default = max(2, min(5, coerce_int(existing_settings.get("hrZoneCount"), 5)))
+hr_zone_window_days_default = max(1, coerce_int(existing_settings.get("hrZoneWindowDays"), 90))
 
 
 def _float_changed(old: float, new: float) -> bool:
     return not math.isclose(float(old), float(new), rel_tol=1e-9, abs_tol=1e-9)
 
 
+def _recompute_zone_artifacts(
+    *,
+    athlete_id: str | None,
+    n_cluster: int,
+    hr_zone_count: int,
+    hr_zone_window_days: int,
+) -> tuple[int, int, int]:
+    if not athlete_id:
+        return 0, 0, 0
+
+    athlete_activities = metrics_service.activities.list(athleteId=athlete_id)
+    if athlete_activities.empty or "activityId" not in athlete_activities.columns:
+        return 0, 0, 0
+
+    activity_ids = sorted(
+        {
+            str(activity_id)
+            for activity_id in athlete_activities["activityId"].dropna().astype(str).tolist()
+            if str(activity_id).strip()
+        }
+    )
+    if not activity_ids:
+        return 0, 0, 0
+
+    # Refresh activity metrics first so hrSpeedShift and source rows are up-to-date.
+    metrics_service.recompute_for_activities(activity_ids)
+
+    speed_profile_service = SpeedProfileService(cfg)
+    ts_service = TimeseriesService(cfg)
+    hr_zones_service = HrZonesService(
+        storage=storage,
+        ts_service=ts_service,
+        speed_profile_service=speed_profile_service,
+        zone_count=hr_zone_count,
+        window_days=hr_zone_window_days,
+    )
+
+    cluster_recomputed = 0
+    for activity_id in activity_ids:
+        result = speed_profile_service.process_timeseries(
+            activity_id,
+            strategy="cluster",
+            n_clusters=int(n_cluster),
+        )
+        if result is not None:
+            speed_profile_service.save_metrics_ts(activity_id, result)
+            cluster_recomputed += 1
+        speed_profile_service.compute_and_save_elevation_metrics(activity_id)
+
+    borders_recomputed = hr_zones_service.backfill_all_borders(athlete_id=athlete_id)
+    return len(activity_ids), cluster_recomputed, borders_recomputed
+
+
 st.subheader("Coach Settings")
 units = st.selectbox("Units", ["metric"], index=0, help="Metric units only in MVP")
 
 st.markdown("#### Paramètres DistEq")
-dist_eq_profiles = {
-    "TRAIL_RUN": "Trail running",
-    "RIDE": "Cyclisme",
-    "BACKCOUNTRY_SKI": "Ski de rando",
-}
-dist_eq_profile = st.selectbox(
-    "Profil d'activité pour DistEq",
-    options=list(dist_eq_profiles.keys()),
-    format_func=lambda key: dist_eq_profiles[key],
-)
-
-distance_eq = float(distance_eq_default)
-bike_eq_distance = float(bike_eq_dist_default)
-bike_eq_ascent = float(bike_eq_ascent_default)
-bike_eq_descent = float(bike_eq_descent_default)
-ski_eq_distance = float(ski_eq_dist_default)
-ski_eq_ascent = float(ski_eq_ascent_default)
-ski_eq_descent = float(ski_eq_descent_default)
-
-if dist_eq_profile == "TRAIL_RUN":
+dist_cols = st.columns(7)
+with dist_cols[0]:
+    st.caption("Trail D+")
     distance_eq = st.number_input(
-        "Distance-eq factor (km per meter ascent)",
+        "Trail D+",
         min_value=0.0,
         max_value=0.1,
         value=float(distance_eq_default),
         step=0.001,
-        help="Default: 0.01 (100 m ascent = 1.0 km)",
+        format="%.3f",
+        label_visibility="collapsed",
         key="dist_eq_factor",
     )
-elif dist_eq_profile == "RIDE":
-    st.markdown("##### Équivalences vélo (DistEq)")
+with dist_cols[1]:
+    st.caption("Bike dist")
     bike_eq_distance = st.number_input(
-        "Facteur distance (vélo)",
+        "Bike dist",
         min_value=0.0,
         max_value=5.0,
         value=float(bike_eq_dist_default),
         step=0.01,
-        help="Contribution de la distance pour le vélo (par défaut 0.30).",
+        format="%.2f",
+        label_visibility="collapsed",
         key="bike_eq_distance",
     )
+with dist_cols[2]:
+    st.caption("Bike D+")
     bike_eq_ascent = st.number_input(
-        "Facteur D+ (vélo)",
+        "Bike D+",
         min_value=0.0,
         max_value=1.0,
         value=float(bike_eq_ascent_default),
         step=0.001,
         format="%.3f",
-        help="Contribution du dénivelé positif pour le vélo (par défaut 0.02).",
+        label_visibility="collapsed",
         key="bike_eq_ascent",
     )
+with dist_cols[3]:
+    st.caption("Bike D-")
     bike_eq_descent = st.number_input(
-        "Facteur D- (vélo)",
+        "Bike D-",
         min_value=0.0,
         max_value=1.0,
         value=float(bike_eq_descent_default),
         step=0.001,
         format="%.3f",
-        help="Contribution du dénivelé négatif pour le vélo (par défaut 0.00).",
+        label_visibility="collapsed",
         key="bike_eq_descent",
     )
-else:
-    st.markdown("##### Équivalences ski de rando (DistEq)")
+with dist_cols[4]:
+    st.caption("Ski dist")
     ski_eq_distance = st.number_input(
-        "Facteur distance (ski de rando)",
+        "Ski dist",
         min_value=0.0,
         max_value=5.0,
         value=float(ski_eq_dist_default),
         step=0.01,
-        help="Contribution de la distance pour le ski de rando (par défaut 1.00).",
+        format="%.2f",
+        label_visibility="collapsed",
         key="ski_eq_distance",
     )
+with dist_cols[5]:
+    st.caption("Ski D+")
     ski_eq_ascent = st.number_input(
-        "Facteur D+ (ski de rando)",
+        "Ski D+",
         min_value=0.0,
         max_value=1.0,
         value=float(ski_eq_ascent_default),
         step=0.001,
         format="%.3f",
-        help="Contribution du dénivelé positif pour le ski de rando (par défaut 0.01).",
+        label_visibility="collapsed",
         key="ski_eq_ascent",
     )
+with dist_cols[6]:
+    st.caption("Ski D-")
     ski_eq_descent = st.number_input(
-        "Facteur D- (ski de rando)",
+        "Ski D-",
         min_value=0.0,
         max_value=1.0,
         value=float(ski_eq_descent_default),
         step=0.001,
         format="%.3f",
-        help="Contribution du dénivelé négatif pour le ski de rando (par défaut 0.00).",
+        label_visibility="collapsed",
         key="ski_eq_descent",
     )
+
+st.markdown("#### Paramètres zones HR")
+zone_cols = st.columns(3)
+with zone_cols[0]:
+    st.caption("n_cluster")
+    n_cluster = st.number_input(
+        "n_cluster",
+        min_value=2,
+        max_value=10,
+        value=int(n_cluster_default),
+        step=1,
+        label_visibility="collapsed",
+        key="n_cluster_value",
+    )
+with zone_cols[1]:
+    st.caption("n_zones")
+    hr_zone_count = st.number_input(
+        "n_zones",
+        min_value=2,
+        max_value=5,
+        value=int(hr_zone_count_default),
+        step=1,
+        label_visibility="collapsed",
+        key="hr_zone_count_value",
+    )
+with zone_cols[2]:
+    st.caption("window_size (jours)")
+    hr_zone_window_days = st.number_input(
+        "window_size",
+        min_value=7,
+        max_value=365,
+        value=int(hr_zone_window_days_default),
+        step=1,
+        label_visibility="collapsed",
+        key="hr_zone_window_days_value",
+    )
+
 strava_sync_days = st.number_input(
     "Jours à synchroniser avec Strava",
     min_value=1,
@@ -210,7 +300,15 @@ if int(strava_sync_days) > 31:
         "la synchronisation peut être plus lente et incomplète si la fenêtre est très large."
     )
 
-if st.button("Save Settings"):
+btn_save, btn_recompute_metrics, btn_recompute_zones = st.columns(3)
+save_settings = btn_save.button("Save Settings", use_container_width=True)
+recompute_metrics = btn_recompute_metrics.button(
+    "Recompute weekly & daily metrics",
+    use_container_width=True,
+)
+recompute_zones = btn_recompute_zones.button("Recompute zones", use_container_width=True)
+
+if save_settings:
     payload = {
         "coachId": "coach-1",
         "units": units,
@@ -223,6 +321,9 @@ if st.button("Save Settings"):
         "skiEqDistance": float(ski_eq_distance),
         "skiEqAscent": float(ski_eq_ascent),
         "skiEqDescent": float(ski_eq_descent),
+        "nCluster": int(n_cluster),
+        "hrZoneCount": int(hr_zone_count),
+        "hrZoneWindowDays": int(hr_zone_window_days),
     }
     categories_to_recompute: set[str] = set()
     if _float_changed(distance_eq_default, payload["distanceEqFactor"]):
@@ -256,9 +357,25 @@ if st.button("Save Settings"):
     else:
         st.success("Settings saved")
 
-if st.button("Recompute weekly & daily metrics"):
+if recompute_metrics:
     metrics_service.recompute_all()
     st.success("Métriques recalculées.")
+
+if recompute_zones:
+    if not athlete_id:
+        st.warning("Aucun athlète disponible pour recalculer les zones.")
+    else:
+        with st.spinner("Recalcul des clusters et zones HR..."):
+            total, clusters, borders = _recompute_zone_artifacts(
+                athlete_id=athlete_id,
+                n_cluster=int(n_cluster),
+                hr_zone_count=int(hr_zone_count),
+                hr_zone_window_days=int(hr_zone_window_days),
+            )
+        st.success(
+            f"Zones recalculées pour {borders} activité(s) "
+            f"(clusters recalculés: {clusters}/{total})."
+        )
 
 if "strava_state" not in st.session_state:
     persisted = _load_state_file()

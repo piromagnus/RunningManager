@@ -445,6 +445,9 @@ class SettingsRepo(BaseRepo):
                 "skiEqDistance",  # multiplier for ski distance contribution
                 "skiEqAscent",  # multiplier for ski ascent contribution
                 "skiEqDescent",  # multiplier for ski descent contribution
+                "nCluster",
+                "hrZoneCount",
+                "hrZoneWindowDays",
             ],
             id_column="coachId",
         )
