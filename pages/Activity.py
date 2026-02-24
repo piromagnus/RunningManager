@@ -19,9 +19,10 @@ from graph.pacer_comparison import render_comparison_elevation_profile, render_d
 from graph.speed_profile import create_speed_profile_chart
 from graph.timeseries import render_timeseries_charts
 from persistence.csv_storage import CsvStorage
-from persistence.repositories import ActivitiesRepo
+from persistence.repositories import ActivitiesRepo, PlannedSessionsRepo
 from services.activity_detail_service import ActivityDetail, ActivityDetailService
 from services.hr_zones_service import HrZonesService
+from services.interval_comparison_service import IntervalComparisonService, LapSegment
 from services.pacer_service import PacerService
 from services.speed_profile_service import SpeedProfileService
 from services.timeseries_service import TimeseriesService
@@ -32,6 +33,7 @@ from utils.formatting import (
     fmt_decimal,
     fmt_km,
     fmt_m,
+    format_delta_minutes,
     format_duration,
     set_locale,
 )
@@ -66,6 +68,8 @@ def main() -> None:
     detail_service = ActivityDetailService(storage, cfg, ts_service)
     pacer_service = PacerService(storage, cfg)
     activities_repo = ActivitiesRepo(storage)
+    planned_sessions_repo = PlannedSessionsRepo(storage)
+    interval_comparison_service = IntervalComparisonService(storage, cfg)
 
     params = st.query_params
 
@@ -76,6 +80,14 @@ def main() -> None:
 
     activity_id = _first(params.get("activityId")) or st.session_state.get("activity_view_id")
     athlete_id = _first(params.get("athleteId")) or st.session_state.get("activity_view_athlete")
+
+    if activity_id:
+        current_activity_id = _first(params.get("activityId"))
+        current_athlete_id = _first(params.get("athleteId"))
+        if str(current_activity_id or "") != str(activity_id):
+            params["activityId"] = str(activity_id)
+        if athlete_id and str(current_athlete_id or "") != str(athlete_id):
+            params["athleteId"] = str(athlete_id)
 
     st.page_link("pages/Activities.py", label="← Retour au flux")
 
@@ -103,22 +115,38 @@ def main() -> None:
         activity_id_str, athlete_id, activities_repo, pacer_service, ts_service, detail
     )
 
-    # Create tabs: Classic timeseries and Comparison (if pacing linked)
+    linked_planned_session = (
+        planned_sessions_repo.get(detail.planned_session_id) if detail.planned_session_id else None
+    )
+    planned_session_type = str((linked_planned_session or {}).get("type") or "").strip().upper()
+    show_interval_tab = planned_session_type == "INTERVAL_SIMPLE"
+
+    tab_labels = ["📊 Time series"]
+    if show_interval_tab:
+        tab_labels.append("🏁 Intervalles")
     if linked_race_id:
-        tab1, tab2 = st.tabs(["📊 Time series", "🎯 Comparaison pacing vs réel"])
-        
-        with tab1:
-            _render_timeseries_section(ts_service, speed_profile_service, detail.activity_id)
-            _render_speed_profile_section(speed_profile_service, detail.activity_id)
-            _render_hr_zones_section(hr_zones_service, detail.activity_id)
-        
-        with tab2:
-            _render_pacing_comparison(activity_id_str, linked_race_id, pacer_service, ts_service)
-    else:
-        # No pacing linked - show classic timeseries
+        tab_labels.append("🎯 Comparaison pacing vs réel")
+
+    tabs = st.tabs(tab_labels)
+    tab_index = 0
+    with tabs[tab_index]:
         _render_timeseries_section(ts_service, speed_profile_service, detail.activity_id)
         _render_speed_profile_section(speed_profile_service, detail.activity_id)
         _render_hr_zones_section(hr_zones_service, detail.activity_id)
+    tab_index += 1
+
+    if show_interval_tab and linked_planned_session is not None:
+        with tabs[tab_index]:
+            _render_interval_comparison(
+                interval_comparison_service,
+                activity_id_str,
+                linked_planned_session,
+            )
+        tab_index += 1
+
+    if linked_race_id:
+        with tabs[tab_index]:
+            _render_pacing_comparison(activity_id_str, linked_race_id, pacer_service, ts_service)
 
     st.subheader("Trace sur la carte")
     map_choice = _select_map_style(mapbox_token)
@@ -213,6 +241,163 @@ def _render_race_pacing_link(
     return linked_race_id
 
 
+_SEGMENT_TYPE_LABELS = {
+    "steep_up": "Montée raide",
+    "run_up": "Montée",
+    "flat": "Plat",
+    "down": "Descente",
+    "steep_down": "Descente raide",
+}
+
+_SEGMENT_TYPE_ORDER = ["steep_up", "run_up", "flat", "down", "steep_down"]
+
+
+def _aggregate_pacing_deltas(df: pd.DataFrame) -> dict | None:
+    """Aggregate pacing deltas for a group of segments (distance-weighted averages)."""
+    n = len(df)
+    if n == 0:
+        return None
+
+    time_valid = df.dropna(subset=["time_delta_sec"])
+    time_delta_sec = float(time_valid["time_delta_sec"].sum()) if not time_valid.empty else None
+
+    speed_valid = df.dropna(subset=["speed_delta_kmh"])
+    if not speed_valid.empty and speed_valid["distance_km"].sum() > 0:
+        total_dist = speed_valid["distance_km"].sum()
+        avg_speed_delta = float(
+            (speed_valid["speed_delta_kmh"] * speed_valid["distance_km"]).sum() / total_dist
+        )
+    else:
+        avg_speed_delta = None
+
+    speq_valid = df.dropna(subset=["speed_eq_delta_kmh"])
+    if not speq_valid.empty and speq_valid["distance_km"].sum() > 0:
+        total_dist = speq_valid["distance_km"].sum()
+        avg_speed_eq_delta = float(
+            (speq_valid["speed_eq_delta_kmh"] * speq_valid["distance_km"]).sum() / total_dist
+        )
+    else:
+        avg_speed_eq_delta = None
+
+    time_str = format_delta_minutes(time_delta_sec) if time_delta_sec is not None else "-"
+    if avg_speed_delta is not None:
+        sign = "+" if avg_speed_delta >= 0 else ""
+        speed_str = f"{sign}{fmt_decimal(avg_speed_delta, 1)}"
+    else:
+        speed_str = "-"
+    if avg_speed_eq_delta is not None:
+        sign = "+" if avg_speed_eq_delta >= 0 else ""
+        speed_eq_str = f"{sign}{fmt_decimal(avg_speed_eq_delta, 1)}"
+    else:
+        speed_eq_str = "-"
+
+    return {
+        "Segments": n,
+        "Δ Temps": time_str,
+        "Δ Vitesse (km/h)": speed_str,
+        "Δ Vitesse-eq (km/h)": speed_eq_str,
+    }
+
+
+def _render_pacing_summary(
+    comparison_df: pd.DataFrame,
+    planned_segments_df: pd.DataFrame,
+    pacer_service: PacerService,
+) -> None:
+    """Render general delta summary grouped by segment type."""
+    if comparison_df.empty:
+        return
+
+    enriched_rows = []
+    for _, row in comparison_df.iterrows():
+        seg_id = int(row["segmentId"])
+        seg_type = row.get("type", "unknown")
+        distance_km = float(row["endKm"]) - float(row["startKm"])
+
+        planned_seg_mask = planned_segments_df[planned_segments_df["segmentId"] == seg_id]
+        planned_seg = planned_seg_mask.iloc[0] if not planned_seg_mask.empty else None
+        elev_gain = float(planned_seg.get("elevGainM", 0) or 0) if planned_seg is not None else 0.0
+
+        planned_time_sec = float(row.get("plannedTimeSec", 0) or 0)
+        planned_speed_kmh = float(row.get("plannedSpeedKmh", 0) or 0)
+        planned_speed_eq_kmh = float(row.get("plannedSpeedEqKmh", 0) or 0)
+
+        if planned_speed_kmh == 0 and planned_time_sec > 0:
+            planned_speed_kmh = (distance_km / planned_time_sec) * 3600
+        if planned_speed_eq_kmh == 0 and planned_time_sec > 0:
+            dist_eq = pacer_service.planner.compute_distance_eq_km(distance_km, elev_gain)
+            if dist_eq > 0:
+                planned_speed_eq_kmh = (dist_eq / planned_time_sec) * 3600
+
+        actual_time_sec = row.get("actualTimeSec")
+        actual_speed_kmh = row.get("actualSpeedKmh")
+        actual_speed_eq_kmh = row.get("actualSpeedEqKmh")
+
+        if actual_speed_kmh is None and actual_time_sec and actual_time_sec > 0:
+            actual_speed_kmh = (distance_km / actual_time_sec) * 3600
+        if actual_speed_eq_kmh is None and actual_time_sec and actual_time_sec > 0:
+            dist_eq = pacer_service.planner.compute_distance_eq_km(distance_km, elev_gain)
+            if dist_eq > 0:
+                actual_speed_eq_kmh = (dist_eq / actual_time_sec) * 3600
+
+        time_delta = (
+            (actual_time_sec - planned_time_sec)
+            if actual_time_sec is not None and planned_time_sec > 0
+            else None
+        )
+        speed_delta = (
+            (actual_speed_kmh - planned_speed_kmh)
+            if actual_speed_kmh is not None and planned_speed_kmh > 0
+            else None
+        )
+        speed_eq_delta = (
+            (actual_speed_eq_kmh - planned_speed_eq_kmh)
+            if actual_speed_eq_kmh is not None and planned_speed_eq_kmh > 0
+            else None
+        )
+
+        enriched_rows.append({
+            "type": seg_type,
+            "distance_km": distance_km,
+            "time_delta_sec": time_delta,
+            "speed_delta_kmh": speed_delta,
+            "speed_eq_delta_kmh": speed_eq_delta,
+        })
+
+    if not enriched_rows:
+        return
+
+    edf = pd.DataFrame(enriched_rows)
+
+    # Global total metrics
+    total_agg = _aggregate_pacing_deltas(edf)
+    if total_agg:
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Δ Temps total", total_agg["Δ Temps"])
+        with col2:
+            st.metric("Δ Vitesse moy.", total_agg["Δ Vitesse (km/h)"])
+        with col3:
+            st.metric("Δ Vitesse-eq moy.", total_agg["Δ Vitesse-eq (km/h)"])
+
+    # Per-type breakdown table
+    type_rows = []
+    for seg_type in _SEGMENT_TYPE_ORDER:
+        subset = edf[edf["type"] == seg_type]
+        if subset.empty:
+            continue
+        agg = _aggregate_pacing_deltas(subset)
+        if agg:
+            agg["Type"] = _SEGMENT_TYPE_LABELS.get(seg_type, seg_type)
+            type_rows.append(agg)
+
+    if type_rows:
+        display_cols = ["Type", "Segments", "Δ Temps", "Δ Vitesse (km/h)", "Δ Vitesse-eq (km/h)"]
+        st.dataframe(
+            pd.DataFrame(type_rows)[display_cols], use_container_width=True, hide_index=True
+        )
+
+
 def _render_pacing_comparison(
     activity_id: str,
     race_id: str,
@@ -222,7 +407,10 @@ def _render_pacing_comparison(
     """Render pacing comparison tab with elevation profile, bar charts, and comparison table."""
     timeseries_df = ts_service.load(activity_id)
     if timeseries_df is None or timeseries_df.empty:
-        st.warning("Les données timeseries sont nécessaires pour comparer les segments planifiés avec les réels.")
+        st.warning(
+            "Les données timeseries sont nécessaires pour comparer"
+            " les segments planifiés avec les réels."
+        )
         return
 
     # Get planned race data
@@ -242,13 +430,21 @@ def _render_pacing_comparison(
     # Compare segments
     comparison_df = pacer_service.compare_race_segments_with_activity(race_id, timeseries_df)
     if comparison_df is None or comparison_df.empty:
-        st.warning("Impossible de comparer les segments. Vérifiez que les données timeseries sont disponibles.")
+        st.warning(
+            "Impossible de comparer les segments."
+            " Vérifiez que les données timeseries sont disponibles."
+        )
         return
 
     st.subheader(f"📊 Comparaison: {race_name}")
 
+    # Summary deltas by segment type
+    _render_pacing_summary(comparison_df, planned_segments_df, pacer_service)
+
     # Render elevation profile with comparison tooltips
-    render_comparison_elevation_profile(metrics_df, planned_segments_df, comparison_df, aid_stations_km)
+    render_comparison_elevation_profile(
+        metrics_df, planned_segments_df, comparison_df, aid_stations_km
+    )
 
     # Render delta bar charts
     st.subheader("📈 Deltas par segment")
@@ -257,6 +453,133 @@ def _render_pacing_comparison(
     # Comparison table with computed missing values
     st.subheader("📋 Tableau de comparaison détaillé")
     render_comparison_table(comparison_df, planned_segments_df, pacer_service)
+
+
+def _render_interval_comparison(
+    interval_service: IntervalComparisonService,
+    activity_id: str,
+    planned_session: dict[str, object],
+) -> None:
+    st.subheader("Intervalles - Prévu vs Réalisé")
+    try:
+        rows = interval_service.compare(activity_id, planned_session)
+    except Exception as exc:
+        logger.exception("Failed to compute interval comparison: %s", exc)
+        st.caption("Impossible de calculer la comparaison des intervalles.")
+        return
+
+    if not rows:
+        st.caption("Aucune donnée de comparaison intervalle disponible.")
+        return
+
+    table_rows: list[dict[str, object]] = []
+    for row in rows:
+        planned = row.planned
+        metrics = row.aggregated_metrics
+        kind = planned.kind if planned is not None else "actual_only"
+
+        planned_time = (
+            format_duration(int(max(planned.sec, 0)), include_seconds=True) if planned is not None else "-"
+        )
+        actual_time = (
+            format_duration(int(round(metrics.time_sec)), include_seconds=True)
+            if metrics.time_sec > 0
+            else "-"
+        )
+
+        table_rows.append(
+            {
+                "Segment": planned.section_label if planned is not None else "Hors plan",
+                "Type": _interval_kind_label(kind),
+                "Laps": _lap_span(row.laps),
+                "Temps prévu": planned_time,
+                "Temps réel": actual_time,
+                "Vitesse": (
+                    f"{fmt_decimal(metrics.avg_speed_kmh, 2)} km/h"
+                    if metrics.avg_speed_kmh is not None
+                    else "-"
+                ),
+                "VitesseEq": (
+                    f"{fmt_decimal(metrics.speed_eq_kmh, 2)} km/h"
+                    if metrics.speed_eq_kmh is not None
+                    else "-"
+                ),
+                "Allure": _format_pace_min_km(metrics.pace_min_km),
+                "FC moy": fmt_decimal(metrics.avg_hr, 0) if metrics.avg_hr is not None else "-",
+                "D+": fmt_decimal(metrics.ascent_m, 1),
+                "D-": fmt_decimal(metrics.descent_m, 1),
+                "Distance (m)": (
+                    fmt_decimal(metrics.distance_m, 1) if metrics.distance_m is not None else "-"
+                ),
+                "État": _interval_status_label(row.match_status),
+                "__kind": kind,
+                "__status": row.match_status,
+            }
+        )
+
+    df = pd.DataFrame(table_rows)
+    kinds = df["__kind"].tolist()
+    statuses = df["__status"].tolist()
+    display_df = df.drop(columns=["__kind", "__status"])
+
+    def _style_interval_row(current_row: pd.Series) -> list[str]:
+        idx = int(current_row.name)
+        status = statuses[idx]
+        kind = kinds[idx]
+        if status == "actual_only":
+            color = "background-color: #4c1d95; color: #e5e7eb"
+        elif kind == "run":
+            color = "background-color: #14532d; color: #e5e7eb"
+        elif kind == "recovery":
+            color = "background-color: #1e3a8a; color: #e5e7eb"
+        else:
+            color = ""
+        return [color] * len(current_row)
+
+    st.dataframe(
+        display_df.style.apply(_style_interval_row, axis=1),
+        use_container_width=True,
+        hide_index=True,
+    )
+
+
+def _interval_kind_label(kind: str) -> str:
+    if kind == "run":
+        return "Run"
+    if kind == "recovery":
+        return "Recovery"
+    return "Hors plan"
+
+
+def _interval_status_label(status: str) -> str:
+    if status == "matched":
+        return "Matché"
+    if status == "planned_only":
+        return "Planifié non trouvé"
+    return "Hors plan"
+
+
+def _lap_span(laps: tuple[LapSegment, ...]) -> str:
+    lap_ids = [lap.lap_index for lap in laps]
+    if not lap_ids:
+        return "-"
+    if len(lap_ids) == 1:
+        return f"L{lap_ids[0]}"
+    contiguous = lap_ids == list(range(lap_ids[0], lap_ids[-1] + 1))
+    if contiguous:
+        return f"L{lap_ids[0]}-L{lap_ids[-1]}"
+    return ", ".join(f"L{lap_id}" for lap_id in lap_ids)
+
+
+def _format_pace_min_km(value: float | None) -> str:
+    if value is None or value <= 0:
+        return "-"
+    minutes = int(value)
+    seconds = int(round((value - minutes) * 60))
+    if seconds >= 60:
+        minutes += 1
+        seconds -= 60
+    return f"{minutes}:{seconds:02d}/km"
 
 
 def _render_summary(detail: ActivityDetail) -> None:

@@ -66,10 +66,10 @@ class MetricsComputationService:
     def recompute_for_activities(self, activity_ids: Sequence[str]) -> None:
         """Recompute metrics for specific activities only.
 
-        This method is optimized to compute activity metrics only for the
-        specified activities, then rebuild daily/weekly aggregates from
-        the full metrics tables. This is more efficient than recomputing
-        all activities for the affected athletes.
+        This method computes activity metrics only for the specified activities,
+        then refreshes daily/weekly aggregates only from the earliest impacted
+        activity date onward (per athlete). This avoids unnecessary recomputation
+        of historical periods that cannot be impacted by the new rows.
         """
         if not activity_ids:
             return
@@ -96,6 +96,7 @@ class MetricsComputationService:
                 activities_df=athlete_subset,
                 hr_profile=hr_profiles.get(athlete_id),
             )
+            impacted_start_date = self._resolve_impacted_start_date(athlete_subset, new_metrics_df)
 
             # Upsert new activity metrics into existing table
             if not new_metrics_df.empty:
@@ -113,19 +114,32 @@ class MetricsComputationService:
                 merged_metrics = merged_metrics[self.activity_metrics.headers]
                 self.storage.write_csv(self.activity_metrics.file_name, merged_metrics)
 
-            # Rebuild daily/weekly from full metrics tables (required for rolling windows)
+            # Refresh daily/weekly from earliest impacted date (with rolling context for daily).
             actual_metrics_df = self.activity_metrics.list(athleteId=athlete_id)
             planned_metrics_df = self.planned_metrics.list(athleteId=athlete_id)
 
-            weekly_df = self._build_weekly_metrics(
-                athlete_id=athlete_id,
-                actual_metrics_df=actual_metrics_df,
-                planned_metrics_df=planned_metrics_df,
-            )
-            daily_df = self._build_daily_metrics(
-                athlete_id=athlete_id,
-                actual_metrics_df=actual_metrics_df,
-            )
+            if impacted_start_date is None:
+                weekly_df = self._build_weekly_metrics(
+                    athlete_id=athlete_id,
+                    actual_metrics_df=actual_metrics_df,
+                    planned_metrics_df=planned_metrics_df,
+                )
+                daily_df = self._build_daily_metrics(
+                    athlete_id=athlete_id,
+                    actual_metrics_df=actual_metrics_df,
+                )
+            else:
+                weekly_df = self._build_weekly_metrics_from_date(
+                    athlete_id=athlete_id,
+                    actual_metrics_df=actual_metrics_df,
+                    planned_metrics_df=planned_metrics_df,
+                    start_date=impacted_start_date,
+                )
+                daily_df = self._build_daily_metrics_from_date(
+                    athlete_id=athlete_id,
+                    actual_metrics_df=actual_metrics_df,
+                    start_date=impacted_start_date,
+                )
 
             self._persist_frame(self.weekly_repo, [weekly_df], {athlete_id}, replace_all=False)
             self._persist_frame(self.daily_repo, [daily_df], {athlete_id}, replace_all=False)
@@ -229,6 +243,27 @@ class MetricsComputationService:
                 ids.update(rdf["athleteId"].astype(str))
         return sorted(ids)
 
+    @staticmethod
+    def _resolve_impacted_start_date(
+        athlete_subset: pd.DataFrame,
+        new_metrics_df: pd.DataFrame,
+    ) -> Optional[dt.date]:
+        candidates: list[dt.date] = []
+
+        if not new_metrics_df.empty and "startDate" in new_metrics_df.columns:
+            parsed = pd.to_datetime(new_metrics_df["startDate"], errors="coerce").dropna().dt.date
+            if not parsed.empty:
+                candidates.append(parsed.min())
+
+        if not athlete_subset.empty and "startTime" in athlete_subset.columns:
+            parsed = pd.to_datetime(athlete_subset["startTime"], errors="coerce").dropna().dt.date
+            if not parsed.empty:
+                candidates.append(parsed.min())
+
+        if not candidates:
+            return None
+        return min(candidates)
+
     def _recompute_for_athletes(self, athlete_ids: Sequence[str], *, replace_all: bool) -> None:
         if not athlete_ids and not replace_all:
             return
@@ -301,6 +336,119 @@ class MetricsComputationService:
             )
         merged = merged[repo.headers] if not merged.empty else pd.DataFrame(columns=repo.headers)
         self.storage.write_csv(repo.file_name, merged)
+
+    def _build_weekly_metrics_from_date(
+        self,
+        athlete_id: str,
+        actual_metrics_df: pd.DataFrame,
+        planned_metrics_df: pd.DataFrame,
+        start_date: dt.date,
+    ) -> pd.DataFrame:
+        cutoff_week_start = iso_week_start(start_date).date()
+        recomputed_full = self._build_weekly_metrics(
+            athlete_id=athlete_id,
+            actual_metrics_df=actual_metrics_df,
+            planned_metrics_df=planned_metrics_df,
+        )
+        if recomputed_full.empty:
+            recomputed_tail = pd.DataFrame(columns=self.weekly_repo.headers)
+        else:
+            recomputed_full = recomputed_full.copy()
+            recomputed_full["_week_date"] = pd.to_datetime(
+                recomputed_full["weekStartDate"], errors="coerce"
+            ).dt.date
+            recomputed_tail = recomputed_full[
+                (recomputed_full["_week_date"].isna())
+                | (recomputed_full["_week_date"] >= cutoff_week_start)
+            ].drop(columns=["_week_date"])
+
+        existing_weekly = self.weekly_repo.list(athleteId=athlete_id)
+        if existing_weekly.empty:
+            return (
+                recomputed_tail[self.weekly_repo.headers]
+                if not recomputed_tail.empty
+                else pd.DataFrame(columns=self.weekly_repo.headers)
+            )
+
+        existing_weekly = existing_weekly.copy()
+        existing_weekly["_week_date"] = pd.to_datetime(
+            existing_weekly["weekStartDate"], errors="coerce"
+        ).dt.date
+        existing_prefix = existing_weekly[
+            (existing_weekly["_week_date"].isna())
+            | (existing_weekly["_week_date"] < cutoff_week_start)
+        ].drop(columns=["_week_date"])
+
+        merged = pd.concat([existing_prefix, recomputed_tail], ignore_index=True)
+        if merged.empty:
+            return pd.DataFrame(columns=self.weekly_repo.headers)
+        merged["_sort_week"] = pd.to_datetime(merged["weekStartDate"], errors="coerce")
+        merged = merged.sort_values(["_sort_week", "isoYear", "isoWeek"]).drop(columns=["_sort_week"])
+        return merged[self.weekly_repo.headers]
+
+    def _build_daily_metrics_from_date(
+        self,
+        athlete_id: str,
+        actual_metrics_df: pd.DataFrame,
+        start_date: dt.date,
+    ) -> pd.DataFrame:
+        existing_daily = self.daily_repo.list(athleteId=athlete_id)
+        if actual_metrics_df.empty:
+            if existing_daily.empty:
+                return pd.DataFrame(columns=self.daily_repo.headers)
+            existing_daily = existing_daily.copy()
+            existing_daily["_date"] = pd.to_datetime(existing_daily["date"], errors="coerce").dt.date
+            prefix = existing_daily[
+                (existing_daily["_date"].isna()) | (existing_daily["_date"] < start_date)
+            ].drop(columns=["_date"])
+            return (
+                prefix[self.daily_repo.headers]
+                if not prefix.empty
+                else pd.DataFrame(columns=self.daily_repo.headers)
+            )
+
+        # Rolling windows (7/28) need historical context prior to start_date.
+        lookback_start = start_date - dt.timedelta(days=27)
+        context_metrics = actual_metrics_df.copy()
+        context_metrics["_start_date"] = pd.to_datetime(
+            context_metrics.get("startDate"), errors="coerce"
+        ).dt.date
+        context_metrics = context_metrics[
+            context_metrics["_start_date"].notna() & (context_metrics["_start_date"] >= lookback_start)
+        ].drop(columns=["_start_date"])
+
+        recomputed_full = self._build_daily_metrics(
+            athlete_id=athlete_id,
+            actual_metrics_df=context_metrics,
+        )
+        if recomputed_full.empty:
+            recomputed_tail = pd.DataFrame(columns=self.daily_repo.headers)
+        else:
+            recomputed_full = recomputed_full.copy()
+            recomputed_full["_date"] = pd.to_datetime(recomputed_full["date"], errors="coerce").dt.date
+            recomputed_tail = recomputed_full[
+                (recomputed_full["_date"].isna()) | (recomputed_full["_date"] >= start_date)
+            ].drop(columns=["_date"])
+
+        if existing_daily.empty:
+            return (
+                recomputed_tail[self.daily_repo.headers]
+                if not recomputed_tail.empty
+                else pd.DataFrame(columns=self.daily_repo.headers)
+            )
+
+        existing_daily = existing_daily.copy()
+        existing_daily["_date"] = pd.to_datetime(existing_daily["date"], errors="coerce").dt.date
+        existing_prefix = existing_daily[
+            (existing_daily["_date"].isna()) | (existing_daily["_date"] < start_date)
+        ].drop(columns=["_date"])
+
+        merged = pd.concat([existing_prefix, recomputed_tail], ignore_index=True)
+        if merged.empty:
+            return pd.DataFrame(columns=self.daily_repo.headers)
+        merged["_sort_date"] = pd.to_datetime(merged["date"], errors="coerce")
+        merged = merged.sort_values(["_sort_date", "dailyId"]).drop(columns=["_sort_date"])
+        return merged[self.daily_repo.headers]
 
     # ------------------------------------------------------------------
     # Activity metrics -------------------------------------------------
