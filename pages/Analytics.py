@@ -12,17 +12,23 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
+from graph.analytics import create_daily_bar_chart, create_weekly_bar_chart
+from graph.hr_zones import build_zone_colors
+from persistence.csv_storage import CsvStorage
+from persistence.repositories import AthletesRepo, SettingsRepo
+from services.analytics_service import AnalyticsService
+from services.hr_zones_service import HrZonesService
+from services.speed_profile_service import SpeedProfileService
+from services.timeseries_service import TimeseriesService
+from utils.config import load_config
 from utils.constants import (
     CATEGORY_LABELS_FR,
     CHART_WIDTH_DEFAULT,
     METRIC_CONFIG,
+)
+from utils.constants import (
     METRICS as CONFIG_METRICS,
 )
-from graph.analytics import create_daily_bar_chart, create_weekly_bar_chart
-from persistence.csv_storage import CsvStorage
-from persistence.repositories import AthletesRepo, SettingsRepo
-from services.analytics_service import AnalyticsService
-from utils.config import load_config
 from utils.formatting import fmt_decimal, set_locale
 from utils.styling import apply_theme
 from widgets.athlete_selector import select_athlete
@@ -39,8 +45,52 @@ storage = CsvStorage(base_dir=Path(cfg.data_dir))
 ath_repo = AthletesRepo(storage)
 settings_repo = SettingsRepo(storage)
 analytics = AnalyticsService(storage)
+settings_values = settings_repo.get("coach-1") or {}
 
 CATEGORY_OPTIONS = CATEGORY_LABELS_FR
+
+
+def _to_int_setting(
+    raw: object,
+    *,
+    default: int,
+    minimum: int,
+    maximum: int | None = None,
+) -> int:
+    parsed = pd.to_numeric(pd.Series([raw]), errors="coerce").iloc[0]
+    if pd.isna(parsed):
+        value = default
+    else:
+        try:
+            value = int(parsed)
+        except Exception:
+            value = default
+    value = max(minimum, value)
+    if maximum is not None:
+        value = min(maximum, value)
+    return value
+
+
+zone_count_setting = _to_int_setting(
+    settings_values.get("hrZoneCount"),
+    default=5,
+    minimum=2,
+    maximum=5,
+)
+zone_window_days_setting = _to_int_setting(
+    settings_values.get("hrZoneWindowDays"),
+    default=90,
+    minimum=1,
+)
+ts_service = TimeseriesService(cfg)
+speed_profile_service = SpeedProfileService(cfg)
+hr_zones_service = HrZonesService(
+    storage=storage,
+    ts_service=ts_service,
+    speed_profile_service=speed_profile_service,
+    zone_count=zone_count_setting,
+    window_days=zone_window_days_setting,
+)
 
 
 def _resolve_metric_config() -> dict[str, dict]:
@@ -60,7 +110,7 @@ def _load_saved_activity_types() -> list[str]:
     Be lenient with persisted values: the column may contain JSON string,
     an actual list, or NaN/float due to CSV typing. Only return valid keys.
     """
-    settings = settings_repo.get("coach-1") or {}
+    settings = settings_values
     raw = settings.get("analyticsActivityTypes")
 
     # Already a list (robustness if another writer stored native list)
@@ -82,6 +132,118 @@ def _load_saved_activity_types() -> list[str]:
 
     # Any other type (including float/NaN) → return empty selection
     return []
+
+
+def _build_session_zone_distribution(
+    activities_df: pd.DataFrame,
+) -> pd.DataFrame:
+    if activities_df.empty or "activityId" not in activities_df.columns:
+        return pd.DataFrame()
+
+    working = activities_df.copy()
+    if "date" in working.columns:
+        working["date"] = pd.to_datetime(working["date"], errors="coerce")
+    else:
+        working["date"] = pd.to_datetime(working.get("startDate"), errors="coerce")
+    working = working.dropna(subset=["activityId", "date"]).sort_values("date")
+    if working.empty:
+        return pd.DataFrame()
+
+    rows: list[dict[str, object]] = []
+    for activity in working.itertuples(index=False):
+        activity_id = str(activity.activityId)
+        summary = hr_zones_service.load_zone_summary(activity_id)
+        if summary is None or summary.empty:
+            continue
+
+        activity_date = pd.to_datetime(getattr(activity, "date", None), errors="coerce")
+        if pd.isna(activity_date):
+            continue
+        date_label = activity_date.strftime("%Y-%m-%d")
+        session_label = f"{date_label} · {activity_id}"
+        for zone_row in summary.itertuples(index=False):
+            zone = int(zone_row.zone)
+            time_seconds_raw = pd.to_numeric(pd.Series([zone_row.time_seconds]), errors="coerce").iloc[0]
+            time_seconds = float(time_seconds_raw) if pd.notna(time_seconds_raw) else 0.0
+            rows.append(
+                {
+                    "sessionDate": activity_date.normalize(),
+                    "sessionLabel": session_label,
+                    "zone": zone,
+                    "zone_label": f"Z{zone}",
+                    "time_seconds": time_seconds,
+                }
+            )
+
+    if not rows:
+        return pd.DataFrame()
+
+    session_df = pd.DataFrame(rows).sort_values(["sessionDate", "zone"]).reset_index(drop=True)
+    session_df["time_minutes"] = session_df["time_seconds"] / 60.0
+    total_seconds = session_df.groupby("sessionLabel")["time_seconds"].transform("sum")
+    session_df["pct_time"] = 0.0
+    valid_total_mask = total_seconds > 0
+    session_df.loc[valid_total_mask, "pct_time"] = (
+        session_df.loc[valid_total_mask, "time_seconds"] / total_seconds[valid_total_mask] * 100.0
+    )
+    return session_df
+
+
+def _render_hr_zone_stacked_chart(
+    zone_df: pd.DataFrame,
+    *,
+    x_col: str,
+    x_title: str,
+    absolute: bool,
+) -> alt.Chart | None:
+    if zone_df.empty:
+        return None
+
+    working = zone_df.copy()
+    if "zone_label" not in working.columns and "zone" in working.columns:
+        working["zone"] = pd.to_numeric(working["zone"], errors="coerce")
+        working["zone_label"] = working["zone"].map(
+            lambda value: f"Z{int(value)}" if pd.notna(value) else None
+        )
+    if "zone_label" not in working.columns:
+        return None
+
+    value_col = "time_minutes" if absolute else "pct_time"
+    if value_col not in working.columns:
+        return None
+    working[value_col] = pd.to_numeric(working[value_col], errors="coerce").fillna(0.0)
+    working = working.dropna(subset=[x_col, "zone_label"])
+    if working.empty:
+        return None
+
+    labels = working["zone_label"].dropna().astype(str).unique().tolist()
+    zone_domain = sorted(labels, key=lambda label: int(label[1:]) if label.startswith("Z") else 999)
+    zone_range = build_zone_colors(len(zone_domain))
+
+    y_title = "Temps (min)" if absolute else "% du temps"
+    value_format = ".1f" if absolute else ".2f"
+    return (
+        alt.Chart(working)
+        .mark_bar()
+        .encode(
+            x=alt.X(f"{x_col}:N", title=x_title),
+            y=alt.Y(f"{value_col}:Q", title=y_title),
+            color=alt.Color(
+                "zone_label:N",
+                title="Zone",
+                scale=alt.Scale(domain=zone_domain, range=zone_range),
+            ),
+            order=alt.Order("zone:Q"),
+            tooltip=[
+                alt.Tooltip(f"{x_col}:N", title=x_title),
+                alt.Tooltip("zone_label:N", title="Zone"),
+                alt.Tooltip(f"{value_col}:Q", title=y_title, format=value_format),
+                alt.Tooltip("time_minutes:Q", title="Temps (min)", format=".1f"),
+                alt.Tooltip("pct_time:Q", title="% du temps", format=".2f"),
+            ],
+        )
+        .properties(height=320, width=CHART_WIDTH)
+    )
 
 
 athlete_id = select_athlete(ath_repo)
@@ -510,3 +672,59 @@ else:
         ),
         use_container_width=True,
     )
+
+st.subheader("Temps passé dans chaque zone HR")
+hr_zone_view_col, hr_zone_scale_col = st.columns(2)
+hr_zone_view = hr_zone_view_col.radio(
+    "Agrégation",
+    options=["Hebdomadaire", "Par session"],
+    horizontal=True,
+    key="analytics_hr_zone_view",
+)
+hr_zone_scale = hr_zone_scale_col.radio(
+    "Affichage",
+    options=["Absolu", "Normalisé"],
+    horizontal=True,
+    key="analytics_hr_zone_scale",
+)
+hr_zone_absolute = hr_zone_scale == "Absolu"
+
+if hr_zone_view == "Hebdomadaire":
+    weekly_zone_df = hr_zones_service.build_weekly_zone_data(
+        athlete_id=athlete_id,
+        start_date=start_date,
+        end_date=end_date,
+        categories=selected_types,
+    )
+    if weekly_zone_df.empty:
+        st.info("Aucune donnée de zone HR disponible pour la période sélectionnée.")
+    else:
+        weekly_zone_df = weekly_zone_df.copy().sort_values(["weekStartDate", "zone"])
+        weekly_zone_df["x_label"] = weekly_zone_df["weekLabel"]
+        zone_chart = _render_hr_zone_stacked_chart(
+            weekly_zone_df,
+            x_col="x_label",
+            x_title="Semaine",
+            absolute=hr_zone_absolute,
+        )
+        if zone_chart is None:
+            st.info("Aucune donnée de zone HR disponible pour la période sélectionnée.")
+        else:
+            st.altair_chart(zone_chart, use_container_width=False)
+else:
+    session_zone_df = _build_session_zone_distribution(activities_metrics_df)
+    if session_zone_df.empty:
+        st.info("Aucune donnée de zone HR disponible pour les sessions sélectionnées.")
+    else:
+        session_zone_df = session_zone_df.copy().sort_values(["sessionDate", "zone"])
+        session_zone_df["x_label"] = session_zone_df["sessionLabel"]
+        zone_chart = _render_hr_zone_stacked_chart(
+            session_zone_df,
+            x_col="x_label",
+            x_title="Session",
+            absolute=hr_zone_absolute,
+        )
+        if zone_chart is None:
+            st.info("Aucune donnée de zone HR disponible pour les sessions sélectionnées.")
+        else:
+            st.altair_chart(zone_chart, use_container_width=False)

@@ -165,6 +165,7 @@ for metric_key in metric_definitions.keys():
     tab_charge,
     tab_speed,
     tab_hr_speed,
+    tab_hr_shift,
     tab_speed_profile,
     tab_speed_profile_cloud,
     tab_hr_borders,
@@ -174,6 +175,7 @@ for metric_key in metric_definitions.keys():
         "Charge",
         "SpeedEq",
         "FC vs Vitesse",
+        "Décalage HR",
         "Profil de vitesse",
         "Nuage de vitesse max",
         "Zones HR",
@@ -505,6 +507,117 @@ with tab_hr_speed:
             formula_text = f"FC = {slope:.2f} × Vitesse + {intercept:.2f}\nR² = {r_squared:.3f}"
             st.caption(formula_text)
         st.altair_chart(chart, use_container_width=True)
+
+with tab_hr_shift:
+    st.subheader("Evolution du décalage HR par activité")
+    acts_path = storage.base_dir / "activities_metrics.csv"
+    shifts_df = pd.read_csv(acts_path) if acts_path.exists() else pd.DataFrame()
+    if shifts_df.empty:
+        st.info("Aucune donnée d'activité disponible.")
+    else:
+        required_cols = {"activityId", "athleteId", "startDate", "hrSpeedShift"}
+        if not required_cols.issubset(set(shifts_df.columns)):
+            st.info("Les colonnes nécessaires au suivi du décalage HR sont absentes.")
+        else:
+            shifts_df = shifts_df[shifts_df["athleteId"].astype(str) == str(athlete_id)].copy()
+            shifts_df["date"] = pd.to_datetime(shifts_df["startDate"], errors="coerce")
+            shifts_df = shifts_df.dropna(subset=["date"])
+            shifts_df = shifts_df[
+                (shifts_df["date"].dt.date >= start_date) & (shifts_df["date"].dt.date <= end_date)
+            ]
+            if selected_cats:
+                allowed = {str(cat).upper() for cat in selected_cats}
+                if "category" in shifts_df.columns:
+                    shifts_df["category"] = shifts_df["category"].astype(str).str.upper()
+                    shifts_df = shifts_df[shifts_df["category"].isin(allowed)]
+            if shifts_df.empty:
+                st.info("Aucune donnée de décalage HR sur la période sélectionnée.")
+            else:
+                shifts_df["hrSpeedShift"] = pd.to_numeric(shifts_df["hrSpeedShift"], errors="coerce")
+                shifts_df = shifts_df.dropna(subset=["hrSpeedShift"]).copy()
+                if shifts_df.empty:
+                    st.info("Aucune valeur de décalage HR disponible sur la période sélectionnée.")
+                else:
+                    shifts_df["distanceKm"] = pd.to_numeric(
+                        shifts_df.get("distanceKm"), errors="coerce"
+                    ).fillna(0.0)
+                    shifts_df["distanceEqKm"] = pd.to_numeric(
+                        shifts_df.get("distanceEqKm"), errors="coerce"
+                    ).fillna(0.0)
+                    shifts_df["timeSec"] = pd.to_numeric(
+                        shifts_df.get("timeSec"), errors="coerce"
+                    ).fillna(0.0)
+                    shifts_df["avgHr"] = pd.to_numeric(shifts_df.get("avgHr"), errors="coerce")
+                    shifts_df["trimp"] = pd.to_numeric(shifts_df.get("trimp"), errors="coerce")
+                    shifts_df["ascentM"] = pd.to_numeric(shifts_df.get("ascentM"), errors="coerce")
+                    with pd.option_context("mode.use_inf_as_na", True):
+                        shifts_df["speedKmh"] = (
+                            shifts_df["distanceKm"] / shifts_df["timeSec"].replace(0, pd.NA) * 3600.0
+                        )
+                        shifts_df["speedEqKmh"] = (
+                            shifts_df["distanceEqKm"] / shifts_df["timeSec"].replace(0, pd.NA) * 3600.0
+                        )
+                    shifts_df["category"] = (
+                        shifts_df.get("category", pd.Series("OTHER", index=shifts_df.index))
+                        .astype(str)
+                        .str.upper()
+                    )
+
+                    acts_info_path = storage.base_dir / "activities.csv"
+                    acts_info = pd.DataFrame()
+                    if acts_info_path.exists():
+                        acts_info = (
+                            pd.read_csv(acts_info_path, usecols=["activityId", "name"])
+                            if "activityId" in pd.read_csv(acts_info_path, nrows=0).columns
+                            else pd.DataFrame()
+                        )
+                    if not acts_info.empty:
+                        shifts_df["activityId"] = shifts_df["activityId"].astype(str)
+                        acts_info["activityId"] = acts_info["activityId"].astype(str)
+                        shifts_df = shifts_df.merge(acts_info, on="activityId", how="left")
+                    shifts_df["name"] = shifts_df.get("name", pd.Series(index=shifts_df.index)).fillna("")
+                    shifts_df["activityLabel"] = shifts_df.apply(
+                        lambda row: row["name"] if str(row["name"]).strip() else str(row["activityId"]),
+                        axis=1,
+                    )
+                    shifts_df["dateLabel"] = shifts_df["date"].dt.strftime("%Y-%m-%d")
+                    shifts_df = shifts_df.sort_values(["date", "activityId"]).reset_index(drop=True)
+
+                    line = (
+                        alt.Chart(shifts_df)
+                        .mark_line(color="#1d4ed8", strokeWidth=2)
+                        .encode(
+                            x=alt.X("date:T", title="Date"),
+                            y=alt.Y("hrSpeedShift:Q", title="Décalage HR (échantillons)"),
+                        )
+                    )
+                    points = (
+                        alt.Chart(shifts_df)
+                        .mark_circle(size=70, opacity=0.9)
+                        .encode(
+                            x=alt.X("date:T", title="Date"),
+                            y=alt.Y("hrSpeedShift:Q", title="Décalage HR (échantillons)"),
+                            color=alt.Color("category:N", title="Type"),
+                            tooltip=[
+                                alt.Tooltip("activityLabel:N", title="Activité"),
+                                alt.Tooltip("dateLabel:N", title="Date"),
+                                alt.Tooltip("category:N", title="Type"),
+                                alt.Tooltip("hrSpeedShift:Q", title="HR shift", format=".0f"),
+                                alt.Tooltip("avgHr:Q", title="FC moy (bpm)", format=".1f"),
+                                alt.Tooltip("speedKmh:Q", title="Vitesse (km/h)", format=".2f"),
+                                alt.Tooltip("speedEqKmh:Q", title="Vitesse eq (km/h)", format=".2f"),
+                                alt.Tooltip("distanceKm:Q", title="Distance (km)", format=".2f"),
+                                alt.Tooltip("distanceEqKm:Q", title="Dist. eq (km)", format=".2f"),
+                                alt.Tooltip("timeSec:Q", title="Temps (s)", format=".0f"),
+                                alt.Tooltip("ascentM:Q", title="D+ (m)", format=".0f"),
+                                alt.Tooltip("trimp:Q", title="TRIMP", format=".1f"),
+                            ],
+                        )
+                    )
+                    st.altair_chart(
+                        alt.layer(line, points).properties(height=340, width=CHART_WIDTH),
+                        use_container_width=True,
+                    )
 
 # --- Max Speed Profile ---
 with tab_speed_profile:

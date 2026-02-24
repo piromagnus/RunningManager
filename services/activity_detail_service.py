@@ -77,6 +77,7 @@ class ActivitySummary:
     avg_hr: Optional[float]
     trimp: Optional[float]
     distance_eq_km: Optional[float]
+    hr_speed_shift: Optional[int]
 
 
 @dataclass(frozen=True)
@@ -167,6 +168,7 @@ class ActivityDetailService:
             avg_hr=safe_float_optional(activity.get("avgHr")),
             trimp=safe_float_optional((metrics_row or {}).get("trimp")),
             distance_eq_km=safe_float_optional((metrics_row or {}).get("distanceEqKm")),
+            hr_speed_shift=safe_int_optional((metrics_row or {}).get("hrSpeedShift")),
         )
 
         comparison = None

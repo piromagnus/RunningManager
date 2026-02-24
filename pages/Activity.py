@@ -271,6 +271,7 @@ def _render_summary(detail: ActivityDetail) -> None:
             "Dist. équiv.",
             fmt_decimal(summary.distance_eq_km, 1) if summary.distance_eq_km is not None else "-",
         ),
+        ("HR shift", str(summary.hr_speed_shift) if summary.hr_speed_shift is not None else "-"),
     ]
     cols = st.columns(len(metrics))
     for (label, value), col in zip(metrics, cols):
