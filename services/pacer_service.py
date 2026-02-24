@@ -352,13 +352,15 @@ class PacerService:
         Returns:
             Race ID
         """
-        return self.race_persistence.save_race(
+        saved_race_id = self.race_persistence.save_race(
             race_name,
             aid_stations_km,
             segments_df,
             race_id=race_id,
             aid_stations_times=aid_stations_times,
         )
+        self.activity_comparison.invalidate_comparison_cache(race_id=saved_race_id)
+        return saved_race_id
 
     def load_race(
         self, race_id: str
@@ -383,19 +385,25 @@ class PacerService:
         return self.race_persistence.list_races()
 
     def compare_race_segments_with_activity(
-        self, race_id: str, activity_timeseries_df: pd.DataFrame
+        self,
+        race_id: str,
+        activity_id: str,
+        activity_timeseries_df: pd.DataFrame,
     ) -> Optional[pd.DataFrame]:
         """Compare planned race segments with actual activity performance.
 
         Args:
             race_id: Race ID to load planned segments from
+            activity_id: Activity ID used for cache keying
             activity_timeseries_df: Activity timeseries DataFrame with cumulated_distance, timestamp, paceKmh
 
         Returns:
             DataFrame with comparison metrics for each segment, or None if race not found
         """
         return self.activity_comparison.compare_race_segments_with_activity(
-            race_id, activity_timeseries_df
+            race_id,
+            activity_id,
+            activity_timeseries_df,
         )
 
     def link_race_to_activity(self, activity_id: str, race_id: str) -> str:

@@ -44,6 +44,7 @@ apply_theme()
 - Week navigation and session CRUD
 - Template apply/save actions
 - Interval editor integration
+- Uses `recompute_planned_incremental(athlete_id, affected_date)` after session/template writes
 - State prefix: `planner_*`
 
 ### Activities.py
@@ -53,9 +54,17 @@ apply_theme()
 - Navigation to Activity detail
 
 ### Activity.py
-- Elevation profile with grade coloring
-- Timeseries charts (HR, pace, elevation)
+- Tabbed layout:
+  - `🫀 Zones HR`
+  - `📈 Cluster / Profil / QQ`
+  - `🗺️ Élévation & Carte`
 - Comparison panel for planned vs actual
+- Action buttons: `Recalculer métriques` and `Associer une séance`
+- Per-activity HR cluster means chart (speed/speed-eq toggle + std bars)
+- Cluster regression line is red with displayed equation
+- QQ-line row for HR, speed, and speed-eq
+- HR zones loaded lazily (`get_or_compute_zones`) when summary is missing
+- Pacing comparison uses on-disk cache + spinner feedback
 
 ### Analytics.py
 - Weekly/daily planned vs actual bars
@@ -68,6 +77,7 @@ apply_theme()
 - Metrics recomputation trigger
 - Distance-equivalent factor configuration
 - Bike/ski DistEq factors
+- Strava sync/rebuild now refresh metrics dependencies and HR zones automatically
 
 ## State Management
 

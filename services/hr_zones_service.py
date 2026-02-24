@@ -147,10 +147,23 @@ class HrZonesService:
     def get_or_compute_zones(self, activity_id: str) -> Optional[tuple[pd.DataFrame, pd.DataFrame]]:
         """Return per-sample zone assignments from persisted borders and summary."""
         summary = self.load_zone_summary(activity_id)
-        if summary is None or summary.empty:
-            return None
         borders = self.load_zone_borders(activity_id)
-        if borders is None:
+        if summary is None or summary.empty or borders is None:
+            athlete_id, activity_date = self._load_activity_context(activity_id)
+            if athlete_id and activity_date:
+                last_computed = self._find_last_zone_date(
+                    athlete_id=athlete_id,
+                    before_date=activity_date,
+                )
+                from_date = last_computed or activity_date
+                self.backfill_borders_from_date(
+                    athlete_id=athlete_id,
+                    from_date=from_date,
+                    to_date=activity_date,
+                )
+                summary = self.load_zone_summary(activity_id)
+                borders = self.load_zone_borders(activity_id)
+        if summary is None or summary.empty or borders is None:
             return None
         ts_df = self._prepare_activity_timeseries(activity_id)
         if ts_df is None:
@@ -187,24 +200,42 @@ class HrZonesService:
             return 0
         target_df["sort_date"] = pd.to_datetime(target_df.get("startDate"), errors="coerce")
         target_df = target_df.sort_values(["sort_date", "activityId"])
-        updated = 0
-        for idx, row in target_df.iterrows():
-            activity_id = str(row.get("activityId") or "").strip()
-            if not activity_id:
-                continue
-            row_athlete_id = str(row.get("athleteId") or "").strip() or None
-            row_date = pd.to_datetime(row.get("startDate"), errors="coerce")
-            payload = self.compute_and_store_borders(
-                activity_id,
-                athlete_id=row_athlete_id,
-                activity_date=row_date.date() if pd.notna(row_date) else None,
-                hr_speed_shift=row.get("hrSpeedShift"),
-            )
-            if payload is None:
-                continue
-            for key, value in payload.items():
-                working.at[idx, key] = value
-            updated += 1
+        working, updated = self._backfill_target_rows(working, target_df)
+        self.storage.write_csv("activities_metrics.csv", working)
+        return updated
+
+    def backfill_borders_from_date(
+        self,
+        athlete_id: str,
+        from_date: dt.date,
+        to_date: Optional[dt.date] = None,
+    ) -> int:
+        """Backfill zone borders for activities in a date window.
+
+        Args:
+            athlete_id: Athlete identifier.
+            from_date: Lower inclusive bound.
+            to_date: Optional upper inclusive bound. If omitted, processes until latest activity.
+        """
+        if not athlete_id:
+            return 0
+        metrics_df = self.storage.read_csv("activities_metrics.csv")
+        if metrics_df.empty or "activityId" not in metrics_df.columns:
+            return 0
+        metrics_df = self._ensure_border_columns(metrics_df)
+        working = metrics_df.copy()
+        target_df = working[working.get("athleteId", "").astype(str) == str(athlete_id)].copy()
+        if target_df.empty:
+            return 0
+        target_df["sort_date"] = pd.to_datetime(target_df.get("startDate"), errors="coerce")
+        target_df = target_df[target_df["sort_date"].notna()]
+        target_df = target_df[target_df["sort_date"].dt.date >= from_date]
+        if to_date is not None:
+            target_df = target_df[target_df["sort_date"].dt.date <= to_date]
+        if target_df.empty:
+            return 0
+        target_df = target_df.sort_values(["sort_date", "activityId"])
+        working, updated = self._backfill_target_rows(working, target_df)
         self.storage.write_csv("activities_metrics.csv", working)
         return updated
 
@@ -761,3 +792,49 @@ class HrZonesService:
             if col not in out.columns:
                 out[col] = pd.Series(dtype="object")
         return out
+
+    def _backfill_target_rows(
+        self,
+        working: pd.DataFrame,
+        target_df: pd.DataFrame,
+    ) -> tuple[pd.DataFrame, int]:
+        updated = 0
+        for idx, row in target_df.iterrows():
+            activity_id = str(row.get("activityId") or "").strip()
+            if not activity_id:
+                continue
+            row_athlete_id = str(row.get("athleteId") or "").strip() or None
+            row_date = pd.to_datetime(row.get("startDate"), errors="coerce")
+            payload = self.compute_and_store_borders(
+                activity_id,
+                athlete_id=row_athlete_id,
+                activity_date=row_date.date() if pd.notna(row_date) else None,
+                hr_speed_shift=row.get("hrSpeedShift"),
+            )
+            if payload is None:
+                continue
+            for key, value in payload.items():
+                working.at[idx, key] = value
+            updated += 1
+        return working, updated
+
+    def _find_last_zone_date(self, athlete_id: str, before_date: dt.date) -> Optional[dt.date]:
+        metrics_df = self.storage.read_csv("activities_metrics.csv")
+        if (
+            metrics_df.empty
+            or "athleteId" not in metrics_df.columns
+            or "startDate" not in metrics_df.columns
+            or "hrZone_z1_upper" not in metrics_df.columns
+        ):
+            return None
+        working = metrics_df[metrics_df["athleteId"].astype(str) == str(athlete_id)].copy()
+        if working.empty:
+            return None
+        working["date"] = pd.to_datetime(working["startDate"], errors="coerce").dt.date
+        working["z1"] = pd.to_numeric(working["hrZone_z1_upper"], errors="coerce")
+        working = working[
+            working["date"].notna() & working["z1"].notna() & (working["date"] < before_date)
+        ]
+        if working.empty:
+            return None
+        return working["date"].max()

@@ -10,12 +10,14 @@ import streamlit as st
 from streamlit.logger import get_logger
 
 from graph.elevation import prepare_elevation_plot_data, render_elevation_profile, render_grade_histogram
+from graph.hr_cluster import create_activity_cluster_chart
 from graph.hr_zones import (
     render_hr_zones_timeseries,
     render_zone_speed_table,
     render_zone_time_bars,
 )
 from graph.pacer_comparison import render_comparison_elevation_profile, render_delta_bar_chart
+from graph.qq_lines import create_qq_line_chart
 from graph.speed_profile import create_speed_profile_chart
 from graph.timeseries import render_timeseries_charts
 from persistence.csv_storage import CsvStorage
@@ -23,6 +25,8 @@ from persistence.repositories import ActivitiesRepo, PlannedSessionsRepo
 from services.activity_detail_service import ActivityDetail, ActivityDetailService
 from services.hr_zones_service import HrZonesService
 from services.interval_comparison_service import IntervalComparisonService, LapSegment
+from services.linking_service import LinkingService
+from services.metrics_service import MetricsComputationService
 from services.pacer_service import PacerService
 from services.speed_profile_service import SpeedProfileService
 from services.timeseries_service import TimeseriesService
@@ -68,6 +72,8 @@ def main() -> None:
     detail_service = ActivityDetailService(storage, cfg, ts_service)
     pacer_service = PacerService(storage, cfg)
     activities_repo = ActivitiesRepo(storage)
+    link_service = LinkingService(storage)
+    metrics_service = MetricsComputationService(storage, config=cfg)
     planned_sessions_repo = PlannedSessionsRepo(storage)
     interval_comparison_service = IntervalComparisonService(storage, cfg)
 
@@ -106,6 +112,7 @@ def main() -> None:
         st.caption(detail.description)
 
     _render_summary(detail)
+    _render_activity_actions(detail, activities_repo, link_service, metrics_service)
     render_comparison_panel(detail.comparison, detail.match_score)
 
     # Race pacing link section
@@ -114,6 +121,7 @@ def main() -> None:
     linked_race_id = _render_race_pacing_link(
         activity_id_str, athlete_id, activities_repo, pacer_service, ts_service, detail
     )
+    _render_timeseries_section(ts_service, speed_profile_service, detail.activity_id)
 
     linked_planned_session = (
         planned_sessions_repo.get(detail.planned_session_id) if detail.planned_session_id else None
@@ -121,7 +129,7 @@ def main() -> None:
     planned_session_type = str((linked_planned_session or {}).get("type") or "").strip().upper()
     show_interval_tab = planned_session_type == "INTERVAL_SIMPLE"
 
-    tab_labels = ["📊 Time series"]
+    tab_labels = ["🫀 Zones HR", "📈 Cluster / Profil / QQ", "🗺️ Élévation & Carte"]
     if show_interval_tab:
         tab_labels.append("🏁 Intervalles")
     if linked_race_id:
@@ -130,9 +138,18 @@ def main() -> None:
     tabs = st.tabs(tab_labels)
     tab_index = 0
     with tabs[tab_index]:
-        _render_timeseries_section(ts_service, speed_profile_service, detail.activity_id)
-        _render_speed_profile_section(speed_profile_service, detail.activity_id)
         _render_hr_zones_section(hr_zones_service, detail.activity_id)
+    tab_index += 1
+    with tabs[tab_index]:
+        _render_cluster_profile_qq_section(ts_service, speed_profile_service, detail.activity_id)
+    tab_index += 1
+    with tabs[tab_index]:
+        _render_elevation_and_map_section(
+            detail=detail,
+            ts_service=ts_service,
+            speed_profile_service=speed_profile_service,
+            mapbox_token=mapbox_token,
+        )
     tab_index += 1
 
     if show_interval_tab and linked_planned_session is not None:
@@ -148,9 +165,93 @@ def main() -> None:
         with tabs[tab_index]:
             _render_pacing_comparison(activity_id_str, linked_race_id, pacer_service, ts_service)
 
-    st.subheader("Trace sur la carte")
-    map_choice = _select_map_style(mapbox_token)
-    _render_map(detail, map_choice, mapbox_token)
+
+def _render_activity_actions(
+    detail: ActivityDetail,
+    activities_repo: ActivitiesRepo,
+    link_service: LinkingService,
+    metrics_service: MetricsComputationService,
+) -> None:
+    col_recompute, col_link = st.columns(2)
+    with col_recompute:
+        if st.button("Recalculer métriques", key=f"activity-recompute-{detail.activity_id}"):
+            try:
+                metrics_service.recompute_single_activity(detail.activity_id)
+                st.success("Métriques recalculées.")
+                st.rerun()
+            except Exception as exc:
+                logger.error("Failed to recompute metrics for activity %s: %s", detail.activity_id, exc)
+                st.error(f"Impossible de recalculer les métriques : {exc}")
+    with col_link:
+        if detail.planned_session_id:
+            st.caption("Séance déjà associée à cette activité.")
+        elif st.button("Associer une séance", key=f"activity-link-{detail.activity_id}"):
+            _open_activity_link_dialog(detail, activities_repo, link_service)
+
+
+def _open_activity_link_dialog(
+    detail: ActivityDetail,
+    activities_repo: ActivitiesRepo,
+    link_service: LinkingService,
+) -> None:
+    factory = get_dialog_factory()
+    if not factory:
+        st.warning("Version de Streamlit sans prise en charge des dialogues.")
+        return
+
+    @factory("Associer une séance planifiée")
+    def _dialog() -> None:
+        activity_row = activities_repo.get(detail.activity_id)
+        if not activity_row:
+            st.error("Impossible de charger l'activité pour créer le lien.")
+            return
+        suggestions = link_service.suggest_for_activity(
+            detail.athlete_id,
+            pd.Series(activity_row),
+            window_days=14,
+        )
+        if not suggestions:
+            st.info("Aucune séance candidate dans la fenêtre ±14 jours.")
+            return
+        selected_idx = st.radio(
+            "Séances correspondantes",
+            list(range(len(suggestions))),
+            format_func=lambda idx: _format_planned_suggestion_label(suggestions[idx]),
+            index=0,
+            key=f"activity-link-radio-{detail.activity_id}",
+        )
+        selected_id = str(suggestions[selected_idx]["plannedSessionId"])
+        if st.button("Associer cette séance", type="primary", key=f"activity-link-confirm-{detail.activity_id}"):
+            try:
+                link_service.create_link(
+                    athlete_id=detail.athlete_id,
+                    activity_id=detail.activity_id,
+                    planned_session_id=selected_id,
+                    window_days=14,
+                )
+                st.success("Séance liée avec succès.")
+                st.rerun()
+            except Exception as exc:
+                st.error(f"Impossible de créer le lien : {exc}")
+
+    _dialog()
+
+
+def _format_planned_suggestion_label(candidate: dict[str, object]) -> str:
+    date_value = pd.to_datetime(candidate.get("date"), errors="coerce")
+    if pd.notna(date_value):
+        date_label = date_value.strftime("%d/%m/%Y")
+    else:
+        date_label = "-"
+    type_label = str(candidate.get("type") or "-")
+    distance = fmt_km(candidate.get("plannedDistanceKm")) if candidate.get("plannedDistanceKm") else "-"
+    duration = format_duration(candidate.get("plannedDurationSec"), include_seconds=True)
+    score_raw = pd.to_numeric(pd.Series([candidate.get("score")]), errors="coerce").iloc[0]
+    if pd.notna(score_raw):
+        score_label = f"{fmt_decimal(float(score_raw) * 100.0, 1)}%"
+    else:
+        score_label = "-"
+    return f"{date_label} · {type_label} · {distance} · {duration} · {score_label}"
 
 
 def _render_race_pacing_link(
@@ -427,8 +528,13 @@ def _render_pacing_comparison(
         st.warning("Impossible de prétraiter les données timeseries.")
         return
 
-    # Compare segments
-    comparison_df = pacer_service.compare_race_segments_with_activity(race_id, timeseries_df)
+    # Compare segments (cached on disk by race/activity pair).
+    with st.spinner("Calcul de la comparaison pacing vs réel..."):
+        comparison_df = pacer_service.compare_race_segments_with_activity(
+            race_id,
+            activity_id,
+            timeseries_df,
+        )
     if comparison_df is None or comparison_df.empty:
         st.warning(
             "Impossible de comparer les segments."
@@ -611,9 +717,6 @@ def _render_timeseries_section(
     charts = render_timeseries_charts(ts_service, activity_id, speed_profile_service)
     if charts:
         _render_timeseries_grid(charts)
-        df = ts_service.load(activity_id)
-        if df is not None and not df.empty and "lat" in df.columns and "lon" in df.columns:
-            _render_elevation_profile(df, speed_profile_service, activity_id)
     else:
         st.caption("Pas de données timeseries pour cette activité.")
 
@@ -640,6 +743,123 @@ def _render_timeseries_grid(charts: dict[str, object]) -> None:
             st.altair_chart(speed_eq_chart, use_container_width=True)
         elif "speed" in charts:
             st.caption("SpeedEq indisponible (données GPS insuffisantes).")
+
+
+def _render_activity_cluster_section(ts_service: TimeseriesService, activity_id: str) -> None:
+    st.subheader("Clusters FC / Vitesse")
+    metrics_ts_df = ts_service.load_metrics_ts(activity_id)
+    if metrics_ts_df is None or metrics_ts_df.empty:
+        st.caption("Données de cluster indisponibles.")
+        return
+    speed_mode = st.radio(
+        "Métrique vitesse",
+        ["Vitesse", "Vitesse équivalente"],
+        horizontal=True,
+        key=f"activity-cluster-speed-mode-{activity_id}",
+    )
+    speed_type = "speedeq" if speed_mode == "Vitesse équivalente" else "speed"
+    chart = create_activity_cluster_chart(metrics_ts_df, speed_type=speed_type, chart_width=CHART_WIDTH)
+    if chart is None:
+        st.caption("Données de cluster indisponibles.")
+        return
+    st.altair_chart(chart, use_container_width=True)
+
+
+def _render_cluster_profile_qq_section(
+    ts_service: TimeseriesService,
+    speed_profile_service: SpeedProfileService,
+    activity_id: str,
+) -> None:
+    st.subheader("Clusters FC / Vitesse")
+    metrics_ts_df = _load_or_compute_metrics_ts(ts_service, speed_profile_service, activity_id)
+    if metrics_ts_df is None or metrics_ts_df.empty:
+        st.caption("Données de cluster indisponibles.")
+    else:
+        speed_mode = st.radio(
+            "Métrique vitesse",
+            ["Vitesse", "Vitesse équivalente"],
+            horizontal=True,
+            key=f"activity-cluster-speed-mode-{activity_id}",
+        )
+        speed_type = "speedeq" if speed_mode == "Vitesse équivalente" else "speed"
+        chart = create_activity_cluster_chart(metrics_ts_df, speed_type=speed_type, chart_width=CHART_WIDTH)
+        if chart is None:
+            st.caption("Données de cluster indisponibles.")
+        else:
+            st.altair_chart(chart, use_container_width=True)
+
+    _render_speed_profile_section(speed_profile_service, activity_id)
+
+    st.subheader("QQ-lines")
+    _render_qq_lines_section(metrics_ts_df)
+
+
+def _load_or_compute_metrics_ts(
+    ts_service: TimeseriesService,
+    speed_profile_service: SpeedProfileService,
+    activity_id: str,
+) -> pd.DataFrame | None:
+    metrics_ts_df = ts_service.load_metrics_ts(activity_id)
+    if metrics_ts_df is not None and not metrics_ts_df.empty:
+        return metrics_ts_df
+    try:
+        speed_profile_service.compute_all_metrics_ts(activity_id)
+    except Exception as exc:
+        logger.debug("Unable to compute metrics_ts for %s: %s", activity_id, exc)
+    metrics_ts_df = ts_service.load_metrics_ts(activity_id)
+    if metrics_ts_df is None or metrics_ts_df.empty:
+        return None
+    return metrics_ts_df
+
+
+def _render_qq_lines_section(metrics_ts_df: pd.DataFrame | None) -> None:
+    if metrics_ts_df is None or metrics_ts_df.empty:
+        st.caption("Données QQ indisponibles.")
+        return
+
+    hr_series = (
+        metrics_ts_df["hr_shifted"]
+        if "hr_shifted" in metrics_ts_df.columns
+        else metrics_ts_df["hr_smooth"]
+        if "hr_smooth" in metrics_ts_df.columns
+        else pd.Series(dtype=float)
+    )
+    speed_series = (
+        metrics_ts_df["speed_smooth"]
+        if "speed_smooth" in metrics_ts_df.columns
+        else pd.Series(dtype=float)
+    )
+    speed_eq_series = (
+        metrics_ts_df["speedeq_smooth"]
+        if "speedeq_smooth" in metrics_ts_df.columns
+        else pd.Series(dtype=float)
+    )
+
+    hr_chart = create_qq_line_chart(hr_series, title="HR", chart_width=300, chart_height=230)
+    speed_chart = create_qq_line_chart(speed_series, title="Vitesse", chart_width=300, chart_height=230)
+    speed_eq_chart = create_qq_line_chart(
+        speed_eq_series,
+        title="Vitesse équivalente",
+        chart_width=300,
+        chart_height=230,
+    )
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        if hr_chart is not None:
+            st.altair_chart(hr_chart, use_container_width=True)
+        else:
+            st.caption("QQ-line HR indisponible.")
+    with col2:
+        if speed_chart is not None:
+            st.altair_chart(speed_chart, use_container_width=True)
+        else:
+            st.caption("QQ-line vitesse indisponible.")
+    with col3:
+        if speed_eq_chart is not None:
+            st.altair_chart(speed_eq_chart, use_container_width=True)
+        else:
+            st.caption("QQ-line vitesse équivalente indisponible.")
 
 
 def _render_speed_profile_section(
@@ -695,6 +915,24 @@ def _render_hr_zones_section(hr_zones_service: HrZonesService, activity_id: str)
         st.caption("Aucune statistique de vitesse disponible par zone.")
     else:
         st.dataframe(speed_table, use_container_width=True)
+
+
+def _render_elevation_and_map_section(
+    detail: ActivityDetail,
+    ts_service: TimeseriesService,
+    speed_profile_service: SpeedProfileService,
+    mapbox_token: str | None,
+) -> None:
+    st.subheader("Profil d'élévation")
+    df = ts_service.load(detail.activity_id)
+    if df is not None and not df.empty and "lat" in df.columns and "lon" in df.columns:
+        _render_elevation_profile(df, speed_profile_service, detail.activity_id)
+    else:
+        st.caption("Données insuffisantes pour le profil d'élévation.")
+
+    st.subheader("Trace sur la carte")
+    map_choice = _select_map_style(mapbox_token)
+    _render_map(detail, map_choice, mapbox_token)
 
 
 def _select_map_style(mapbox_token: str | None) -> dict:

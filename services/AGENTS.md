@@ -33,7 +33,7 @@ Domain services for planning, analytics, metrics, and external integrations.
 | `pacer/preprocessing.py` | Pacer GPX preprocessing |
 | `pacer/aid_station_stats.py` | Aid station stats helpers |
 | `pacer/race_persistence.py` | Race pacing CSV persistence |
-| `pacer/activity_comparison.py` | Planned vs actual comparison + linking |
+| `pacer/activity_comparison.py` | Planned vs actual comparison, cache, linking |
 | `pacer/__init__.py` | PacerService facade |
 | `planner_presenter.py` | Week planning presentation layer |
 | `serialization.py` | JSON serialization utilities |
@@ -50,6 +50,9 @@ Domain services for planning, analytics, metrics, and external integrations.
 - `recompute_all(athlete_id=None)`: Full pipeline recomputation
 - `recompute_athlete(athlete_id)`: Single athlete recomputation
 - `recompute_for_activities(activity_ids)`: Incremental recomputation
+- `recompute_planned_incremental(athlete_id, affected_date)`: Planned + weekly incremental rebuild
+- `_ensure_dependencies(activity_ids)`: Ensure `metrics_ts`, speed profile, and lap metrics exist
+- `_ensure_hr_zones(activity_ids)`: Backfill missing HR zone borders from earliest impacted date
 
 Key metrics:
 - `distanceEqKm = distanceKm + ascentM * distanceEqFactor`
@@ -58,9 +61,15 @@ Key metrics:
 
 ### StravaService
 - `authorization_url(state)`: OAuth initiation
-- `exchange_code(code)`: Token exchange
-- `sync_activities(athlete_id)`: Incremental sync
-- `rebuild_cache(athlete_id)`: Full cache rebuild
+- `exchange_code(athlete_id, code)`: Token exchange
+- `sync_last_n_days(athlete_id, days)`: Incremental sync with dependency + zone refresh
+- `rebuild_from_cache(athlete_id)`: Cache rebuild with single metrics pass
+- Sync/rebuild now ensure `metrics_ts` + speed profile + lap metrics + HR zones
+
+### HrZonesService
+- `backfill_all_borders(athlete_id=None)`: Full zone-border rebuild
+- `backfill_borders_from_date(athlete_id, from_date, to_date=None)`: Incremental backfill window
+- `get_or_compute_zones(activity_id)`: Loads zones or lazily backfills missing summaries
 
 ### AnalyticsService
 - `load_weekly_data(athlete_id, weeks)`: Weekly aggregates
@@ -80,6 +89,11 @@ Key metrics:
 - `load(activity_id)`: Load raw timeseries DataFrame
 - `load_metrics_ts(activity_id)`: Load cached metrics_ts DataFrame
 - `has_elevation_metrics(activity_id)`: Check if cached elevation metrics are available
+
+### PacerService
+- `save_race(...)`: Persists race and invalidates comparison cache for this race
+- `compare_race_segments_with_activity(race_id, activity_id, timeseries_df)`: Uses on-disk cache
+- Link/unlink race-to-activity invalidates cached comparisons for that activity
 
 ## Session Types
 

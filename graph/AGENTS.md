@@ -11,6 +11,8 @@ Visualization components using Altair and Matplotlib.
 | `elevation.py` | Elevation profile with grade coloring |
 | `timeseries.py` | Activity timeseries (HR, speed, elevation, SpeedEq) |
 | `hr_speed.py` | HR vs Speed scatter with regression |
+| `hr_cluster.py` | Per-activity HR cluster means with std bars |
+| `qq_lines.py` | QQ-line charts for HR/speed/speedEq distributions |
 | `speed_scatter.py` | SpeedEq scatter visualization |
 | `speed_profile.py` | Speed profile charts |
 | `pacer_comparison.py` | Race pacing comparison charts |
@@ -53,6 +55,11 @@ GRADE_COLOR_MAPPING = {
 ### hr_speed.py
 - `render_hr_speed_scatter(df)`: Weighted regression scatter
 - Shows HR vs Speed relationship
+
+### hr_cluster.py
+- `create_activity_cluster_chart(metrics_ts_df, speed_type)`: Per-activity cluster means
+- Renders horizontal + vertical std bars ("moustaches") on mean points
+- Adds robust linear regression with outlier detection + displayed equation
 
 ## Chart Patterns
 

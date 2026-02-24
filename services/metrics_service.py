@@ -25,11 +25,14 @@ from persistence.repositories import (
     SettingsRepo,
     WeeklyMetricsRepo,
 )
+from services.hr_zones_service import HrZonesService
 from services.interval_utils import normalize_steps
+from services.lap_metrics_service import LapMetricsService
 from services.planner_service import PlannerService
 from services.speed_profile_service import SpeedProfileService
+from services.timeseries_service import TimeseriesService
 from utils.coercion import safe_float, safe_int
-from utils.config import load_config
+from utils.config import Config, load_config
 from utils.constants import TRAINING_LOAD_CATEGORIES
 from utils.metrics_formulas import compute_trimp_hr_reserve_from_profile
 from utils.time import iso_week_start, to_date
@@ -38,6 +41,11 @@ from utils.time import iso_week_start, to_date
 @dataclass
 class MetricsComputationService:
     storage: CsvStorage
+    config: Optional[Config] = None
+    speed_profile_service: Optional[SpeedProfileService] = None
+    timeseries_service: Optional[TimeseriesService] = None
+    lap_metrics_service: Optional[LapMetricsService] = None
+    hr_zones_service: Optional[HrZonesService] = None
 
     def __post_init__(self) -> None:
         self.activities = ActivitiesRepo(self.storage)
@@ -49,8 +57,11 @@ class MetricsComputationService:
         self.daily_repo = DailyMetricsRepo(self.storage)
         self.athletes = AthletesRepo(self.storage)
         self.planner = PlannerService(self.storage)
-        self.config = load_config()
-        self.speed_profile_service = SpeedProfileService(self.config)
+        self.config = self.config or load_config()
+        self.speed_profile_service = self.speed_profile_service or SpeedProfileService(self.config)
+        self.timeseries_service = self.timeseries_service or TimeseriesService(self.config)
+        self.lap_metrics_service = self.lap_metrics_service or LapMetricsService(self.storage, self.config)
+        self._hr_zones_service_override = self.hr_zones_service
         self._bike_eq_cache: Optional[Tuple[float, float, float]] = None
         self._ski_eq_cache: Optional[Tuple[float, float, float]] = None
 
@@ -58,10 +69,16 @@ class MetricsComputationService:
     # Public API
     def recompute_all(self, athlete_id: Optional[str] = None) -> None:
         athlete_ids = list(self._target_athletes(athlete_id))
+        activity_ids = self._activity_ids_for_athletes(athlete_ids)
+        self._ensure_dependencies(activity_ids)
         self._recompute_for_athletes(athlete_ids, replace_all=athlete_id is None)
+        self._ensure_hr_zones(activity_ids)
 
     def recompute_athlete(self, athlete_id: str) -> None:
+        activity_ids = self._activity_ids_for_athletes([athlete_id])
+        self._ensure_dependencies(activity_ids)
         self._recompute_for_athletes([athlete_id], replace_all=False)
+        self._ensure_hr_zones(activity_ids)
 
     def recompute_for_activities(self, activity_ids: Sequence[str]) -> None:
         """Recompute metrics for specific activities only.
@@ -80,6 +97,8 @@ class MetricsComputationService:
         subset = df[df["activityId"].astype(str).isin(activity_id_set)]
         if subset.empty or "athleteId" not in subset.columns:
             return
+
+        self._ensure_dependencies(sorted(activity_id_set))
 
         hr_profiles = self._load_hr_profiles()
         athlete_ids = sorted(set(subset["athleteId"].astype(str)))
@@ -143,6 +162,7 @@ class MetricsComputationService:
 
             self._persist_frame(self.weekly_repo, [weekly_df], {athlete_id}, replace_all=False)
             self._persist_frame(self.daily_repo, [daily_df], {athlete_id}, replace_all=False)
+        self._ensure_hr_zones(sorted(activity_id_set))
 
     def recompute_single_activity(self, activity_id: str) -> None:
         if not activity_id:
@@ -155,6 +175,7 @@ class MetricsComputationService:
         target = activities_df[activities_df["activityId"] == str(activity_id)]
         if target.empty:
             return
+        self._ensure_dependencies([activity_id])
         athlete_id = str(target.iloc[0].get("athleteId") or "")
         if not athlete_id:
             return
@@ -183,6 +204,7 @@ class MetricsComputationService:
         )
         self._persist_frame(self.weekly_repo, [weekly_df], {athlete_id}, replace_all=False)
         self._persist_frame(self.daily_repo, [daily_df], {athlete_id}, replace_all=False)
+        self._ensure_hr_zones([activity_id])
 
     def recompute_for_categories(
         self, categories: Sequence[str], athlete_id: Optional[str] = None
@@ -212,6 +234,17 @@ class MetricsComputationService:
         if not athlete_id:
             return
         planned_df = self.sessions.list(athleteId=athlete_id)
+        affected_date = dt.date.today()
+        if not planned_df.empty and "date" in planned_df.columns:
+            parsed = pd.to_datetime(planned_df["date"], errors="coerce").dropna().dt.date
+            if not parsed.empty:
+                affected_date = parsed.min()
+        self.recompute_planned_incremental(athlete_id, affected_date)
+
+    def recompute_planned_incremental(self, athlete_id: str, affected_date: dt.date) -> None:
+        if not athlete_id:
+            return
+        planned_df = self.sessions.list(athleteId=athlete_id)
         hr_profiles = self._load_hr_profiles()
         planned_metrics_df = self._compute_planned_metrics(
             athlete_id=athlete_id,
@@ -220,11 +253,13 @@ class MetricsComputationService:
         )
         self._persist_frame(self.planned_metrics, [planned_metrics_df], {athlete_id}, False)
 
+        start_date = to_date(affected_date) or dt.date.today()
         actual_metrics_df = self.activity_metrics.list(athleteId=athlete_id)
-        weekly_df = self._build_weekly_metrics(
+        weekly_df = self._build_weekly_metrics_from_date(
             athlete_id=athlete_id,
             actual_metrics_df=actual_metrics_df,
             planned_metrics_df=planned_metrics_df,
+            start_date=start_date,
         )
         self._persist_frame(self.weekly_repo, [weekly_df], {athlete_id}, False)
 
@@ -242,6 +277,161 @@ class MetricsComputationService:
             if not rdf.empty and "athleteId" in rdf.columns:
                 ids.update(rdf["athleteId"].astype(str))
         return sorted(ids)
+
+    def _activity_ids_for_athletes(self, athlete_ids: Sequence[str]) -> list[str]:
+        if not athlete_ids:
+            return []
+        df = self.activities.list()
+        if df.empty or "activityId" not in df.columns or "athleteId" not in df.columns:
+            return []
+        filtered = df[df["athleteId"].astype(str).isin({str(aid) for aid in athlete_ids})]
+        if filtered.empty:
+            return []
+        return sorted(filtered["activityId"].astype(str).dropna().unique().tolist())
+
+    def _ensure_dependencies(self, activity_ids: Sequence[str]) -> None:
+        """Compute metrics_ts, speed profile and lap metrics when missing."""
+        if not activity_ids:
+            return
+        activities_df = self.activities.list()
+        if activities_df.empty or "activityId" not in activities_df.columns:
+            return
+        wanted_ids = {str(activity_id) for activity_id in activity_ids}
+        subset = activities_df[activities_df["activityId"].astype(str).isin(wanted_ids)]
+        if subset.empty:
+            return
+        for _, row in subset.iterrows():
+            activity_id = str(row.get("activityId") or "").strip()
+            if not activity_id:
+                continue
+            has_timeseries = self._to_bool(row.get("hasTimeseries"))
+            if has_timeseries and (self.config.timeseries_dir / f"{activity_id}.csv").exists():
+                metrics_ts_path = self.config.metrics_ts_dir / f"{activity_id}.csv"
+                if not metrics_ts_path.exists():
+                    try:
+                        self.speed_profile_service.compute_all_metrics_ts(activity_id)
+                    except Exception:
+                        pass
+                speed_profile_path = self.config.speed_profile_dir / f"{activity_id}.csv"
+                if not speed_profile_path.exists():
+                    try:
+                        self.speed_profile_service.compute_and_store_speed_profile(activity_id)
+                    except Exception:
+                        pass
+
+            laps_path = self.config.laps_dir / f"{activity_id}.csv"
+            if laps_path.exists():
+                continue
+            athlete_id = str(row.get("athleteId") or "").strip()
+            if not athlete_id:
+                continue
+            detail = self._load_raw_activity_detail(row)
+            if detail is None:
+                continue
+            try:
+                self.lap_metrics_service.compute_and_store(athlete_id, detail)
+            except Exception:
+                pass
+
+    def _ensure_hr_zones(self, activity_ids: Sequence[str]) -> None:
+        """Backfill HR zone borders from the earliest impacted date per athlete."""
+        if not activity_ids:
+            return
+        activities_df = self.activities.list()
+        if activities_df.empty or "activityId" not in activities_df.columns:
+            return
+        subset = activities_df[
+            activities_df["activityId"].astype(str).isin({str(activity_id) for activity_id in activity_ids})
+        ]
+        if subset.empty or "athleteId" not in subset.columns:
+            return
+        earliest_per_athlete: dict[str, dt.date] = {}
+        for _, row in subset.iterrows():
+            athlete_id = str(row.get("athleteId") or "").strip()
+            activity_date = to_date(row.get("startTime"))
+            if not athlete_id or activity_date is None:
+                continue
+            current = earliest_per_athlete.get(athlete_id)
+            if current is None or activity_date < current:
+                earliest_per_athlete[athlete_id] = activity_date
+        if not earliest_per_athlete:
+            return
+        zone_service = self._zone_service()
+        for athlete_id, from_date in earliest_per_athlete.items():
+            if not self._needs_zone_backfill(athlete_id, from_date):
+                continue
+            try:
+                zone_service.backfill_borders_from_date(
+                    athlete_id=athlete_id,
+                    from_date=from_date,
+                )
+            except Exception:
+                pass
+
+    def _zone_service(self) -> HrZonesService:
+        if self._hr_zones_service_override is not None:
+            return self._hr_zones_service_override
+        zone_count, window_days = self._zone_params()
+        return HrZonesService(
+            storage=self.storage,
+            ts_service=self.timeseries_service,
+            speed_profile_service=self.speed_profile_service,
+            zone_count=zone_count,
+            window_days=window_days,
+        )
+
+    def _zone_params(self) -> tuple[int, int]:
+        settings = self.settings.get("coach-1") or {}
+        zone_count = max(2, min(5, safe_int(settings.get("hrZoneCount"), 5)))
+        window_days = max(1, safe_int(settings.get("hrZoneWindowDays"), 90))
+        return zone_count, window_days
+
+    def _needs_zone_backfill(self, athlete_id: str, from_date: dt.date) -> bool:
+        metrics_df = self.storage.read_csv("activities_metrics.csv")
+        if metrics_df.empty or "athleteId" not in metrics_df.columns:
+            return False
+        if "startDate" not in metrics_df.columns or "hrZone_z1_upper" not in metrics_df.columns:
+            return True
+        working = metrics_df[metrics_df["athleteId"].astype(str) == str(athlete_id)].copy()
+        if working.empty:
+            return False
+        working["startDate"] = pd.to_datetime(working["startDate"], errors="coerce").dt.date
+        working = working[working["startDate"].notna() & (working["startDate"] >= from_date)]
+        if working.empty:
+            return False
+        z1 = pd.to_numeric(working["hrZone_z1_upper"], errors="coerce")
+        return bool(z1.isna().any())
+
+    def _load_raw_activity_detail(self, row: pd.Series) -> Optional[dict[str, Any]]:
+        raw_json_path = row.get("rawJsonPath")
+        if not isinstance(raw_json_path, (str, bytes)):
+            return None
+        path_value = raw_json_path.decode() if isinstance(raw_json_path, (bytes, bytearray)) else raw_json_path
+        path_str = str(path_value).strip()
+        if not path_str:
+            return None
+        path = self.storage.base_dir / Path(path_str)
+        if not path.exists():
+            return None
+        try:
+            with path.open("r", encoding="utf-8") as fh:
+                detail = json.load(fh)
+            if isinstance(detail, dict):
+                detail.setdefault("id", str(row.get("activityId") or ""))
+                return detail
+        except Exception:
+            return None
+        return None
+
+    @staticmethod
+    def _to_bool(value: object) -> bool:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return bool(value)
+        if isinstance(value, str):
+            return value.strip().lower() in {"1", "true", "yes", "y"}
+        return False
 
     @staticmethod
     def _resolve_impacted_start_date(

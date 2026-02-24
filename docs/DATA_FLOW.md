@@ -19,7 +19,7 @@ Traces how data is gathered, computed, stored, and displayed for every user-faci
 10. [Race Pacer](#10-race-pacer)
 11. [Dashboard (Read-Only)](#11-dashboard-read-only)
 12. [Analytics (Read-Only)](#12-analytics-read-only)
-13. [Activity Detail Page (Read-Only)](#13-activity-detail-page-read-only)
+13. [Activity Detail Page (Detail + Actions)](#13-activity-detail-page-detail--actions)
 14. [Settings: Save Settings](#14-settings-save-settings)
 15. [CSV Modification Matrix](#15-csv-modification-matrix)
 
@@ -114,26 +114,34 @@ activities_metrics.csv ──→ daily_metrics.csv  (aggregated by date)
 Settings.py: st.button("Synchroniser les {sync_days} derniers jours")
   → strava_service.preview_sync_last_n_days(athlete_id, sync_days)   [optional preview]
   → strava_service.sync_last_n_days(athlete_id, sync_days)
-      → _sync_activities(athlete_id, after_ts)
-          ├── For each activity NOT in cache:
-          │     → Strava API: GET /athlete/activities (paginated)
-          │     → Strava API: GET /activities/{id}           (detail)
-          │     → Strava API: GET /activities/{id}/streams   (timeseries)
-          │     → Write raw/strava/{id}.json
-          │     → Write timeseries/{id}.csv
-          │     → _map_activity_row() → activities.csv row
-          │
-          ├── For each activity already in cache:
-          │     → Read raw/strava/{id}.json
-          │     → _map_activity_row() → activities.csv row  (if missing)
-          │
-          ├── lap_metrics.compute_and_store()                (per activity)
-          ├── speed_profile_service.compute_and_store()       (per activity with TS)
-          │
-          └── metrics_service.recompute_for_activities(new_ids)
-                → activities_metrics.csv  (new rows)
-                → daily_metrics.csv       (from earliest affected date)
-                → weekly_metrics.csv      (from earliest affected week)
+      ├── For each activity NOT in cache:
+      │     → Strava API: GET /athlete/activities (paginated)
+      │     → Strava API: GET /activities/{id}           (detail)
+      │     → Strava API: GET /activities/{id}/streams   (timeseries)
+      │     → Write raw/strava/{id}.json
+      │     → Write timeseries/{id}.csv
+      │     → lap_metrics.compute_and_store()
+      │     → _map_activity_row() → activities.csv row
+      │
+      ├── For each activity already in cache:
+      │     → Read raw/strava/{id}.json
+      │     → lap_metrics.compute_and_store() (best effort)
+      │     → _map_activity_row() → activities.csv row (if missing)
+      │
+      ├── metrics_service.recompute_for_activities(created_rows)      [pass 1]
+      │     → ensures missing dependencies (metrics_ts, speed profile, laps)
+      │     → updates activities_metrics/daily_metrics/weekly_metrics
+      │
+      ├── For each new activity with timeseries:
+      │     → speed_profile_service.compute_all_metrics_ts(id)
+      │     → speed_profile_service.compute_and_store_speed_profile(id)
+      │
+      ├── metrics_service.recompute_for_activities(created_rows)      [pass 2]
+      │     → refreshes hrSpeedShift after fresh metrics_ts
+      │
+      └── hr_zones_service.backfill_borders_from_date(athlete_id, earliest_new_date)
+            → recomputes zone borders for all activities from that date onward
+            → writes hr_zones/{id}.csv + hrZone_z*_upper columns
 ```
 
 ### Strava API Endpoints
@@ -184,9 +192,13 @@ Settings.py: st.button("Synchroniser les {sync_days} derniers jours")
 | `raw/strava/{id}.json` | Created (one per new activity) |
 | `timeseries/{id}.csv` | Created (one per activity with streams) |
 | `activities.csv` | Rows appended |
+| `laps/{id}.csv` | Created/updated when raw details include laps |
+| `metrics_ts/{id}.csv` | Created/updated for new activities with timeseries |
+| `speed_profil/{id}.csv` | Created/updated for new activities with timeseries |
 | `activities_metrics.csv` | Rows upserted |
 | `daily_metrics.csv` | Recomputed from earliest affected date |
 | `weekly_metrics.csv` | Recomputed from earliest affected week |
+| `hr_zones/{id}.csv` | Created/updated from earliest new activity date onward |
 
 ---
 
@@ -207,11 +219,12 @@ Settings.py: st.button("Reconstruire les activités depuis le cache Strava")
       4. Write full activities.csv
       5. Delete metrics_ts/{id}.csv  (for all cached activities)
       6. Delete speed_profil/{id}.csv (for all cached activities)
-      7. metrics_service.recompute_for_activities(activity_ids)
-      8. For each activity with timeseries:
+      7. For each activity with timeseries:
          → speed_profile_service.compute_all_metrics_ts(id)
          → speed_profile_service.compute_and_store_speed_profile(id)
-      9. metrics_service.recompute_for_activities(all_ids) [final pass]
+      8. metrics_service.recompute_for_activities(all_ids) [single pass]
+         → rebuilds activities_metrics/daily_metrics/weekly_metrics
+         → backfills missing HR zones from earliest impacted date
 ```
 
 ### Key Differences from Sync
@@ -223,7 +236,8 @@ Settings.py: st.button("Reconstruire les activités depuis le cache Strava")
 | Timeseries | Creates new | Keeps existing |
 | `metrics_ts/` | Not touched | Deleted and recomputed |
 | `speed_profil/` | Created for new | Deleted and recomputed |
-| Metrics passes | 1 pass (new IDs only) | 2 passes (before + after TS recompute) |
+| Metrics passes | 2 targeted passes on new IDs | 1 pass after full TS rebuild |
+| HR zones | Backfilled from earliest new activity date | Backfilled during incremental recompute |
 
 ### Files Written
 
@@ -235,6 +249,7 @@ Settings.py: st.button("Reconstruire les activités depuis le cache Strava")
 | `activities_metrics.csv` | Recomputed |
 | `daily_metrics.csv` | Recomputed |
 | `weekly_metrics.csv` | Recomputed |
+| `hr_zones/{id}.csv` | Created/updated for impacted date range |
 
 ---
 
@@ -247,6 +262,7 @@ Settings.py: st.button("Reconstruire les activités depuis le cache Strava")
 ```
 metrics_service.recompute_all(athlete_id=None)
   → _target_athletes()                          # All athletes
+  → _ensure_dependencies(all_activity_ids)      # metrics_ts + speed_profile + laps (if missing)
   → _recompute_for_athletes(ids, replace_all=True)
       For each athlete:
         → _load_hr_profiles()                    # athlete.csv (hrRest, hrMax)
@@ -255,11 +271,12 @@ metrics_service.recompute_all(athlete_id=None)
         → _build_weekly_metrics()                # Aggregate by ISO week
         → _build_daily_metrics()                 # Aggregate by day + rolling
         → _persist_frame() × 4                   # Write all CSVs
+  → _ensure_hr_zones(all_activity_ids)          # hr_zones backfill from earliest impacted date
 ```
 
-**Input CSVs:** `activities.csv`, `athlete.csv`, `settings.csv`, `planned_sessions.csv`, `thresholds.csv`, `timeseries/{id}.csv`
+**Input CSVs:** `activities.csv`, `athlete.csv`, `settings.csv`, `planned_sessions.csv`, `thresholds.csv`, `timeseries/{id}.csv`, `raw/strava/{id}.json`
 
-**Output CSVs:** `activities_metrics.csv`, `planned_metrics.csv`, `weekly_metrics.csv`, `daily_metrics.csv`
+**Output CSVs:** `activities_metrics.csv`, `planned_metrics.csv`, `weekly_metrics.csv`, `daily_metrics.csv`, `laps/{id}.csv`, `metrics_ts/{id}.csv`, `speed_profil/{id}.csv`, `hr_zones/{id}.csv`
 
 ### 5.2 Recompute for Activities (`recompute_for_activities`)
 
@@ -267,6 +284,7 @@ metrics_service.recompute_all(athlete_id=None)
 
 ```
 metrics_service.recompute_for_activities(activity_ids)
+  → _ensure_dependencies(activity_ids)          # backfill missing metrics_ts/laps/speed profiles
   → _load_hr_profiles()
   → _compute_activity_metrics()               # Only for given IDs
   → Upsert into activities_metrics.csv         # Remove old + concat new
@@ -274,6 +292,7 @@ metrics_service.recompute_for_activities(activity_ids)
   → _build_weekly_metrics_from_date()          # From impacted week onward
   → _build_daily_metrics_from_date()           # From impacted date (27-day lookback)
   → _persist_frame()
+  → _ensure_hr_zones(activity_ids)             # backfill zone borders from earliest impacted date
 ```
 
 ### 5.3 Recompute Single Activity
@@ -282,11 +301,13 @@ metrics_service.recompute_for_activities(activity_ids)
 
 ```
 metrics_service.recompute_single_activity(activity_id)
+  → _ensure_dependencies([activity_id])
   → _compute_activity_metrics()                # One activity
   → activity_metrics.update(id, row)           # Single row upsert
   → _build_weekly_metrics()                    # Full rebuild for athlete
   → _build_daily_metrics()                     # Full rebuild for athlete
   → _persist_frame()
+  → _ensure_hr_zones([activity_id])
 ```
 
 ### 5.4 Recompute for Categories
@@ -362,7 +383,11 @@ Returns 0 if HR profile is invalid or missing.
 
 ## 6. HR Zones Recomputation
 
-**Trigger:** Settings page → `"Recompute zones"` button
+**Triggers:**
+- Settings page → `"Recompute zones"` button (full refresh)
+- Strava sync → automatic `backfill_borders_from_date` from earliest imported activity date
+- Metrics recompute flows (`recompute_all`, `recompute_for_activities`, `recompute_single_activity`)
+- Activity detail page → lazy backfill when zone summary is missing
 
 ### Call Chain
 
@@ -379,6 +404,13 @@ Settings.py: st.button("Recompute zones")
            → GMM clustering on HR samples → zone borders
            → Write hr_zones/{id}.csv
            → Update activities_metrics.csv (hrZone_z*_upper columns)
+
+Activity.py (lazy)
+  → hr_zones_service.get_or_compute_zones(activity_id)
+      → If summary missing:
+           - Find last computed zone date before activity
+           - backfill_borders_from_date(athlete_id, from_date, to_date=activity_date)
+      → Reload summary + borders and render charts
 ```
 
 ### HR Zone Computation Logic
@@ -389,6 +421,14 @@ Settings.py: st.button("Recompute zones")
 4. **Output per activity:**
    - `hr_zones/{id}.csv`: zone summaries (zone, lower_hr, upper_hr, time_seconds, avg_speed, avg_speedeq)
    - `activities_metrics.csv`: zone border columns (`hrZone_z1_upper`, ..., `hrZone_z5_upper`)
+
+### Date-Window Backfill
+
+`HrZonesService.backfill_borders_from_date(athlete_id, from_date, to_date=None)`:
+- Filters `activities_metrics.csv` to athlete + date window
+- Sorts by `startDate`, `activityId`
+- Recomputes and persists borders + summary per activity
+- Used for sync incremental updates and lazy Activity-page fill
 
 ### Files Written
 
@@ -459,9 +499,9 @@ Persistent save only via `compute_and_save_elevation_metrics()` or `compute_all_
 Planner.py: Submit form
   → sessions_repo.create(payload)
       → Write row to planned_sessions.csv
-  → metrics_service.recompute_planned_for_athlete(athlete_id)
-      → planned_metrics.csv   (recomputed)
-      → weekly_metrics.csv    (recomputed)
+  → metrics_service.recompute_planned_incremental(athlete_id, session_date)
+      → planned_metrics.csv   (full athlete recompute)
+      → weekly_metrics.csv    (from impacted ISO week onward)
 ```
 
 ### Edit Session
@@ -470,9 +510,9 @@ Planner.py: Submit form
 Planner.py: Edit form submit
   → sessions_repo.update(plannedSessionId, payload)
       → Update row in planned_sessions.csv
-  → metrics_service.recompute_planned_for_athlete(athlete_id)
-      → planned_metrics.csv   (recomputed)
-      → weekly_metrics.csv    (recomputed)
+  → metrics_service.recompute_planned_incremental(athlete_id, session_date)
+      → planned_metrics.csv   (full athlete recompute)
+      → weekly_metrics.csv    (from impacted ISO week onward)
 ```
 
 ### Delete Session
@@ -481,10 +521,16 @@ Planner.py: Edit form submit
 Planner.py: Delete button
   → sessions_repo.delete(plannedSessionId)
       → Remove row from planned_sessions.csv
-  → metrics_service.recompute_planned_for_athlete(athlete_id)
-      → planned_metrics.csv   (recomputed)
-      → weekly_metrics.csv    (recomputed)
+  → metrics_service.recompute_planned_incremental(athlete_id, deleted_session_date)
+      → planned_metrics.csv   (full athlete recompute)
+      → weekly_metrics.csv    (from impacted ISO week onward)
 ```
+
+### Incremental Strategy
+
+- Planned metrics are recomputed for the athlete (table is small).
+- Weekly metrics are rebuilt only from `iso_week_start(affected_date)` onward.
+- `daily_metrics.csv` is not touched (daily table is based on actual activities only).
 
 ### Session Types & Templates
 
@@ -582,6 +628,7 @@ RacePacing.py: "Enregistrer la course" button
   → pacer_service.save_race(name, aid_km, segments_df, race_id, aid_stations_times)
       → Write/update races.csv (race metadata)
       → Write race_pacing/{race_id}_segments.csv (segment details)
+      → Invalidate race_pacing/{race_id}_*_comparison.csv cache files
 ```
 
 ### Link Race to Activity
@@ -590,20 +637,26 @@ RacePacing.py: "Enregistrer la course" button
 Activity.py: "Lier un pacing" button
   → pacer_service.link_race_to_activity(activity_id, race_id)
       → Write/update race-pacing-link.csv
+      → Invalidate race_pacing/*_{activity_id}_comparison.csv
 
 Activity.py: "Délier" button
   → pacer_service.unlink_race_from_activity(activity_id)
       → Remove row from race-pacing-link.csv
+      → Invalidate race_pacing/*_{activity_id}_comparison.csv
 ```
 
 ### Pacing vs Actual Comparison
 
 ```
 Activity.py: "Comparaison pacing vs réel" tab
-  → pacer_service.compare_race_segments_with_activity(race_id, timeseries_df)
-      → Preprocess activity timeseries
-      → Map planned segments onto actual GPS trace
-      → Compute delta time, delta speed per segment
+  → pacer_service.compare_race_segments_with_activity(race_id, activity_id, timeseries_df)
+      → If race_pacing/{race_id}_{activity_id}_comparison.csv exists: load cached result
+      → Else:
+           - Preprocess activity timeseries
+           - Map planned segments onto actual GPS trace
+           - Compute delta time, delta speed per segment
+           - Save cache file race_pacing/{race_id}_{activity_id}_comparison.csv
+  → st.spinner("Calcul de la comparaison pacing vs réel...")
   → render_comparison_elevation_profile()
   → render_delta_bar_chart()
   → render_comparison_table()
@@ -615,6 +668,7 @@ Activity.py: "Comparaison pacing vs réel" tab
 |------|--------|
 | `races.csv` | Row created/updated |
 | `race_pacing/{id}_segments.csv` | Created/updated |
+| `race_pacing/{race_id}_{activity_id}_comparison.csv` | Created/read/deleted (cache) |
 | `race-pacing-link.csv` | Row created/deleted |
 
 ---
@@ -694,11 +748,11 @@ AnalyticsService.daily_range(athlete_id, metric_label, selected_types, start_dat
 
 ---
 
-## 13. Activity Detail Page (Read-Only)
+## 13. Activity Detail Page (Detail + Actions)
 
 **Location:** Activity page (navigated from Activities feed)
 
-Displays data but only writes when explicitly linking a race pacing.
+Displays activity data and now exposes direct maintenance actions.
 
 ### Data Loading
 
@@ -711,6 +765,14 @@ activity_detail_service.get_detail(athlete_id, activity_id)
   → timeseries/{id}.csv      (decode polyline for map)
 ```
 
+### Direct Actions
+
+| UI Action | Service Call | Files Written |
+|-----------|--------------|---------------|
+| `Recalculer métriques` | `metrics_service.recompute_single_activity(activity_id)` | `activities_metrics.csv`, `daily_metrics.csv`, `weekly_metrics.csv`, optional `metrics_ts/`, `speed_profil/`, `laps/`, `hr_zones/` |
+| `Associer une séance` | `link_service.create_link(...)` | `links.csv` |
+| `Lier/Délier un pacing` | `pacer_service.link_race_to_activity()` / `unlink_race_from_activity()` | `race-pacing-link.csv`, comparison cache invalidation |
+
 ### Timeseries Tab
 
 | Chart | Source |
@@ -721,6 +783,7 @@ activity_detail_service.get_detail(athlete_id, activity_id)
 | SpeedEq over time | `metrics_ts/{id}.csv` (speedeq_smooth) |
 | Elevation profile | `metrics_ts/{id}.csv` (grade_ma_10, elevationM_ma_5, cumulated_distance) |
 | Grade histogram | Computed from elevation profile data |
+| Cluster means (HR vs Speed / SpeedEq) | `metrics_ts/{id}.csv` grouped by `cluster` |
 
 ### Speed Profile Section
 
@@ -735,6 +798,7 @@ speed_profile_service.load_speed_profile(activity_id)
 ```
 hr_zones_service.get_or_compute_zones(activity_id)
   → Load hr_zones/{id}.csv
+  → If missing: lazy backfill from last computed zone date to current activity date
   → Display zone timeseries, zone time bars, zone speed table
 ```
 
@@ -788,10 +852,10 @@ Summary of which CSV files are modified by each user action.
 
 | Action | activities | act_metrics | planned_sessions | planned_metrics | links | daily_metrics | weekly_metrics | settings | metrics_ts | speed_profil | hr_zones | races | race_pacing |
 |--------|:---------:|:-----------:|:----------------:|:--------------:|:-----:|:-------------:|:--------------:|:--------:|:----------:|:------------:|:--------:|:-----:|:-----------:|
-| **Strava Sync** | W | W | | | | W | W | | | W | | | |
-| **Rebuild from Cache** | W | W | | | | W | W | | W | W | | | |
-| **Recompute All** | | W | | W | | W | W | | | | | | |
-| **Recompute Single Activity** | | W | | | | W | W | | | | | | |
+| **Strava Sync** | W | W | | | | W | W | | W | W | W | | |
+| **Rebuild from Cache** | W | W | | | | W | W | | W | W | W | | |
+| **Recompute All** | | W | | W | | W | W | | W* | W* | W | | |
+| **Recompute Single Activity** | | W | | | | W | W | | W* | W* | W | | |
 | **Recompute Zones** | | W | | | | W | W | | W | | W | | |
 | **Save Settings** | | W* | | | | W* | W* | W | | | | | |
 | **Create Planned Session** | | | W | W | | | W | | | | | | |
@@ -800,7 +864,8 @@ Summary of which CSV files are modified by each user action.
 | **Link Activity** | | | | | W | | | | | | | | |
 | **Unlink Activity** | | | | | W | | | | | | | | |
 | **Save Race** | | | | | | | | | | | | W | W |
+| **Open Pacing Comparison Tab** | | | | | | | | | | | | | W* |
 | **Link Race to Activity** | | | | | | | | | | | | | W† |
 | **Unlink Race** | | | | | | | | | | | | | W† |
 
-`W` = Written, `W*` = Conditionally written (only if factors changed), `W†` = `race-pacing-link.csv`
+`W` = Written, `W*` = Conditionally written, `W†` = `race-pacing-link.csv` write/delete

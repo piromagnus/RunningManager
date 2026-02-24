@@ -20,10 +20,13 @@ from urllib.parse import urlparse
 import requests
 
 from persistence.csv_storage import CsvStorage
-from persistence.repositories import ActivitiesRepo, TokensRepo
+from persistence.repositories import ActivitiesRepo, SettingsRepo, TokensRepo
+from services.hr_zones_service import HrZonesService
 from services.lap_metrics_service import LapMetricsService
 from services.metrics_service import MetricsComputationService
 from services.speed_profile_service import SpeedProfileService
+from services.timeseries_service import TimeseriesService
+from utils.coercion import safe_int
 from utils.config import Config
 from utils.constants import (
     STRAVA_API_BASE,
@@ -38,6 +41,8 @@ from utils.constants import (
 from utils.crypto import decrypt_text, encrypt_text, get_fernet
 
 LOGGER = logging.getLogger(__name__)
+API_BASE = STRAVA_API_BASE
+TOKEN_URL = STRAVA_TOKEN_URL
 
 @dataclass
 class StravaService:
@@ -56,9 +61,11 @@ class StravaService:
     def __post_init__(self) -> None:
         self.session = self.session or requests.Session()
         self.activities = ActivitiesRepo(self.storage)
+        self.settings = SettingsRepo(self.storage)
         self.tokens = TokensRepo(self.storage)
         self.lap_metrics = LapMetricsService(self.storage, self.config)
         self.speed_profile_service = SpeedProfileService(self.config)
+        self.ts_service = TimeseriesService(self.config)
         self._fernet = None
         self._rate_log_path = self.storage.base_dir / "strava_api_log.json"
 
@@ -180,6 +187,8 @@ class StravaService:
 
         imported_from_api: List[str] = []  # strictly newly downloaded raw
         created_rows: List[str] = []  # activity rows newly created (from API or cache)
+        created_rows_with_ts: set[str] = set()
+        created_start_dates: list[dt.date] = []
 
         for summary in self._iter_recent_activities(tokens["access_token"], after_ts):
             activity_id = str(summary.get("id"))
@@ -205,12 +214,6 @@ class StravaService:
                     self.lap_metrics.compute_and_store(athlete_id, detail)
                 except Exception:
                     LOGGER.exception("Failed to compute lap metrics for activity %s", activity_id)
-                # Compute speed profile if timeseries exists
-                if has_timeseries:
-                    try:
-                        self.speed_profile_service.compute_and_store_speed_profile(activity_id)
-                    except Exception:
-                        LOGGER.exception("Failed to compute speed profile for activity %s", activity_id)
                 existing_raw_ids.add(activity_id)
                 imported_from_api.append(activity_id)
             else:
@@ -241,10 +244,44 @@ class StravaService:
                 self.activities.create(row)
                 existing_ids.add(activity_id)
                 created_rows.append(activity_id)
+                if has_timeseries:
+                    created_rows_with_ts.add(activity_id)
+                try:
+                    start_date = pd.to_datetime(
+                        detail.get("start_date_local") or detail.get("start_date"),
+                        errors="coerce",
+                    )
+                    if pd.notna(start_date):
+                        created_start_dates.append(start_date.date())
+                except Exception:
+                    pass
 
         # Recompute metrics for newly added activities (from API or cache)
         if created_rows:
-            MetricsComputationService(self.storage).recompute_for_activities(created_rows)
+            metrics_service = MetricsComputationService(self.storage, config=self.config)
+            metrics_service.recompute_for_activities(created_rows)
+
+            # Ensure new activities have a complete metrics_ts/speed profile cache.
+            for created_activity_id in sorted(created_rows_with_ts):
+                try:
+                    self.speed_profile_service.compute_all_metrics_ts(created_activity_id)
+                    self.speed_profile_service.compute_and_store_speed_profile(created_activity_id)
+                except Exception:
+                    LOGGER.exception(
+                        "Failed to compute metrics_ts artifacts for activity %s",
+                        created_activity_id,
+                    )
+
+            # Refresh metrics so hrSpeedShift can use newly computed metrics_ts.
+            if created_rows_with_ts:
+                metrics_service.recompute_for_activities(created_rows)
+
+            if created_start_dates:
+                zone_service = self._build_hr_zones_service()
+                zone_service.backfill_borders_from_date(
+                    athlete_id=athlete_id,
+                    from_date=min(created_start_dates),
+                )
 
         # Record stats for UI
         created_from_cache = [aid for aid in created_rows if aid not in imported_from_api]
@@ -339,10 +376,6 @@ class StravaService:
                     except Exception:
                         pass
         
-        # Recompute metrics for rebuilt activities (includes hrSpeedShift)
-        if activity_ids:
-            MetricsComputationService(self.storage).recompute_for_activities(activity_ids)
-        
         # Recompute metrics_ts for ALL activities with timeseries data for this athlete
         # This ensures all metrics_ts files are up to date after rebuilding from cache
         activities_df = self.activities.list(athleteId=athlete_id)
@@ -390,9 +423,10 @@ class StravaService:
             except Exception:
                 LOGGER.exception("Failed to recompute metrics_ts for activity %s", activity_id)
         
-        # Also recompute metrics for all activities (not just those from cache)
+        # Recompute metrics and zone borders once after metrics_ts refresh.
         if all_activity_ids:
-            MetricsComputationService(self.storage).recompute_for_activities(all_activity_ids)
+            metrics_service = MetricsComputationService(self.storage, config=self.config)
+            metrics_service.recompute_for_activities(all_activity_ids)
         
         # Return all activities processed (from cache + existing)
         return [str(r.get("activityId")) for r in rows if r.get("activityId")]
@@ -890,3 +924,15 @@ class StravaService:
             return str(path.relative_to(self.config.data_dir))
         except ValueError:
             return str(path)
+
+    def _build_hr_zones_service(self) -> HrZonesService:
+        settings = self.settings.get("coach-1") or {}
+        zone_count = max(2, min(5, safe_int(settings.get("hrZoneCount"), 5)))
+        window_days = max(1, safe_int(settings.get("hrZoneWindowDays"), 90))
+        return HrZonesService(
+            storage=self.storage,
+            ts_service=self.ts_service,
+            speed_profile_service=self.speed_profile_service,
+            zone_count=zone_count,
+            window_days=window_days,
+        )

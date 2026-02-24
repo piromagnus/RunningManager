@@ -4,6 +4,7 @@ SPDX-License-Identifier: GPL-3.0-or-later
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Callable, Optional
 
 import pandas as pd
@@ -35,9 +36,21 @@ class ActivityComparison:
         self.links_repo = links_repo
 
     def compare_race_segments_with_activity(
-        self, race_id: str, activity_timeseries_df: pd.DataFrame
+        self,
+        race_id: str,
+        activity_id: str,
+        activity_timeseries_df: pd.DataFrame,
     ) -> Optional[pd.DataFrame]:
         """Compare planned race segments with actual activity performance."""
+        cache_path = self._comparison_cache_path(race_id, activity_id)
+        if cache_path.exists():
+            try:
+                cached = pd.read_csv(cache_path)
+                if not cached.empty:
+                    return cached
+            except Exception:
+                pass
+
         loaded = self.load_race(race_id)
         if not loaded:
             return None
@@ -282,11 +295,19 @@ class ActivityComparison:
                 }
             )
 
-        return pd.DataFrame(comparison_rows)
+        comparison_df = pd.DataFrame(comparison_rows)
+        if not comparison_df.empty:
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                comparison_df.to_csv(cache_path, index=False)
+            except Exception:
+                pass
+        return comparison_df
 
     def link_race_to_activity(self, activity_id: str, race_id: str) -> str:
         """Link a race pacing to an activity."""
         existing_links = self.links_repo.list(activityId=activity_id)
+        self.invalidate_comparison_cache(activity_id=activity_id)
         if not existing_links.empty:
             link_id = existing_links.iloc[0]["linkId"]
             self.links_repo.update(link_id, {"raceId": race_id})
@@ -296,6 +317,7 @@ class ActivityComparison:
     def unlink_race_from_activity(self, activity_id: str) -> None:
         """Unlink race pacing from an activity."""
         existing_links = self.links_repo.list(activityId=activity_id)
+        self.invalidate_comparison_cache(activity_id=activity_id)
         if not existing_links.empty:
             for _, link in existing_links.iterrows():
                 self.links_repo.delete(link["linkId"])
@@ -309,3 +331,42 @@ class ActivityComparison:
             if race_id and pd.notna(race_id) and str(race_id).strip():
                 return str(race_id).strip()
         return None
+
+    def invalidate_comparison_cache(
+        self,
+        race_id: Optional[str] = None,
+        activity_id: Optional[str] = None,
+    ) -> int:
+        """Invalidate cached race/activity comparison files."""
+        cache_dir = self._comparison_cache_dir()
+        if not cache_dir.exists():
+            return 0
+        if race_id and activity_id:
+            patterns = [f"{race_id}_{activity_id}_comparison.csv"]
+        elif race_id:
+            patterns = [f"{race_id}_*_comparison.csv"]
+        elif activity_id:
+            patterns = [f"*_{activity_id}_comparison.csv"]
+        else:
+            return 0
+        removed = 0
+        seen: set[Path] = set()
+        for pattern in patterns:
+            for path in cache_dir.glob(pattern):
+                if path in seen:
+                    continue
+                seen.add(path)
+                try:
+                    path.unlink()
+                    removed += 1
+                except Exception:
+                    continue
+        return removed
+
+    def _comparison_cache_dir(self) -> Path:
+        return self.links_repo.storage.base_dir / "race_pacing"
+
+    def _comparison_cache_path(self, race_id: str, activity_id: str) -> Path:
+        safe_race = str(race_id).strip()
+        safe_activity = str(activity_id).strip()
+        return self._comparison_cache_dir() / f"{safe_race}_{safe_activity}_comparison.csv"
