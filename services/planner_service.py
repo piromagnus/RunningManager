@@ -4,18 +4,19 @@ SPDX-License-Identifier: GPL-3.0-or-later
 
 from __future__ import annotations
 
-import statistics
-from dataclasses import dataclass
 import json
 import math
+import re
+import statistics
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from persistence.csv_storage import CsvStorage
 from persistence.repositories import (
-    ThresholdsRepo,
     ActivitiesRepo,
     PlannedSessionsRepo,
     SettingsRepo,
+    ThresholdsRepo,
 )
 from services.interval_utils import normalize_steps
 
@@ -120,6 +121,23 @@ class PlannerService:
             return None
         return None
 
+    def _speed_target_kmh(self, value: object) -> Optional[float]:
+        if value in (None, ""):
+            return None
+        raw = str(value).strip().replace(",", ".")
+        if not raw:
+            return None
+        match = re.search(r"[-+]?\d*\.?\d+", raw)
+        if not match:
+            return None
+        try:
+            parsed = float(match.group(0))
+        except Exception:
+            return None
+        if not math.isfinite(parsed) or parsed <= 0:
+            return None
+        return parsed
+
     def _action_distance_km(self, athlete_id: str, action: Dict[str, Any]) -> float:
         seconds = int(action.get("sec") or 0)
         if seconds <= 0:
@@ -127,10 +145,12 @@ class PlannerService:
         pace = self._fundamental_pace_kmh(athlete_id)
         kind = (action.get("kind") or "recovery").lower()
         if kind == "run":
-            target_type = action.get("targetType")
+            target_type = str(action.get("targetType") or "").lower()
             target_label = action.get("targetLabel")
             if target_type in ("pace", "hr"):
                 pace = self._threshold_pace_kmh(athlete_id, target_label) or pace
+            elif target_type == "speed":
+                pace = self._speed_target_kmh(target_label) or pace
         return (seconds / 3600.0) * pace
 
     def estimate_interval_duration_sec(self, steps: Dict[str, Any]) -> int:

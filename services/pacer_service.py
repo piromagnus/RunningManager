@@ -331,6 +331,12 @@ class PacerService:
         """
         return self.aid_station_stats.compute_aid_station_times(aid_stations_km, segments_df)
 
+    def _compute_time_between(
+        self, start_km: float, end_km: float, segments_df: pd.DataFrame
+    ) -> float:
+        """Backward-compatible time interpolation helper used by RacePacing page."""
+        return self.aid_station_stats._compute_time_between(start_km, end_km, segments_df)
+
     def save_race(
         self,
         race_name: str,

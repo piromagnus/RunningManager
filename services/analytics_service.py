@@ -558,7 +558,7 @@ class AnalyticsService:
                         if "elevationM" in ts.columns:
                             diffs = (
                                 pd.to_numeric(ts["elevationM"], errors="coerce")
-                                .fillna(method="ffill")
+                                .ffill()
                                 .diff()
                             )
                             descent_m = float((-diffs[diffs < 0].sum()) if not diffs.empty else 0.0)

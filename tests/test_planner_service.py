@@ -129,6 +129,28 @@ def test_interval_distance_backcompat_repeats(planner, interval_steps_legacy):
     assert km == pytest.approx(warm + first + second + cool, rel=1e-3)
 
 
+def test_interval_distance_uses_speed_target_value(planner):
+    steps = {
+        "warmupSec": 0,
+        "cooldownSec": 0,
+        "betweenLoopRecoverSec": 0,
+        "preBlocks": [],
+        "postBlocks": [],
+        "loops": [
+            {
+                "repeats": 1,
+                "actions": [
+                    {"kind": "run", "sec": 120, "targetType": "speed", "targetLabel": "15,5 km/h"},
+                    {"kind": "recovery", "sec": 60},
+                ],
+            }
+        ],
+    }
+    km = planner.estimate_interval_distance_km("ath-1", steps)
+    expected = (120 / 3600) * 15.5 + (60 / 3600) * 10.0
+    assert km == pytest.approx(expected, rel=1e-3)
+
+
 def test_interval_ascent_loops(planner, interval_steps_loops):
     asc = planner.estimate_interval_ascent_m(interval_steps_loops)
     # repeats=2 so (20 + 0) * 2 = 40
