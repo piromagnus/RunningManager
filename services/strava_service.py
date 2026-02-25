@@ -745,7 +745,7 @@ class StravaService:
         # Append JSON line under lock; keep recent ~500 entries to avoid growth
         path = self._rate_log_path
         path.parent.mkdir(parents=True, exist_ok=True)
-        with portalocker.Lock(str(path), timeout=10, flags=portalocker.LOCK_EX):
+        with portalocker.Lock(str(path), flags=portalocker.LOCK_EX):
             entries: list[dict] = []
             if path.exists() and path.stat().st_size > 0:
                 try:

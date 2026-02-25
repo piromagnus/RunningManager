@@ -771,7 +771,7 @@ class HrZonesService:
         sample_count: int,
         fit_date: dt.date,
     ) -> dict[str, object]:
-        payload: dict[str, object] = {col: "" for col in BORDER_COLUMNS}
+        payload: dict[str, object] = {col: np.nan for col in BORDER_COLUMNS}
         for idx, border in enumerate(borders[:MAX_PERSISTED_BORDERS], start=1):
             payload[f"hrZone_z{idx}_upper"] = float(border)
         payload["hrZone_gmm_sample_count"] = int(sample_count)

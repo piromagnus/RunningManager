@@ -387,14 +387,25 @@ if "strava_state" not in st.session_state:
         _save_state_file(st.session_state["strava_state"])
         print(f"[Strava UI] Generated state {st.session_state['strava_state']}")
 
-params = st.experimental_get_query_params()
+params = st.query_params
+
+
+def _qp_first(key: str, default: str = "") -> str:
+    raw = params.get(key, default)
+    if isinstance(raw, list):
+        if not raw:
+            return default
+        return str(raw[0])
+    if raw is None:
+        return default
+    return str(raw)
 
 if strava_service and athlete_id:
     if "code" in params:
-        returned_state = params.get("state", [""])[0]
+        returned_state = _qp_first("state", "")
         expected_state = st.session_state.get("strava_state") or _load_state_file()
         if expected_state and returned_state == expected_state:
-            code = params["code"][0]
+            code = _qp_first("code", "")
             try:
                 strava_service.exchange_code(athlete_id, code)
                 st.session_state["strava_flash"] = (
@@ -421,15 +432,15 @@ if strava_service and athlete_id:
                 "error",
                 "Requête Strava invalide (state différent). Merci de réessayer la connexion.",
             )
-        st.experimental_set_query_params()
+        params.clear()
         trigger_rerun()
     elif "error" in params:
-        description = params.get("error_description", params.get("message", [""]))[0]
+        description = _qp_first("error_description", "") or _qp_first("message", "")
         st.session_state["strava_flash"] = (
             "error",
-            f"Strava a refusé l'autorisation : {description or params['error'][0]}",
+            f"Strava a refusé l'autorisation : {description or _qp_first('error', '')}",
         )
-        st.experimental_set_query_params()
+        params.clear()
         trigger_rerun()
 
 flash = st.session_state.pop("strava_flash", None)

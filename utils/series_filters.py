@@ -52,7 +52,10 @@ def filter_series_outliers(
                 window_span = pd.to_timedelta(window).value
             else:
                 window_span = float(window) * 1e9
-            reference = reference.view("int64")
+            # Keep NaT as NaN after conversion to integer nanoseconds.
+            ref_dt = reference
+            reference = ref_dt.astype("int64")
+            reference = reference.where(ref_dt.notna(), np.nan)
         else:
             reference = pd.to_numeric(reference, errors="coerce")
             window_span = float(window)

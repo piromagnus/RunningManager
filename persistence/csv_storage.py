@@ -38,7 +38,7 @@ class CsvStorage:
             if dtypes:
                 return pd.DataFrame(columns=list(dtypes.keys())).astype(dtypes)
             return pd.DataFrame()
-        with portalocker.Lock(str(path), timeout=10, flags=portalocker.LOCK_SH):
+        with portalocker.Lock(str(path), flags=portalocker.LOCK_SH):
             try:
                 df = pd.read_csv(path)
             except EmptyDataError:
@@ -64,14 +64,14 @@ class CsvStorage:
         csv_buf = io.StringIO()
         df.to_csv(csv_buf, index=False)
         data = csv_buf.getvalue()
-        with portalocker.Lock(str(path), timeout=10, flags=portalocker.LOCK_EX):
+        with portalocker.Lock(str(path), flags=portalocker.LOCK_EX):
             path.write_text(data)
 
     def append_row(
         self, relative: str | Path, row: Dict[str, object], columns: Iterable[str]
     ) -> None:
         path = self._path(relative)
-        with portalocker.Lock(str(path), timeout=10, flags=portalocker.LOCK_EX):
+        with portalocker.Lock(str(path), flags=portalocker.LOCK_EX):
             exists = path.exists()
             empty = exists and path.stat().st_size == 0
             df = pd.DataFrame([row], columns=list(columns))

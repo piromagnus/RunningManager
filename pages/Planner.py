@@ -23,7 +23,7 @@ from utils.config import load_config
 from utils.formatting import fmt_decimal, fmt_m, format_session_duration, set_locale
 from utils.helpers import clean_optional, default_template_title
 from utils.styling import apply_theme
-from utils.time import iso_week_end, iso_week_start
+from utils.time import iso_week_end, iso_week_start, to_date
 from utils.ui_helpers import get_dialog_factory
 from widgets.week_view import render_week_view
 
@@ -248,13 +248,21 @@ def _update_week_from_picker() -> None:
     st.session_state["planner_week_date"] = st.session_state.get("planner_week_picker", today)
 
 
+def _shift_week(days: int) -> None:
+    current = st.session_state.get("planner_week_date", today)
+    new_date = current + dt.timedelta(days=days)
+    st.session_state["planner_week_date"] = new_date
+    st.session_state["planner_week_picker"] = new_date
+
+
 nav_prev, nav_picker, nav_next = st.columns([1, 2, 1])
 with nav_prev:
-    if st.button("← Semaine précédente", key="planner-prev-week"):
-        new_date = st.session_state["planner_week_date"] - dt.timedelta(days=7)
-        st.session_state["planner_week_date"] = new_date
-        st.session_state["planner_week_picker"] = new_date
-        st.rerun()
+    st.button(
+        "← Semaine précédente",
+        key="planner-prev-week",
+        on_click=_shift_week,
+        args=(-7,),
+    )
 with nav_picker:
     st.date_input(
         "Week (pick any day)",
@@ -263,11 +271,12 @@ with nav_picker:
         on_change=_update_week_from_picker,
     )
 with nav_next:
-    if st.button("Semaine suivante →", key="planner-next-week"):
-        new_date = st.session_state["planner_week_date"] + dt.timedelta(days=7)
-        st.session_state["planner_week_date"] = new_date
-        st.session_state["planner_week_picker"] = new_date
-        st.rerun()
+    st.button(
+        "Semaine suivante →",
+        key="planner-next-week",
+        on_click=_shift_week,
+        args=(7,),
+    )
 
 selected_week_date = st.session_state["planner_week_date"]
 week_start = iso_week_start(selected_week_date)
