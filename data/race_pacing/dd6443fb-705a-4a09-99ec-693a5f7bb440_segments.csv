@@ -1,0 +1,2 @@
+segmentId,type,startKm,endKm,distanceKm,elevGainM,elevLossM,avgGrade,isAidSplit,distanceEqKm,speedEqKmh,speedKmh,timeSec,startLat,startLon,endLat,endLon
+0,flat,0.0,42.20479517834509,42.20479517834509,111.07249999999999,115.24183333333333,-9.878814280972012e-05,False,43.31552017834509,0.0,12.0,12661,41.892035412,12.489396044,41.886845039,12.483755933
