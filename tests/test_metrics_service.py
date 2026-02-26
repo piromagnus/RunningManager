@@ -20,6 +20,7 @@ from persistence.repositories import (
     WeeklyMetricsRepo,
 )
 from services.metrics_service import MetricsComputationService
+from utils.metrics_formulas import compute_trimp_hr_reserve_from_profile
 
 
 def _bootstrap(tmp_path):
@@ -178,6 +179,85 @@ def test_recompute_metrics(tmp_path):
     assert float(first_day["distanceKm"]) > 0.0
     assert float(first_day["distanceEqKm"]) >= float(first_day["distanceKm"])
     assert float(first_day["acuteDistanceKm"]) >= float(first_day["distanceKm"])
+
+
+def test_planned_speed_target_uses_last_five_running_sessions_for_hr(tmp_path):
+    storage = _bootstrap(tmp_path)
+    planned_repo = PlannedSessionsRepo(storage)
+    activities_repo = ActivitiesRepo(storage)
+    metrics_service = MetricsComputationService(storage)
+
+    planned_repo.create(
+        {
+            "athleteId": "ath-1",
+            "date": "2025-04-20",
+            "type": "FUNDAMENTAL_ENDURANCE",
+            "plannedDistanceKm": "",
+            "plannedDurationSec": 3600,
+            "plannedAscentM": 0,
+            "targetType": "speed",
+            "targetLabel": "12 km/h",
+            "notes": "",
+            "stepEndMode": "",
+            "stepsJson": "",
+        }
+    )
+
+    runs = [
+        ("run-1", "2025-04-19T08:00:00Z", 14.0, 160.0),
+        ("run-2", "2025-04-18T08:00:00Z", 13.0, 155.0),
+        ("run-3", "2025-04-17T08:00:00Z", 12.0, 150.0),
+        ("run-4", "2025-04-16T08:00:00Z", 11.0, 145.0),
+        ("run-5", "2025-04-15T08:00:00Z", 10.0, 140.0),
+        # Older run should be ignored by "last 5 sessions" rule.
+        ("run-6", "2025-01-10T08:00:00Z", 12.0, 190.0),
+    ]
+    for activity_id, start_time, speed_kmh, avg_hr in runs:
+        activities_repo.create(
+            {
+                "activityId": activity_id,
+                "athleteId": "ath-1",
+                "source": "manual",
+                "sportType": "Run",
+                "startTime": start_time,
+                "distanceKm": speed_kmh,
+                "elapsedSec": 3800,
+                "movingSec": 3600,
+                "ascentM": 100.0,
+                "avgHr": avg_hr,
+                "maxHr": 180.0,
+                "hasTimeseries": False,
+                "polyline": "",
+                "rawJsonPath": "",
+            }
+        )
+    activities_repo.create(
+        {
+            "activityId": "ride-1",
+            "athleteId": "ath-1",
+            "source": "manual",
+            "sportType": "Ride",
+            "startTime": "2025-04-19T09:00:00Z",
+            "distanceKm": 30.0,
+            "elapsedSec": 3700,
+            "movingSec": 3600,
+            "ascentM": 200.0,
+            "avgHr": 195.0,
+            "maxHr": 200.0,
+            "hasTimeseries": False,
+            "polyline": "",
+            "rawJsonPath": "",
+        }
+    )
+
+    metrics_service.recompute_all(athlete_id="ath-1")
+
+    planned_metrics = PlannedMetricsRepo(storage).list(athleteId="ath-1")
+    row = planned_metrics.iloc[0]
+
+    expected_hr = 150.0
+    expected_trimp = compute_trimp_hr_reserve_from_profile(expected_hr, 3600.0, (55.0, 205.0))
+    assert float(row["trimp"]) == pytest.approx(expected_trimp, rel=1e-6)
 
 
 def test_ski_distance_eq_applied(tmp_path):

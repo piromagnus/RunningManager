@@ -322,7 +322,7 @@ class IntervalComparisonService:
 
         if kind == "loop":
             min_laps = max(0, expected_count - max(expected_count // 3, 1))
-            max_laps = min(lap_count, expected_count + 3)
+            max_laps = min(lap_count, max(expected_count + 3, expected_count * 3 // 2))
         elif kind == "between":
             min_laps = 0
             max_laps = min(lap_count, max(2, expected_count + 2))
@@ -395,33 +395,80 @@ class IntervalComparisonService:
         assignments.reverse()
         return assignments
 
+    def _inner_dp_assignment(
+        self,
+        segments: Sequence[PlannedSegment],
+        laps: Sequence[LapSegment],
+    ) -> Tuple[float, List[int]]:
+        """Optimal assignment of consecutive laps to segments via DP.
+
+        Returns (cost, assignments) where assignments[i] = number of laps
+        for segment i.  Cost is the sum of per-segment normalised time errors.
+        """
+        n_seg = len(segments)
+        n_laps = len(laps)
+        leftover_penalty = 0.3
+
+        if n_seg == 0:
+            return (leftover_penalty * n_laps, [])
+        if n_laps == 0:
+            return (float(n_seg), [0] * n_seg)
+
+        inf = float("inf")
+        cum_time = [0.0]
+        for lap in laps:
+            cum_time.append(cum_time[-1] + max(float(lap.time_sec), 0.0))
+
+        dp = [[inf] * (n_laps + 1) for _ in range(n_seg + 1)]
+        back = [[0] * (n_laps + 1) for _ in range(n_seg + 1)]
+        dp[0][0] = 0.0
+
+        for i in range(n_seg):
+            target = max(float(segments[i].sec), 1.0)
+            for j in range(n_laps + 1):
+                if dp[i][j] >= inf:
+                    continue
+                for k in range(n_laps - j + 1):
+                    actual = cum_time[j + k] - cum_time[j]
+                    cost = abs(actual - target) / target
+                    candidate = dp[i][j] + cost
+                    if candidate < dp[i + 1][j + k] - 1e-9:
+                        dp[i + 1][j + k] = candidate
+                        back[i + 1][j + k] = k
+
+        best_j = n_laps
+        best_cost = dp[n_seg][n_laps]
+        for j in range(n_laps):
+            candidate = dp[n_seg][j] + leftover_penalty * (n_laps - j)
+            if candidate < best_cost - 1e-9:
+                best_cost = candidate
+                best_j = j
+
+        if best_cost >= inf:
+            return (inf, [0] * n_seg)
+
+        assignments: List[int] = []
+        j = best_j
+        for i in range(n_seg, 0, -1):
+            k = back[i][j]
+            assignments.append(k)
+            j -= k
+        assignments.reverse()
+
+        return (best_cost, assignments)
+
     def _group_region_cost(
         self,
         group: StructuralGroup,
         laps: Sequence[LapSegment],
     ) -> float:
-        lap_count = len(laps)
         if group.kind == "buffer":
-            return 0.05 * lap_count
+            return 0.05 * len(laps)
+        if not group.segments:
+            return 0.0 if not laps else float(len(laps))
 
-        expected_total = max(float(group.expected_total_sec), 1.0)
-        actual_total = sum(max(float(lap.time_sec), 0.0) for lap in laps)
-        duration_error = abs(actual_total - float(group.expected_total_sec)) / expected_total
-
-        expected_count = max(group.expected_count, 1)
-        count_error = abs(lap_count - group.expected_count) / float(expected_count)
-
-        if group.kind == "loop":
-            base = (0.4 * duration_error) + (0.6 * count_error)
-            if lap_count == 0:
-                base += 0.5
-            return base
-
-        if group.kind in {"pre", "post"}:
-            return duration_error + (0.10 * count_error)
-        if group.kind == "between":
-            return duration_error + (0.25 * count_error)
-        return duration_error + (0.20 * count_error)
+        cost, _ = self._inner_dp_assignment(group.segments, laps)
+        return cost
 
     def _assign_region_to_segments(
         self,
@@ -439,25 +486,12 @@ class IntervalComparisonService:
                 for lap in region_laps
             ]
 
+        _, assignments = self._inner_dp_assignment(group.segments, region_laps)
+
         rows: List[MatchedSegment] = []
         lap_cursor = 0
-        segments = group.segments
-        for seg_idx, segment in enumerate(segments):
-            remaining_laps = region_laps[lap_cursor:]
-            remaining_segments = len(segments) - seg_idx
-            if not remaining_laps:
-                rows.append(
-                    MatchedSegment(
-                        planned=segment,
-                        laps=(),
-                        aggregated_metrics=self.aggregate_metrics(()),
-                        match_status="planned_only",
-                    )
-                )
-                continue
-
-            take = self._laps_for_segment(segment, group.kind, remaining_laps, remaining_segments)
-            matched_laps = tuple(remaining_laps[:take]) if take > 0 else tuple()
+        for segment, take in zip(group.segments, assignments):
+            matched_laps = tuple(region_laps[lap_cursor : lap_cursor + take]) if take > 0 else ()
             if matched_laps:
                 rows.append(
                     MatchedSegment(
@@ -476,7 +510,7 @@ class IntervalComparisonService:
                         match_status="planned_only",
                     )
                 )
-            lap_cursor += len(matched_laps)
+            lap_cursor += take
 
         while lap_cursor < len(region_laps):
             lap = region_laps[lap_cursor]
@@ -491,73 +525,6 @@ class IntervalComparisonService:
             lap_cursor += 1
 
         return rows
-
-    def _laps_for_segment(
-        self,
-        segment: PlannedSegment,
-        group_kind: str,
-        laps: Sequence[LapSegment],
-        remaining_segments: int,
-    ) -> int:
-        if not laps:
-            return 0
-
-        if self._is_short_segment(segment, group_kind):
-            return self._short_segment_lap_take(segment, laps, remaining_segments)
-        return self._long_segment_lap_take(segment, laps, remaining_segments)
-
-    @staticmethod
-    def _is_short_segment(segment: PlannedSegment, group_kind: str) -> bool:
-        if group_kind == "loop" and segment.sec <= 150:
-            return True
-        return segment.sec <= 90
-
-    @staticmethod
-    def _short_segment_lap_take(
-        segment: PlannedSegment,
-        laps: Sequence[LapSegment],
-        remaining_segments: int,
-    ) -> int:
-        if len(laps) < 2:
-            return 1
-        # Merge only when needed: when a single lap is clearly too short for this segment.
-        can_take_two = (len(laps) - 2) >= max(remaining_segments - 1, 0)
-        if not can_take_two:
-            return 1
-
-        first = max(float(laps[0].time_sec), 0.0)
-        second = max(float(laps[1].time_sec), 0.0)
-        single_error = abs(first - float(segment.sec))
-        merged_error = abs((first + second) - float(segment.sec))
-        if first < (float(segment.sec) * 0.65) and merged_error + 1e-6 < single_error:
-            return 2
-        return 1
-
-    @staticmethod
-    def _long_segment_lap_take(
-        segment: PlannedSegment,
-        laps: Sequence[LapSegment],
-        remaining_segments: int,
-    ) -> int:
-        min_keep = max(remaining_segments - 1, 0)
-        max_take = max(1, len(laps) - min_keep)
-        target_time = max(float(segment.sec) * 0.60, 1.0)
-        totals: List[float] = []
-        running_total = 0.0
-
-        for idx in range(max_take):
-            running_total += max(float(laps[idx].time_sec), 0.0)
-            totals.append(running_total)
-
-        candidates = [idx + 1 for idx, total in enumerate(totals) if total >= target_time]
-        if not candidates:
-            candidates = [max_take]
-
-        best_take = min(
-            candidates,
-            key=lambda take: (abs(totals[take - 1] - float(segment.sec)), take),
-        )
-        return max(1, best_take)
 
     @staticmethod
     def aggregate_metrics(laps: Sequence[LapSegment]) -> AggregatedMetrics:

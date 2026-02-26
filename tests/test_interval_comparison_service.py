@@ -37,9 +37,6 @@ def config(tmp_path: Path) -> Config:
         metrics_ts_dir=metrics_ts_dir,
         speed_profile_dir=speed_profile_dir,
         n_cluster=5,
-        hr_zone_count=5,
-        hr_zone_window_days=90,
-        hr_zone_fit_activity_types=("RUN", "TRAIL_RUN"),
     )
 
 
@@ -287,3 +284,74 @@ def test_alternating_30_30_interval_sequential_assignment(
     assert matched_by_planned_index[11] == [12, 13]
     actual_only = [entry for entry in matches if entry.match_status == "actual_only"]
     assert len(actual_only) == 0
+
+
+def test_3x2_interval_merges_laps_consistently_across_repeats(
+    service: IntervalComparisonService, config: Config
+) -> None:
+    """Regression: each 8-min A1 segment should merge 2 auto-laps, not just the first repeat."""
+    activity_id = "act-3x2-merge"
+    pd.DataFrame(
+        {
+            "lapIndex": list(range(1, 12)),
+            "label": ["Run"] * 11,
+            "startTime": [
+                "2026-01-15T08:00:00Z",  # L1  warmup start
+                "2026-01-15T08:04:23Z",  # L2  warmup part 2
+                "2026-01-15T08:08:43Z",  # L3  R1/3 A1 first km
+                "2026-01-15T08:12:43Z",  # L4  R1/3 A1 rest
+                "2026-01-15T08:16:41Z",  # L5  R1/3 A2 recovery
+                "2026-01-15T08:19:42Z",  # L6  R2/3 A1 first km
+                "2026-01-15T08:23:43Z",  # L7  R2/3 A1 rest
+                "2026-01-15T08:27:43Z",  # L8  R2/3 A2 recovery
+                "2026-01-15T08:30:44Z",  # L9  R3/3 A1 first km
+                "2026-01-15T08:35:02Z",  # L10 R3/3 A1 rest
+                "2026-01-15T08:39:02Z",  # L11 cooldown
+            ],
+            "timeSec": [263, 260, 240, 238, 181, 241, 240, 181, 258, 240, 400],
+            "distanceKm": [0.76, 0.76, 1.0, 1.0, 0.30, 1.0, 0.95, 0.30, 0.95, 1.0, 1.1],
+            "avgSpeedKmh": [10.4, 10.5, 15.0, 15.1, 6.0, 14.9, 14.3, 6.0, 13.3, 15.0, 9.9],
+            "distanceEqKm": [0.76, 0.76, 1.0, 1.0, 0.30, 1.0, 0.95, 0.30, 0.95, 1.0, 1.1],
+            "avgHr": [148, 153, 180, 185, 148, 177, 184, 145, 176, 182, 155],
+            "ascentM": [5, 12, 0, 0, 0, 0, 0, 0, 0, 0, 5],
+        }
+    ).to_csv(config.laps_dir / f"{activity_id}.csv", index=False)
+
+    planned_session = {
+        "stepsJson": {
+            "preBlocks": [{"kind": "run", "sec": 600}],
+            "loops": [
+                {
+                    "repeats": 3,
+                    "actions": [
+                        {"kind": "run", "sec": 480},
+                        {"kind": "recovery", "sec": 120},
+                    ],
+                }
+            ],
+            "postBlocks": [{"kind": "recovery", "sec": 600}],
+        }
+    }
+
+    matches = service.compare(activity_id, planned_session)
+    matched_by_planned_index = {
+        entry.planned.index: [lap.lap_index for lap in entry.laps]
+        for entry in matches
+        if entry.planned is not None and entry.laps
+    }
+
+    # Warmup: L1+L2 (523s vs planned 600s)
+    assert matched_by_planned_index[1] == [1, 2]
+
+    # R1/3 A1 (480s): L3+L4 (478s)
+    assert matched_by_planned_index[2] == [3, 4]
+    # R1/3 A2 (120s): L5 (181s)
+    assert matched_by_planned_index[3] == [5]
+
+    # R2/3 A1 (480s): L6+L7 (481s) — was the bug: previously got only L6
+    assert matched_by_planned_index[4] == [6, 7]
+    # R2/3 A2 (120s): L8 (181s)
+    assert matched_by_planned_index[5] == [8]
+
+    # R3/3 A1 (480s): L9+L10 (498s) — was the bug: previously got only L8/L9
+    assert matched_by_planned_index[6] == [9, 10]
