@@ -767,6 +767,7 @@ class MetricsComputationService:
                 athlete_id=athlete_id,
                 session=row,
                 duration_sec=duration,
+                distance_km=distance,
                 hr_profile=hr_profile,
                 running_speed_hr_samples=running_speed_hr_samples,
             )
@@ -1078,16 +1079,23 @@ class MetricsComputationService:
         athlete_id: str,
         session: pd.Series,
         duration_sec: int,
+        distance_km: float,
         hr_profile: Optional[Tuple[float, float]],
         running_speed_hr_samples: Sequence[Tuple[float, float]],
     ) -> float:
         if hr_profile is None or duration_sec <= 0:
             return 0.0
+        race_speed_target_kmh = self._planned_race_speed_target_kmh(
+            session=session,
+            duration_sec=duration_sec,
+            distance_km=distance_km,
+        )
         segments = self._planned_segments(
             athlete_id,
             session,
             hr_profile,
             running_speed_hr_samples=running_speed_hr_samples,
+            race_speed_target_kmh=race_speed_target_kmh,
         )
         total = 0.0
         for seg_duration, avg_hr in segments:
@@ -1101,6 +1109,7 @@ class MetricsComputationService:
                 session.get("targetLabel"),
                 hr_profile,
                 running_speed_hr_samples=running_speed_hr_samples,
+                target_speed_kmh=race_speed_target_kmh,
             )
             total = self._compute_trimp(target_hr, duration_sec, hr_profile)
         return total
@@ -1193,6 +1202,7 @@ class MetricsComputationService:
         session: pd.Series,
         hr_profile: Optional[Tuple[float, float]],
         running_speed_hr_samples: Sequence[Tuple[float, float]],
+        race_speed_target_kmh: Optional[float] = None,
     ) -> List[Tuple[int, float]]:
         segments: List[Tuple[int, float]] = []
         fundamental_hr = self._avg_hr_for_target(
@@ -1213,6 +1223,7 @@ class MetricsComputationService:
                 session.get("targetLabel"),
                 hr_profile,
                 running_speed_hr_samples=running_speed_hr_samples,
+                target_speed_kmh=race_speed_target_kmh,
             )
             if duration > 0:
                 segments.append((duration, avg_hr))
@@ -1287,10 +1298,12 @@ class MetricsComputationService:
         target_label: Optional[str],
         hr_profile: Optional[Tuple[float, float]],
         running_speed_hr_samples: Sequence[Tuple[float, float]],
+        target_speed_kmh: Optional[float] = None,
     ) -> float:
         target_kind = str(target_type or "").strip().lower()
-        if target_kind == "speed":
-            target_speed_kmh = self._parse_speed_target_kmh(target_label)
+        if target_kind in {"speed", "race"}:
+            if target_speed_kmh is None and target_kind == "speed":
+                target_speed_kmh = self._parse_speed_target_kmh(target_label)
             estimated_hr = self._estimate_mean_hr_for_speed(
                 target_speed_kmh,
                 running_speed_hr_samples,
@@ -1315,6 +1328,26 @@ class MetricsComputationService:
             if hr_max > hr_rest:
                 return hr_rest + 0.6 * (hr_max - hr_rest)
         return 0.0
+
+    @staticmethod
+    def _planned_race_speed_target_kmh(
+        session: pd.Series,
+        duration_sec: int,
+        distance_km: float,
+    ) -> Optional[float]:
+        target_kind = str(session.get("targetType") or "").strip().lower()
+        session_type = str(session.get("type") or "").strip().upper()
+        if target_kind != "race" and session_type != "RACE":
+            return None
+        if duration_sec <= 0:
+            return None
+        resolved_distance_km = distance_km if distance_km > 0 else safe_float(session.get("plannedDistanceKm"))
+        if resolved_distance_km <= 0:
+            return None
+        speed_kmh = (resolved_distance_km * 3600.0) / float(duration_sec)
+        if not math.isfinite(speed_kmh) or speed_kmh <= 0:
+            return None
+        return speed_kmh
 
     @staticmethod
     def _parse_speed_target_kmh(value: object) -> Optional[float]:
