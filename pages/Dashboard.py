@@ -14,6 +14,7 @@ import streamlit as st
 
 from graph.hr_speed import create_hr_speed_chart
 from graph.hr_zones import build_zone_colors, render_zone_borders_chart, render_zone_speed_evolution
+from graph.redi import create_workload_ratio_chart
 from graph.speed_profile import create_speed_profile_chart, create_speed_profile_cloud_chart
 from graph.speed_scatter import create_speedeq_scatter_chart
 from graph.training_load import create_training_load_chart
@@ -38,6 +39,7 @@ from utils.dashboard_state import (
     set_dashboard_date_range_quick,
 )
 from utils.formatting import set_locale
+from utils.redi import compute_ewma, compute_redi
 from utils.styling import apply_theme
 from widgets.athlete_selector import select_athlete
 
@@ -64,6 +66,7 @@ daily_metrics = load_daily_metrics(storage, athlete_id)
 if daily_metrics.empty:
     st.info("Aucune donnée journalière disponible pour cet athlète.")
     st.stop()
+daily_metrics_all = daily_metrics.copy()
 
 # --- Date range controls (same behavior as Analytics) ---
 min_plan, max_plan = analytics.planned_date_bounds(athlete_id)
@@ -156,6 +159,58 @@ metric_definitions = {
     },
 }
 
+raw_metric_columns = {
+    "Time": "timeSec",
+    "Distance": "distanceKm",
+    "DistEq": "distanceEqKm",
+    "Trimp": "trimp",
+    "Ascent": "ascentM",
+}
+
+
+def _compute_acute_chronic(
+    values: pd.Series | np.ndarray,
+    method: str,
+    *,
+    lambda_acute: float = 0.25,
+    lambda_chronic: float = 0.07,
+) -> tuple[np.ndarray, np.ndarray]:
+    numeric_values = pd.to_numeric(pd.Series(values), errors="coerce").fillna(0.0).to_numpy(dtype=float)
+    method_key = str(method).upper()
+
+    if method_key == "REDI":
+        acute_values = compute_redi(numeric_values, lam=lambda_acute)
+        chronic_values = compute_redi(numeric_values, lam=lambda_chronic)
+    elif method_key == "EWMA":
+        acute_values = compute_ewma(numeric_values, lam=lambda_acute)
+        chronic_values = compute_ewma(numeric_values, lam=lambda_chronic)
+    else:
+        series_values = pd.Series(numeric_values)
+        acute_values = series_values.rolling(window=7, min_periods=1).mean().to_numpy()
+        chronic_values = series_values.rolling(window=28, min_periods=1).mean().to_numpy()
+
+    return acute_values, chronic_values
+
+
+def _stateful_radio(
+    *,
+    label: str,
+    options: list[str],
+    key: str,
+    default: str,
+    help_text: str | None = None,
+) -> str:
+    if key not in st.session_state or st.session_state[key] not in options:
+        st.session_state[key] = default if default in options else options[0]
+    return st.radio(
+        label,
+        options=options,
+        key=key,
+        horizontal=True,
+        help=help_text,
+    )
+
+
 available_metrics: list[str] = [m for m in CONFIG_METRICS if m in metric_definitions]
 for metric_key in metric_definitions.keys():
     if metric_key not in available_metrics:
@@ -163,6 +218,7 @@ for metric_key in metric_definitions.keys():
 # Shared tabs for the charts
 (
     tab_charge,
+    tab_redi,
     tab_speed,
     tab_hr_speed,
     tab_hr_shift,
@@ -173,6 +229,7 @@ for metric_key in metric_definitions.keys():
 ) = st.tabs(
     [
         "Charge",
+        "REDI",
         "SpeedEq",
         "FC vs Vitesse",
         "Décalage HR",
@@ -185,11 +242,19 @@ for metric_key in metric_definitions.keys():
 
 with tab_charge:
     st.subheader("Charge d'entraînement")
-    selected_metric = st.selectbox(
-        "Métrique",
-        available_metrics,
-        index=available_metrics.index("DistEq") if "DistEq" in available_metrics else 0,
-        help="Sélectionne la métrique pour le graphique de charge.",
+    selected_metric = _stateful_radio(
+        label="Métrique",
+        options=available_metrics,
+        key="dashboard_charge_metric",
+        default="DistEq",
+        help_text="Sélectionne la métrique pour le graphique de charge.",
+    )
+    selected_ratio_method = _stateful_radio(
+        label="Méthode de ratio",
+        options=["REDI", "EWMA", "ACWR"],
+        key="dashboard_charge_ratio_method",
+        default="REDI",
+        help_text="Définit la méthode de calcul des charges aiguë/chronique. REDI par défaut.",
     )
     # Recompute acute/chronic including planned values
     col_names = {
@@ -200,10 +265,42 @@ with tab_charge:
         "Ascent": ("chronicAscentM", "acuteAscentM"),
     }
 
-    if selected_metric not in col_names:
-        chart = create_training_load_chart(
-            daily_metrics, selected_metric, metric_definitions[selected_metric]
+    def _build_charge_chart(base_df: pd.DataFrame) -> alt.Chart:
+        workload_col = raw_metric_columns.get(selected_metric)
+        if workload_col and workload_col in base_df.columns:
+            working_df = base_df[["date", workload_col]].copy()
+            working_df["date"] = pd.to_datetime(working_df["date"], errors="coerce")
+            working_df = working_df.dropna(subset=["date"]).sort_values("date")
+            working_df[workload_col] = pd.to_numeric(working_df[workload_col], errors="coerce").fillna(0.0)
+            acute_values, chronic_values = _compute_acute_chronic(
+                working_df[workload_col], selected_ratio_method
+            )
+            working_df["acute_custom"] = acute_values
+            working_df["chronic_custom"] = chronic_values
+            method_cfg = {
+                "label": metric_definitions[selected_metric]["label"],
+                "acute": "acute_custom",
+                "chronic": "chronic_custom",
+            }
+            return create_training_load_chart(
+                working_df,
+                selected_metric,
+                method_cfg,
+                band_lower_ratio=0.8,
+                band_upper_ratio=1.3,
+                danger_ratio=1.5,
+            )
+        return create_training_load_chart(
+            base_df,
+            selected_metric,
+            metric_definitions[selected_metric],
+            band_lower_ratio=0.8,
+            band_upper_ratio=1.3,
+            danger_ratio=1.5,
         )
+
+    if selected_metric not in col_names:
+        chart = _build_charge_chart(daily_metrics)
         chart = chart.properties(width=CHART_WIDTH)
         st.altair_chart(chart, use_container_width=False)
     else:
@@ -223,9 +320,7 @@ with tab_charge:
         )
 
         if daily_range_df.empty:
-            chart = create_training_load_chart(
-                daily_metrics, selected_metric, metric_definitions[selected_metric]
-            )
+            chart = _build_charge_chart(daily_metrics)
             chart = chart.properties(width=CHART_WIDTH)
             st.altair_chart(chart, use_container_width=False)
         else:
@@ -244,12 +339,11 @@ with tab_charge:
             range_end_ts = pd.Timestamp(range_end_date)
             today_ts = pd.Timestamp.today().normalize()
 
-            daily_range_df["actual_acute"] = (
-                daily_range_df["actual_value"].rolling(window=7, min_periods=1).mean()
+            actual_acute_values, actual_chronic_values = _compute_acute_chronic(
+                daily_range_df["actual_value"], selected_ratio_method
             )
-            daily_range_df["actual_chronic"] = (
-                daily_range_df["actual_value"].rolling(window=28, min_periods=1).mean()
-            )
+            daily_range_df["actual_acute"] = actual_acute_values
+            daily_range_df["actual_chronic"] = actual_chronic_values
 
             combined_for_plan = np.where(
                 daily_range_df["date"] <= today_ts,
@@ -257,12 +351,11 @@ with tab_charge:
                 daily_range_df["planned_value"],
             )
             combined_for_plan = pd.to_numeric(combined_for_plan, errors="coerce")
-            daily_range_df["planned_acute"] = (
-                pd.Series(combined_for_plan).rolling(window=7, min_periods=1).mean().to_numpy()
+            planned_acute_values, planned_chronic_values = _compute_acute_chronic(
+                combined_for_plan, selected_ratio_method
             )
-            daily_range_df["planned_chronic"] = (
-                pd.Series(combined_for_plan).rolling(window=28, min_periods=1).mean().to_numpy()
-            )
+            daily_range_df["planned_acute"] = planned_acute_values
+            daily_range_df["planned_chronic"] = planned_chronic_values
 
             daily_range_df.loc[
                 daily_range_df["date"] <= today_ts, ["planned_chronic", "planned_acute"]
@@ -276,15 +369,17 @@ with tab_charge:
             ] = np.nan
 
             band_df = plot_df_base.dropna(subset=["actual_chronic"]).copy()
-            band_df["lower"] = 0.75 * band_df["actual_chronic"]
-            band_df["upper"] = 1.5 * band_df["actual_chronic"]
+            band_df["lower"] = 0.8 * band_df["actual_chronic"]
+            band_df["upper"] = 1.3 * band_df["actual_chronic"]
+            band_df["danger"] = 1.5 * band_df["actual_chronic"]
 
             planned_band_df = plot_df_base[
                 (plot_df_base["date"] > today_ts) & plot_df_base["planned_chronic"].notna()
             ].copy()
             if not planned_band_df.empty:
-                planned_band_df["lower"] = 0.75 * planned_band_df["planned_chronic"]
-                planned_band_df["upper"] = 1.5 * planned_band_df["planned_chronic"]
+                planned_band_df["lower"] = 0.8 * planned_band_df["planned_chronic"]
+                planned_band_df["upper"] = 1.3 * planned_band_df["planned_chronic"]
+                planned_band_df["danger"] = 1.5 * planned_band_df["planned_chronic"]
 
             plot_rows: list[dict] = []
             for _, row in plot_df_base.iterrows():
@@ -339,9 +434,7 @@ with tab_charge:
             plot_df = pd.DataFrame(plot_rows)
 
             if plot_df.empty:
-                chart = create_training_load_chart(
-                    daily_metrics, selected_metric, metric_definitions[selected_metric]
-                )
+                chart = _build_charge_chart(daily_metrics)
                 st.altair_chart(chart, use_container_width=True)
             else:
                 color_scale = alt.Scale(
@@ -389,6 +482,15 @@ with tab_charge:
                         )
                     )
                     layers.append(actual_fill)
+                    actual_danger = (
+                        alt.Chart(band_df)
+                        .mark_line(color="#dc2626", strokeWidth=1.8)
+                        .encode(
+                            x=alt.X("date:T", title="Date"),
+                            y=alt.Y("danger:Q", title=metric_definitions[selected_metric]["label"]),
+                        )
+                    )
+                    layers.append(actual_danger)
                 if "planned_band_df" in locals() and not planned_band_df.empty:
                     planned_fill = (
                         alt.Chart(planned_band_df)
@@ -400,11 +502,137 @@ with tab_charge:
                         )
                     )
                     layers.append(planned_fill)
+                    planned_danger = (
+                        alt.Chart(planned_band_df)
+                        .mark_line(color="#fca5a5", strokeWidth=1.6, strokeDash=[6, 3])
+                        .encode(
+                            x=alt.X("date:T", title="Date"),
+                            y=alt.Y("danger:Q", title=metric_definitions[selected_metric]["label"]),
+                        )
+                    )
+                    layers.append(planned_danger)
 
                 layers.append(line_chart)
                 chart = alt.layer(*layers).properties(height=340)
 
                 st.altair_chart(chart, use_container_width=True)
+
+
+with tab_redi:
+    st.subheader("Ratios ACWR, EWMA & REDI")
+    selected_redi_metric = _stateful_radio(
+        label="Métrique",
+        options=available_metrics,
+        key="dashboard_redi_metric",
+        default="DistEq",
+        help_text="Sélectionne la métrique utilisée pour les indices ACWR/EWMA/REDI.",
+    )
+
+    acute_col, chronic_col = st.columns(2)
+    lambda_acute = acute_col.slider(
+        "Lambda aiguë",
+        min_value=0.05,
+        max_value=0.5,
+        value=0.25,
+        step=0.01,
+        key="dashboard_redi_lambda_acute",
+        help="Par défaut 0.25 (équivalent EWMA N=7).",
+    )
+    lambda_chronic = chronic_col.slider(
+        "Lambda chronique",
+        min_value=0.01,
+        max_value=0.15,
+        value=0.07,
+        step=0.005,
+        key="dashboard_redi_lambda_chronic",
+        help="Par défaut 0.07 (équivalent EWMA N=28).",
+    )
+
+    if lambda_chronic >= lambda_acute:
+        st.info(
+            "Conseil: utilisez une lambda aiguë supérieure à la lambda chronique "
+            "pour une meilleure séparation des signaux."
+        )
+
+    workload_column = raw_metric_columns.get(selected_redi_metric)
+    if not workload_column or workload_column not in daily_metrics_all.columns:
+        st.info("Métrique indisponible pour les calculs ACWR/EWMA/REDI.")
+    else:
+        redi_df = daily_metrics_all[["date", workload_column]].copy()
+        redi_df["date"] = pd.to_datetime(redi_df["date"], errors="coerce")
+        redi_df = redi_df.dropna(subset=["date"]).sort_values("date")
+        redi_df[workload_column] = pd.to_numeric(redi_df[workload_column], errors="coerce").fillna(0.0)
+
+        workloads = redi_df[workload_column].to_numpy(dtype=float)
+
+        acwr_acute_values, acwr_chronic_values = _compute_acute_chronic(workloads, "ACWR")
+        redi_df["acwr_acute"] = acwr_acute_values
+        redi_df["acwr_chronic"] = acwr_chronic_values
+        redi_df["redi_acute"] = compute_redi(workloads, lam=lambda_acute)
+        redi_df["redi_chronic"] = compute_redi(workloads, lam=lambda_chronic)
+        redi_df["ewma_acute"] = compute_ewma(workloads, lam=lambda_acute)
+        redi_df["ewma_chronic"] = compute_ewma(workloads, lam=lambda_chronic)
+
+        redi_df["acwr_ratio"] = np.divide(
+            redi_df["acwr_acute"],
+            redi_df["acwr_chronic"],
+            out=np.full(redi_df.shape[0], np.nan),
+            where=redi_df["acwr_chronic"] > 0,
+        )
+        redi_df["redi_ratio"] = np.divide(
+            redi_df["redi_acute"],
+            redi_df["redi_chronic"],
+            out=np.full(redi_df.shape[0], np.nan),
+            where=redi_df["redi_chronic"] > 0,
+        )
+        redi_df["ewma_ratio"] = np.divide(
+            redi_df["ewma_acute"],
+            redi_df["ewma_chronic"],
+            out=np.full(redi_df.shape[0], np.nan),
+            where=redi_df["ewma_chronic"] > 0,
+        )
+
+        ratio_mask = (redi_df["date"].dt.normalize() >= pd.Timestamp(start_date)) & (
+            redi_df["date"].dt.normalize() <= pd.Timestamp(end_date)
+        )
+        ratio_plot_df = redi_df[ratio_mask].copy()
+        ratio_plot_df = ratio_plot_df.replace([np.inf, -np.inf], np.nan)
+
+        if ratio_plot_df.empty:
+            st.info("Aucune donnée disponible pour les indices ACWR/EWMA/REDI.")
+        else:
+            acwr_chart = create_workload_ratio_chart(
+                ratio_plot_df,
+                method_label="ACWR",
+                ratio_col="acwr_ratio",
+                acute_col="acwr_acute",
+                chronic_col="acwr_chronic",
+            )
+            redi_chart = create_workload_ratio_chart(
+                ratio_plot_df,
+                method_label="REDI",
+                ratio_col="redi_ratio",
+                acute_col="redi_acute",
+                chronic_col="redi_chronic",
+            )
+            ewma_chart = create_workload_ratio_chart(
+                ratio_plot_df,
+                method_label="EWMA",
+                ratio_col="ewma_ratio",
+                acute_col="ewma_acute",
+                chronic_col="ewma_chronic",
+            )
+
+            chart_col_acwr, chart_col_ewma, chart_col_redi = st.columns(3)
+            with chart_col_acwr:
+                st.caption("ACWR (aiguë / chronique)")
+                st.altair_chart(acwr_chart, use_container_width=True)
+            with chart_col_ewma:
+                st.caption("EWMA (aiguë / chronique)")
+                st.altair_chart(ewma_chart, use_container_width=True)
+            with chart_col_redi:
+                st.caption("REDI (aiguë / chronique)")
+                st.altair_chart(redi_chart, use_container_width=True)
 
 # --- Nuage d'activités: SpeedEq (km/h) vs Durée (h), couleur = FC moyenne ---
 with tab_speed:

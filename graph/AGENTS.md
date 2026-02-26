@@ -7,6 +7,7 @@ Visualization components using Altair and Matplotlib.
 | File | Purpose |
 |------|---------|
 | `training_load.py` | Acute/chronic training load charts |
+| `redi.py` | REDI/EWMA ratio charts with risk-zone overlays |
 | `analytics.py` | Planned vs actual bar charts |
 | `elevation.py` | Elevation profile with grade coloring |
 | `timeseries.py` | Activity timeseries (HR, speed, elevation, SpeedEq) |
@@ -23,6 +24,10 @@ Visualization components using Altair and Matplotlib.
 ### training_load.py
 - `render_training_load_chart(df)`: Acute/chronic load time series
 - Altair-based with tooltips
+
+### redi.py
+- `create_workload_ratio_chart(df, method_label, ratio_col, acute_col, chronic_col)`: Ratio chart with 0.8-1.3 zone band and 1.5 threshold line
+- `create_redi_ratio_chart(df)`: Convenience wrapper for REDI default columns
 
 ### analytics.py
 - `render_planned_vs_actual_chart(df, metric)`: Stacked bars

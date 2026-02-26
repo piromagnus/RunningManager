@@ -13,7 +13,13 @@ import pandas as pd
 
 
 def create_training_load_chart(
-    df: pd.DataFrame, metric_key: str, metric_cfg: dict
+    df: pd.DataFrame,
+    metric_key: str,
+    metric_cfg: dict,
+    *,
+    band_lower_ratio: float = 0.75,
+    band_upper_ratio: float = 1.5,
+    danger_ratio: float | None = None,
 ) -> alt.Chart:
     """Create a training load chart showing acute vs chronic with bands.
 
@@ -34,8 +40,10 @@ def create_training_load_chart(
     working = df[["date", planned_col, acute_col]].copy()
     working[planned_col] = pd.to_numeric(working[planned_col], errors="coerce").fillna(0.0)
     working[acute_col] = pd.to_numeric(working[acute_col], errors="coerce").fillna(0.0)
-    working["chronic_lower"] = 0.75 * working[planned_col]
-    working["chronic_upper"] = 1.5 * working[planned_col]
+    working["chronic_lower"] = band_lower_ratio * working[planned_col]
+    working["chronic_upper"] = band_upper_ratio * working[planned_col]
+    if danger_ratio is not None:
+        working["danger_line"] = danger_ratio * working[planned_col]
 
     base = alt.Chart(working).encode(x=alt.X("date:T", title="Date"))
 
@@ -46,9 +54,13 @@ def create_training_load_chart(
 
     chronic_line = base.mark_line(color="#1d4ed8", strokeWidth=2).encode(y=f"{planned_col}:Q")
     acute_line = base.mark_line(color="#f97316", strokeWidth=2).encode(y=f"{acute_col}:Q")
+    layers: list[alt.Chart] = [fill, chronic_line, acute_line]
+    if danger_ratio is not None:
+        danger_line = base.mark_line(color="#dc2626", strokeWidth=1.8).encode(y="danger_line:Q")
+        layers.append(danger_line)
 
     return (
-        (fill + chronic_line + acute_line)
+        alt.layer(*layers)
         .encode(
             tooltip=[
                 alt.Tooltip("date:T", title="Date"),

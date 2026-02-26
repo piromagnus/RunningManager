@@ -18,6 +18,7 @@ General-purpose helpers for config, formatting, time, crypto, and UI.
 | `auth_state.py` | Session state bootstrap |
 | `ui_helpers.py` | UI utilities (trigger_rerun, dialogs) |
 | `dashboard_state.py` | Dashboard date range state |
+| `redi.py` | REDI/EWMA workload computations |
 | `elevation_preprocessing.py` | Elevation profile data prep with caching |
 | `elevation.py` | Elevation math helpers (avg grade) |
 | `grade_classification.py` | Grade classification utilities |
@@ -58,6 +59,10 @@ General-purpose helpers for config, formatting, time, crypto, and UI.
 ### metrics_formulas.py
 - `compute_trimp_hr_reserve(avg_hr, duration_sec, hr_rest, hr_max)`: TRIMP formula
 - `compute_trimp_hr_reserve_from_profile(avg_hr, duration_sec, hr_profile)`: HR profile helper
+
+### redi.py
+- `compute_redi(workloads, lam)`: REDI weighted cumulative workload with exponential decay
+- `compute_ewma(workloads, lam)`: EWMA recursive cumulative workload
 
 ### timeseries_preprocessing.py
 - `moving_average(df, window_size, col)`: Centered smoothing
