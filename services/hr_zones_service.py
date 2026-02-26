@@ -201,6 +201,8 @@ class HrZonesService:
         target_df["sort_date"] = pd.to_datetime(target_df.get("startDate"), errors="coerce")
         target_df = target_df.sort_values(["sort_date", "activityId"])
         working, updated = self._backfill_target_rows(working, target_df)
+        working, harmonized = self._harmonize_zone_payloads(working, athlete_id=athlete_id)
+        updated += harmonized
         self.storage.write_csv("activities_metrics.csv", working)
         return updated
 
@@ -236,7 +238,20 @@ class HrZonesService:
             return 0
         target_df = target_df.sort_values(["sort_date", "activityId"])
         working, updated = self._backfill_target_rows(working, target_df)
+        working, harmonized = self._harmonize_zone_payloads(working, athlete_id=athlete_id)
+        updated += harmonized
         self.storage.write_csv("activities_metrics.csv", working)
+        return updated
+
+    def harmonize_borders(self, athlete_id: Optional[str] = None) -> int:
+        """Ensure a consistent border set/count for an athlete's activities."""
+        metrics_df = self.storage.read_csv("activities_metrics.csv")
+        if metrics_df.empty or "activityId" not in metrics_df.columns:
+            return 0
+        working = self._ensure_border_columns(metrics_df)
+        working, updated = self._harmonize_zone_payloads(working, athlete_id=athlete_id)
+        if updated > 0:
+            self.storage.write_csv("activities_metrics.csv", working)
         return updated
 
     def build_weekly_zone_data(
@@ -838,3 +853,167 @@ class HrZonesService:
         if working.empty:
             return None
         return working["date"].max()
+
+    def _harmonize_zone_payloads(
+        self,
+        working: pd.DataFrame,
+        *,
+        athlete_id: Optional[str] = None,
+    ) -> tuple[pd.DataFrame, int]:
+        if working.empty or "activityId" not in working.columns:
+            return working, 0
+        if "athleteId" not in working.columns:
+            return working, 0
+
+        out = self._ensure_border_columns(working)
+        updated = 0
+        if athlete_id:
+            athlete_ids = [str(athlete_id)]
+        else:
+            athlete_ids = (
+                out["athleteId"]
+                .dropna()
+                .astype(str)
+                .map(str.strip)
+                .replace("", np.nan)
+                .dropna()
+                .drop_duplicates()
+                .tolist()
+            )
+
+        for current_athlete in athlete_ids:
+            mask = out["athleteId"].astype(str) == str(current_athlete)
+            subset = out.loc[mask].copy()
+            if subset.empty:
+                continue
+
+            subset["sort_date"] = pd.to_datetime(subset.get("startDate"), errors="coerce")
+            subset = subset.sort_values(["sort_date", "activityId"])
+            ordered_indices = subset.index.tolist()
+            if not ordered_indices:
+                continue
+
+            parsed_by_index: dict[int, Optional[tuple[int, list[float]]]] = {}
+            for idx in ordered_indices:
+                parsed_by_index[idx] = self._parse_row_zone_payload(subset.loc[idx])
+
+            valid_payloads = [
+                payload for payload in parsed_by_index.values() if payload is not None
+            ]
+            if not valid_payloads:
+                continue
+
+            target_border_count = max(border_count for border_count, _ in valid_payloads)
+            if target_border_count <= 0:
+                continue
+            target_zone_count = target_border_count + 1
+
+            references: dict[int, list[float]] = {}
+            for idx in ordered_indices:
+                payload = parsed_by_index.get(idx)
+                if payload is None:
+                    continue
+                border_count, borders = payload
+                if border_count == target_border_count:
+                    references[idx] = borders
+            if not references:
+                continue
+
+            previous_ref: dict[int, Optional[list[float]]] = {}
+            next_ref: dict[int, Optional[list[float]]] = {}
+            last_borders: Optional[list[float]] = None
+            for idx in ordered_indices:
+                if idx in references:
+                    last_borders = references[idx]
+                previous_ref[idx] = last_borders
+            last_borders = None
+            for idx in reversed(ordered_indices):
+                if idx in references:
+                    last_borders = references[idx]
+                next_ref[idx] = last_borders
+
+            for idx in ordered_indices:
+                payload = parsed_by_index.get(idx)
+                if payload is not None and payload[0] == target_border_count:
+                    canonical_borders = payload[1]
+                else:
+                    canonical_borders = previous_ref.get(idx) or next_ref.get(idx)
+                if canonical_borders is None:
+                    continue
+                if self._apply_row_zone_payload(
+                    out,
+                    idx,
+                    borders=canonical_borders,
+                    zone_count=target_zone_count,
+                ):
+                    updated += 1
+
+        return out, updated
+
+    @staticmethod
+    def _parse_row_zone_payload(row: pd.Series) -> Optional[tuple[int, list[float]]]:
+        raw_zone_count = pd.to_numeric(pd.Series([row.get("hrZone_zone_count")]), errors="coerce").iloc[0]
+        if pd.notna(raw_zone_count):
+            zone_count = max(2, min(int(raw_zone_count), MAX_PERSISTED_BORDERS + 1))
+            expected_borders = min(zone_count - 1, MAX_PERSISTED_BORDERS)
+            borders: list[float] = []
+            for idx in range(1, expected_borders + 1):
+                parsed = pd.to_numeric(
+                    pd.Series([row.get(f"hrZone_z{idx}_upper")]),
+                    errors="coerce",
+                ).iloc[0]
+                if pd.isna(parsed):
+                    return None
+                borders.append(float(parsed))
+            if any(borders[i] >= borders[i + 1] for i in range(len(borders) - 1)):
+                return None
+            return expected_borders, borders
+
+        borders: list[float] = []
+        for idx in range(1, MAX_PERSISTED_BORDERS + 1):
+            parsed = pd.to_numeric(
+                pd.Series([row.get(f"hrZone_z{idx}_upper")]),
+                errors="coerce",
+            ).iloc[0]
+            if pd.isna(parsed):
+                break
+            borders.append(float(parsed))
+        if not borders:
+            return None
+        if any(borders[i] >= borders[i + 1] for i in range(len(borders) - 1)):
+            return None
+        return len(borders), borders
+
+    @staticmethod
+    def _same_numeric(old_value: object, new_value: object) -> bool:
+        old_num = pd.to_numeric(pd.Series([old_value]), errors="coerce").iloc[0]
+        new_num = pd.to_numeric(pd.Series([new_value]), errors="coerce").iloc[0]
+        if pd.isna(old_num) and pd.isna(new_num):
+            return True
+        if pd.isna(old_num) or pd.isna(new_num):
+            return False
+        return bool(np.isclose(float(old_num), float(new_num)))
+
+    def _apply_row_zone_payload(
+        self,
+        df: pd.DataFrame,
+        idx: int,
+        *,
+        borders: Sequence[float],
+        zone_count: int,
+    ) -> bool:
+        changed = False
+        for border_idx, col in enumerate(BORDER_COLUMNS, start=1):
+            new_value: object = np.nan
+            if border_idx <= len(borders):
+                new_value = float(borders[border_idx - 1])
+            old_value = df.at[idx, col] if col in df.columns else np.nan
+            if not self._same_numeric(old_value, new_value):
+                df.at[idx, col] = new_value
+                changed = True
+
+        old_zone_count = pd.to_numeric(pd.Series([df.at[idx, "hrZone_zone_count"]]), errors="coerce").iloc[0]
+        if pd.isna(old_zone_count) or int(old_zone_count) != int(zone_count):
+            df.at[idx, "hrZone_zone_count"] = int(zone_count)
+            changed = True
+        return changed

@@ -15,6 +15,9 @@ from services.hr_zones_service import HrZonesService
 from services.timeseries_service import TimeseriesService
 from utils.config import Config
 
+DEFAULT_HR_ZONE_COUNT = 5
+DEFAULT_HR_ZONE_WINDOW_DAYS = 90
+
 
 def _build_cfg(tmp_path: Path) -> Config:
     data_dir = tmp_path
@@ -41,9 +44,6 @@ def _build_cfg(tmp_path: Path) -> Config:
         metrics_ts_dir=metrics_ts_dir,
         speed_profile_dir=speed_profile_dir,
         n_cluster=5,
-        hr_zone_count=5,
-        hr_zone_window_days=90,
-        hr_zone_fit_activity_types=("RUN", "TRAIL_RUN"),
     )
 
 
@@ -144,8 +144,8 @@ def test_compute_and_store_borders_then_load_activity_zones(tmp_path):
     service = HrZonesService(
         storage=storage,
         ts_service=ts_service,
-        zone_count=cfg.hr_zone_count,
-        window_days=cfg.hr_zone_window_days,
+        zone_count=DEFAULT_HR_ZONE_COUNT,
+        window_days=DEFAULT_HR_ZONE_WINDOW_DAYS,
     )
     _write_activity_timeseries(cfg, "act-1")
     _write_activities_metrics(storage)
@@ -467,3 +467,103 @@ def test_backfill_all_borders_updates_activities_metrics(tmp_path):
     zone_2 = storage.read_csv("hr_zones/act-2.csv")
     assert not zone_1.empty
     assert not zone_2.empty
+
+
+def test_harmonize_borders_backfills_missing_and_zone_count(tmp_path):
+    cfg = _build_cfg(tmp_path)
+    storage = CsvStorage(cfg.data_dir)
+    ts_service = TimeseriesService(cfg)
+    service = HrZonesService(storage=storage, ts_service=ts_service)
+
+    storage.write_csv(
+        "activities_metrics.csv",
+        pd.DataFrame(
+            [
+                {
+                    "activityId": "act-old",
+                    "athleteId": "ath-1",
+                    "startDate": "2026-02-20",
+                    "category": "RUN",
+                    "hrSpeedShift": 0,
+                },
+                {
+                    "activityId": "act-ref",
+                    "athleteId": "ath-1",
+                    "startDate": "2026-02-22",
+                    "category": "TRAIL_RUN",
+                    "hrSpeedShift": 0,
+                    "hrZone_z1_upper": 139.0,
+                    "hrZone_z2_upper": 149.0,
+                    "hrZone_z3_upper": 159.0,
+                    "hrZone_z4_upper": 170.0,
+                    "hrZone_zone_count": 5,
+                },
+                {
+                    "activityId": "act-new",
+                    "athleteId": "ath-1",
+                    "startDate": "2026-02-26",
+                    "category": "RUN",
+                    "hrSpeedShift": 0,
+                    "hrZone_z1_upper": 143.0,
+                    "hrZone_z2_upper": 157.0,
+                    "hrZone_z3_upper": 170.0,
+                    "hrZone_zone_count": 4,
+                },
+            ]
+        ),
+    )
+
+    updated = service.harmonize_borders(athlete_id="ath-1")
+    assert updated >= 2
+
+    metrics_df = storage.read_csv("activities_metrics.csv")
+    metrics_df = metrics_df[metrics_df["athleteId"].astype(str) == "ath-1"].copy()
+    assert not metrics_df.empty
+
+    for _, row in metrics_df.iterrows():
+        assert int(pd.to_numeric(pd.Series([row.get("hrZone_zone_count")]), errors="coerce").iloc[0]) == 5
+        assert float(row["hrZone_z1_upper"]) == 139.0
+        assert float(row["hrZone_z2_upper"]) == 149.0
+        assert float(row["hrZone_z3_upper"]) == 159.0
+        assert float(row["hrZone_z4_upper"]) == 170.0
+
+
+def test_backfill_from_date_harmonizes_previous_rows(tmp_path):
+    cfg = _build_cfg(tmp_path)
+    storage = CsvStorage(cfg.data_dir)
+    ts_service = TimeseriesService(cfg)
+    service = HrZonesService(storage=storage, ts_service=ts_service)
+
+    _write_activity_timeseries(cfg, "act-ref")
+    storage.write_csv(
+        "activities_metrics.csv",
+        pd.DataFrame(
+            [
+                {
+                    "activityId": "act-old",
+                    "athleteId": "ath-1",
+                    "startDate": "2026-02-20",
+                    "category": "RUN",
+                    "hrSpeedShift": 0,
+                },
+                {
+                    "activityId": "act-ref",
+                    "athleteId": "ath-1",
+                    "startDate": "2026-02-22",
+                    "category": "RUN",
+                    "hrSpeedShift": 0,
+                },
+            ]
+        ),
+    )
+
+    updated = service.backfill_borders_from_date(
+        athlete_id="ath-1",
+        from_date=dt.date(2026, 2, 22),
+    )
+    assert updated >= 1
+
+    metrics_df = storage.read_csv("activities_metrics.csv")
+    old_row = metrics_df[metrics_df["activityId"].astype(str) == "act-old"].iloc[0]
+    assert pd.notna(pd.to_numeric(pd.Series([old_row.get("hrZone_z1_upper")]), errors="coerce").iloc[0])
+    assert pd.notna(pd.to_numeric(pd.Series([old_row.get("hrZone_zone_count")]), errors="coerce").iloc[0])

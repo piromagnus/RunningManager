@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import math
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
@@ -733,6 +735,7 @@ class MetricsComputationService:
             return pd.DataFrame(columns=self.planned_metrics.headers)
 
         rows: List[Dict[str, object]] = []
+        running_speed_hr_samples = self._recent_running_speed_hr_samples(athlete_id)
         for _, row in planned_df.iterrows():
             session_id = str(row.get("plannedSessionId") or "")
             if not session_id:
@@ -765,6 +768,7 @@ class MetricsComputationService:
                 session=row,
                 duration_sec=duration,
                 hr_profile=hr_profile,
+                running_speed_hr_samples=running_speed_hr_samples,
             )
             rows.append(
                 {
@@ -1075,10 +1079,16 @@ class MetricsComputationService:
         session: pd.Series,
         duration_sec: int,
         hr_profile: Optional[Tuple[float, float]],
+        running_speed_hr_samples: Sequence[Tuple[float, float]],
     ) -> float:
         if hr_profile is None or duration_sec <= 0:
             return 0.0
-        segments = self._planned_segments(athlete_id, session, hr_profile)
+        segments = self._planned_segments(
+            athlete_id,
+            session,
+            hr_profile,
+            running_speed_hr_samples=running_speed_hr_samples,
+        )
         total = 0.0
         for seg_duration, avg_hr in segments:
             if seg_duration <= 0:
@@ -1090,6 +1100,7 @@ class MetricsComputationService:
                 session.get("targetType"),
                 session.get("targetLabel"),
                 hr_profile,
+                running_speed_hr_samples=running_speed_hr_samples,
             )
             total = self._compute_trimp(target_hr, duration_sec, hr_profile)
         return total
@@ -1181,30 +1192,52 @@ class MetricsComputationService:
         athlete_id: str,
         session: pd.Series,
         hr_profile: Optional[Tuple[float, float]],
+        running_speed_hr_samples: Sequence[Tuple[float, float]],
     ) -> List[Tuple[int, float]]:
         segments: List[Tuple[int, float]] = []
-        fundamental_hr = self._avg_hr_for_target(athlete_id, None, "Fundamental", hr_profile)
+        fundamental_hr = self._avg_hr_for_target(
+            athlete_id,
+            None,
+            "Fundamental",
+            hr_profile,
+            running_speed_hr_samples=running_speed_hr_samples,
+        )
         duration = safe_int(session.get("plannedDurationSec"))
-        steps_json = session.get("stepsJson")
-        if not steps_json:
+        steps_payload = session.get("stepsJson")
+        if isinstance(steps_payload, float) and pd.isna(steps_payload):
+            steps_payload = ""
+        if not steps_payload:
             avg_hr = self._avg_hr_for_target(
                 athlete_id,
                 session.get("targetType"),
                 session.get("targetLabel"),
                 hr_profile,
+                running_speed_hr_samples=running_speed_hr_samples,
             )
             if duration > 0:
                 segments.append((duration, avg_hr))
             return segments
 
-        try:
-            steps = json.loads(steps_json)
-        except Exception:
+        if isinstance(steps_payload, dict):
+            steps = steps_payload
+        elif isinstance(steps_payload, str):
+            try:
+                steps = json.loads(steps_payload)
+            except Exception:
+                if duration > 0:
+                    segments.append((duration, fundamental_hr))
+                return segments
+        else:
             if duration > 0:
                 segments.append((duration, fundamental_hr))
             return segments
 
-        normalised = normalize_steps(steps)
+        try:
+            normalised = normalize_steps(steps)
+        except Exception:
+            if duration > 0:
+                segments.append((duration, fundamental_hr))
+            return segments
 
         def _segment_hr(block: Dict[str, Any]) -> float:
             kind = (block.get("kind") or "recovery").lower()
@@ -1214,6 +1247,7 @@ class MetricsComputationService:
                     block.get("targetType"),
                     block.get("targetLabel"),
                     hr_profile,
+                    running_speed_hr_samples=running_speed_hr_samples,
                 )
             return fundamental_hr
 
@@ -1252,11 +1286,21 @@ class MetricsComputationService:
         target_type: Optional[str],
         target_label: Optional[str],
         hr_profile: Optional[Tuple[float, float]],
+        running_speed_hr_samples: Sequence[Tuple[float, float]],
     ) -> float:
+        target_kind = str(target_type or "").strip().lower()
+        if target_kind == "speed":
+            target_speed_kmh = self._parse_speed_target_kmh(target_label)
+            estimated_hr = self._estimate_mean_hr_for_speed(
+                target_speed_kmh,
+                running_speed_hr_samples,
+            )
+            if estimated_hr is not None:
+                return estimated_hr
         label = target_label or ""
-        if target_type == "sensation":
+        if target_kind == "sensation":
             label = "Fundamental"
-        if target_type in {"hr", "pace"} and not label:
+        if target_kind in {"hr", "pace"} and not label:
             label = target_label or "Fundamental"
         threshold = None
         if label:
@@ -1271,3 +1315,77 @@ class MetricsComputationService:
             if hr_max > hr_rest:
                 return hr_rest + 0.6 * (hr_max - hr_rest)
         return 0.0
+
+    @staticmethod
+    def _parse_speed_target_kmh(value: object) -> Optional[float]:
+        if value in (None, ""):
+            return None
+        raw = str(value).strip().replace(",", ".")
+        if not raw:
+            return None
+        match = re.search(r"[-+]?\d*\.?\d+", raw)
+        if not match:
+            return None
+        try:
+            speed = float(match.group(0))
+        except Exception:
+            return None
+        if not math.isfinite(speed) or speed <= 0:
+            return None
+        return speed
+
+    @staticmethod
+    def _estimate_mean_hr_for_speed(
+        target_speed_kmh: Optional[float],
+        running_speed_hr_samples: Sequence[Tuple[float, float]],
+    ) -> Optional[float]:
+        if (
+            target_speed_kmh is None
+            or not math.isfinite(target_speed_kmh)
+            or target_speed_kmh <= 0
+            or not running_speed_hr_samples
+        ):
+            return None
+        weighted_hr = 0.0
+        weight_sum = 0.0
+        for speed_kmh, avg_hr in running_speed_hr_samples:
+            if (
+                not math.isfinite(speed_kmh)
+                or speed_kmh <= 0
+                or not math.isfinite(avg_hr)
+                or avg_hr <= 0
+            ):
+                continue
+            # Favor sessions that are closest to the requested target speed.
+            weight = 1.0 / (abs(speed_kmh - target_speed_kmh) + 0.25)
+            weighted_hr += avg_hr * weight
+            weight_sum += weight
+        if weight_sum <= 0:
+            return None
+        return weighted_hr / weight_sum
+
+    def _recent_running_speed_hr_samples(self, athlete_id: str) -> List[Tuple[float, float]]:
+        activities_df = self.activities.list(athleteId=athlete_id)
+        if activities_df.empty:
+            return []
+        ordered = activities_df.copy()
+        if "startTime" in ordered.columns:
+            ordered["_start"] = pd.to_datetime(ordered["startTime"], errors="coerce")
+            ordered = ordered.sort_values("_start", ascending=False, na_position="last")
+        samples: List[Tuple[float, float]] = []
+        for _, row in ordered.iterrows():
+            _, category = self._resolve_activity_category(row)
+            if category not in {"RUN", "TRAIL_RUN"}:
+                continue
+            distance_km = safe_float(row.get("distanceKm"))
+            moving_sec = safe_float(row.get("movingSec"))
+            avg_hr = safe_float(row.get("avgHr"))
+            if distance_km <= 0 or moving_sec <= 0 or avg_hr <= 0:
+                continue
+            speed_kmh = (distance_km * 3600.0) / moving_sec
+            if not math.isfinite(speed_kmh) or speed_kmh <= 0:
+                continue
+            samples.append((speed_kmh, avg_hr))
+            if len(samples) >= 5:
+                break
+        return samples
