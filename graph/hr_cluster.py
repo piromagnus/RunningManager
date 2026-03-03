@@ -223,7 +223,10 @@ def _fit_regression_with_outliers(
     working["is_outlier"] = False
     outlier_indices = indices[~inlier_mask]
     if outlier_indices.size > 0:
-        working.loc[outlier_indices, "is_outlier"] = True
+        # outlier_indices are positional indices (numpy), not index labels.
+        # Use iloc to stay robust when DataFrame index is non-contiguous.
+        outlier_col = int(working.columns.get_loc("is_outlier"))
+        working.iloc[outlier_indices, outlier_col] = True
 
     x_fit = x[inlier_mask] if inlier_mask.sum() >= 2 else x
     y_fit = y[inlier_mask] if inlier_mask.sum() >= 2 else y

@@ -13,7 +13,7 @@ from persistence.csv_storage import CsvStorage
 from persistence.repositories import AthletesRepo, ThresholdsRepo
 from utils.ids import new_id
 
-st.set_page_config(page_title="Running Manager - Athlete")
+st.set_page_config(page_title="Running Manager - Athlete", layout="wide")
 apply_theme()
 st.title("Athlete")
 
@@ -118,17 +118,51 @@ else:
             disabled=["thresholdId", "athleteId"],
             hide_index=True,
         )
-        if st.button("Save threshold edits"):
-            try:
-                # Persist row-by-row based on thresholdId
-                for _, row in edited.iterrows():
-                    tid = row.get("thresholdId")
-                    if not tid:
-                        continue
-                    thr_repo.update(str(tid), row.to_dict())
-                st.success("Threshold changes saved")
-            except Exception as e:
-                st.error(f"Failed to save edits: {e}")
+        save_col, delete_col = st.columns(2)
+        with save_col:
+            if st.button("Save threshold edits"):
+                try:
+                    # Persist row-by-row based on thresholdId
+                    for _, row in edited.iterrows():
+                        tid = row.get("thresholdId")
+                        if not tid:
+                            continue
+                        thr_repo.update(str(tid), row.to_dict())
+                    st.success("Threshold changes saved")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Failed to save edits: {e}")
+
+        with delete_col:
+            threshold_labels = []
+            threshold_id_by_label = {}
+            for _, row in thr_df.iterrows():
+                threshold_id = str(row.get("thresholdId") or "")
+                threshold_name = str(row.get("name") or "Unnamed threshold")
+                label = f"{threshold_name} ({threshold_id})"
+                threshold_labels.append(label)
+                threshold_id_by_label[label] = threshold_id
+
+            selected_threshold_label = st.selectbox(
+                "Threshold to delete",
+                threshold_labels,
+                key="athlete_threshold_delete_select",
+            )
+            confirm_delete = st.checkbox(
+                "Confirm threshold deletion",
+                value=False,
+                key="athlete_threshold_delete_confirm",
+            )
+            if st.button("Delete selected threshold", type="secondary"):
+                if not confirm_delete:
+                    st.warning("Please confirm deletion first.")
+                else:
+                    threshold_to_delete = threshold_id_by_label.get(selected_threshold_label)
+                    if threshold_to_delete:
+                        thr_repo.delete(threshold_to_delete)
+                        st.rerun()
+                    else:
+                        st.error("Unable to determine which threshold to delete.")
     else:
         st.info("No thresholds yet for this athlete.")
 
