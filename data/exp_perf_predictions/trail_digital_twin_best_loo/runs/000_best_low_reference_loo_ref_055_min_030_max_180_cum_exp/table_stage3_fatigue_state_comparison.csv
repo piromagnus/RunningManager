@@ -1,0 +1,5 @@
+cohort,stage,r2,maeMin,mapePct,biasMin,validation,fitObjective,fatigueState,acuteTrimpCol,fatigueModel,alpha,fatigueCoef
+hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential,0.9587734656401976,22.17611237767109,13.636840792497162,8.900503862150327,in_sample,activity,cumulative,cumTrimpBefore,exponential,0.4,0.3
+hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,0.9587734656401976,22.176112377671096,13.636840792497166,8.900503862150332,loo,activity,cumulative,cumTrimpBefore,exponential,0.4,0.3
+hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential,0.95844090329462,13.349538849347201,10.805680420788397,0.8268182446084746,in_sample,activity,cumulative,cumTrimpBefore,exponential,0.45,0.4
+hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,0.9376099747093866,15.826749679364525,11.592744775519924,1.8924303474437134,loo,activity,cumulative,cumTrimpBefore,exponential,0.45,0.4

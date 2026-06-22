@@ -2,7 +2,8 @@
 .env.*
 __pycache__/
 .pytest_cache/
-.streamlit/
+.streamlit/*
+!.streamlit/config.toml
 .vscode/
 .DS_Store
 .idea/

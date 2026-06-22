@@ -12,6 +12,7 @@ import pandas as pd
 
 from persistence.csv_storage import CsvStorage
 from persistence.repositories import LinksRepo, SettingsRepo, WeeklyMetricsRepo
+from utils.constants import CATEGORY_BREAKDOWN_STACK_ORDER, CATEGORY_LABELS_FR
 from utils.metrics_formulas import compute_trimp_hr_reserve_from_profile
 
 
@@ -565,3 +566,184 @@ class AnalyticsService:
                     except Exception:
                         descent_m = 0.0
         return distance_km * dist_f + ascent_m * asc_f - descent_m * desc_f
+
+    def _load_filtered_activity_metrics(
+        self,
+        *,
+        athlete_id: str,
+        metric_label: str,
+        selected_types: Optional[Sequence[str]],
+        start_date: dt.date,
+        end_date: dt.date,
+    ) -> pd.DataFrame:
+        """Return per-activity rows with category, date, and metric_value."""
+        value_column_map = {
+            "Time": "timeSec",
+            "Distance": "distanceKm",
+            "DistEq": "distanceEqKm",
+            "Trimp": "trimp",
+        }
+        value_col = value_column_map.get(metric_label, "distanceKm")
+
+        acts_path = self.storage.base_dir / "activities_metrics.csv"
+        if acts_path.exists():
+            acts_df = pd.read_csv(acts_path)
+        else:
+            return pd.DataFrame()
+
+        acts_df = acts_df[acts_df.get("athleteId") == athlete_id].copy()
+        if acts_df.empty:
+            return acts_df
+
+        if selected_types:
+            acts_df["category"] = (
+                acts_df.get("category", pd.Series(dtype=str)).astype(str).str.upper()
+            )
+            acts_df = acts_df[acts_df["category"].isin([s.upper() for s in selected_types])]
+        acts_df["date"] = pd.to_datetime(acts_df.get("startDate"), errors="coerce").dt.normalize()
+        acts_df = acts_df[
+            (acts_df["date"] >= pd.Timestamp(start_date))
+            & (acts_df["date"] <= pd.Timestamp(end_date))
+        ]
+        if acts_df.empty:
+            return acts_df
+
+        bike_eq = self._load_bike_eq_factors()
+        ski_eq = self._load_ski_eq_factors()
+        if metric_label == "DistEq":
+            acts_df["metric_value"] = acts_df.apply(
+                lambda r: (
+                    self._bike_disteq_value(r, bike_eq)
+                    if str(r.get("category", "")).upper() == "RIDE"
+                    else self._ski_disteq_value(r, ski_eq)
+                    if str(r.get("category", "")).upper() == "BACKCOUNTRY_SKI"
+                    else float(r.get("distanceEqKm") or 0.0)
+                ),
+                axis=1,
+            )
+        else:
+            acts_df["metric_value"] = pd.to_numeric(acts_df.get(value_col), errors="coerce").fillna(
+                0.0
+            )
+
+        if metric_label == "Time":
+            acts_df["metric_value"] = acts_df["metric_value"].apply(self.seconds_to_hours)
+
+        acts_df["category"] = acts_df.get("category", pd.Series(dtype=str)).astype(str).str.upper()
+        return acts_df
+
+    @staticmethod
+    def _category_stack_metadata(df: pd.DataFrame) -> pd.DataFrame:
+        order_map = {cat: idx for idx, cat in enumerate(CATEGORY_BREAKDOWN_STACK_ORDER)}
+        out = df.copy()
+        out["category_label"] = out["category"].map(
+            lambda key: CATEGORY_LABELS_FR.get(str(key), str(key))
+        )
+        out["category_order"] = out["category"].map(
+            lambda key: order_map.get(str(key), len(CATEGORY_BREAKDOWN_STACK_ORDER))
+        )
+        return out
+
+    def activity_category_breakdown(
+        self,
+        *,
+        athlete_id: str,
+        metric_label: str,
+        selected_types: Optional[Sequence[str]],
+        start_date: dt.date,
+        end_date: dt.date,
+    ) -> pd.DataFrame:
+        """Aggregate actual metric values by activity category for a date range.
+
+        Returns columns: category, category_label, value, pct, activity_count.
+        """
+        empty = pd.DataFrame(
+            columns=["category", "category_label", "value", "pct", "activity_count", "category_order"]
+        )
+        acts_df = self._load_filtered_activity_metrics(
+            athlete_id=athlete_id,
+            metric_label=metric_label,
+            selected_types=selected_types,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        if acts_df.empty:
+            return empty
+
+        grouped = acts_df.groupby("category", as_index=False).agg(
+            value=("metric_value", "sum"),
+            activity_count=("activityId", "count"),
+        )
+        total = float(grouped["value"].sum())
+        grouped["pct"] = 0.0
+        if total > 0:
+            grouped["pct"] = grouped["value"] / total * 100.0
+        return self._category_stack_metadata(grouped).sort_values("category_order").reset_index(
+            drop=True
+        )
+
+    def activity_category_weekly_breakdown(
+        self,
+        *,
+        athlete_id: str,
+        metric_label: str,
+        selected_types: Optional[Sequence[str]],
+        start_date: dt.date,
+        end_date: dt.date,
+    ) -> pd.DataFrame:
+        """Weekly actual metric totals stacked by activity category.
+
+        Returns columns: weekLabel, isoYear, isoWeek, category, category_label,
+        value, category_order.
+        """
+        empty = pd.DataFrame(
+            columns=[
+                "weekLabel",
+                "isoYear",
+                "isoWeek",
+                "category",
+                "category_label",
+                "value",
+                "category_order",
+            ]
+        )
+        acts_df = self._load_filtered_activity_metrics(
+            athlete_id=athlete_id,
+            metric_label=metric_label,
+            selected_types=selected_types,
+            start_date=start_date,
+            end_date=end_date,
+        )
+
+        grid: List[dt.date] = []
+        cur = start_date - dt.timedelta(days=start_date.isoweekday() - 1)
+        while cur <= end_date:
+            grid.append(cur)
+            cur = cur + dt.timedelta(days=7)
+        weeks_df = pd.DataFrame({"weekStart": pd.to_datetime(grid)})
+        iso = weeks_df["weekStart"].dt.isocalendar()
+        weeks_df["isoYear"] = iso.year.astype(int)
+        weeks_df["isoWeek"] = iso.week.astype(int)
+        weeks_df["weekLabel"] = weeks_df["weekStart"].dt.strftime("%Y-%m-%d")
+
+        if acts_df.empty:
+            return empty
+
+        acts_df["isoYear"] = acts_df["date"].dt.isocalendar().year.astype(int)
+        acts_df["isoWeek"] = acts_df["date"].dt.isocalendar().week.astype(int)
+        grouped = acts_df.groupby(["isoYear", "isoWeek", "category"], as_index=False).agg(
+            value=("metric_value", "sum")
+        )
+        grouped = grouped.merge(
+            weeks_df[["isoYear", "isoWeek", "weekLabel"]],
+            on=["isoYear", "isoWeek"],
+            how="right",
+        )
+        grouped["value"] = pd.to_numeric(grouped["value"], errors="coerce").fillna(0.0)
+        grouped = grouped[grouped["value"] > 0]
+        if grouped.empty:
+            return empty
+
+        return self._category_stack_metadata(grouped).sort_values(
+            ["weekLabel", "category_order"]
+        ).reset_index(drop=True)

@@ -82,6 +82,37 @@ class MetricsComputationService:
         self._recompute_for_athletes([athlete_id], replace_all=False)
         self._ensure_hr_zones(activity_ids)
 
+    def list_activity_ids_missing_metrics(self, athlete_id: Optional[str] = None) -> list[str]:
+        """Return activity IDs present in activities.csv but missing from activities_metrics."""
+        activities_df = (
+            self.activities.list(athleteId=athlete_id) if athlete_id else self.activities.list()
+        )
+        if activities_df.empty or "activityId" not in activities_df.columns:
+            return []
+        activity_ids = {
+            str(activity_id)
+            for activity_id in activities_df["activityId"].astype(str).dropna()
+            if str(activity_id).strip()
+        }
+        metrics_df = self.activity_metrics.list()
+        if metrics_df.empty or "activityId" not in metrics_df.columns:
+            return sorted(activity_ids)
+        if athlete_id and "athleteId" in metrics_df.columns:
+            metrics_df = metrics_df[metrics_df["athleteId"].astype(str) == str(athlete_id)]
+        metrics_ids = {
+            str(activity_id)
+            for activity_id in metrics_df["activityId"].astype(str).dropna()
+            if str(activity_id).strip()
+        }
+        return sorted(activity_ids - metrics_ids)
+
+    def recompute_missing_activity_metrics(self, athlete_id: Optional[str] = None) -> list[str]:
+        """Recompute metrics for activities missing from activities_metrics.csv."""
+        missing_ids = self.list_activity_ids_missing_metrics(athlete_id)
+        if missing_ids:
+            self.recompute_for_activities(missing_ids)
+        return missing_ids
+
     def recompute_for_activities(self, activity_ids: Sequence[str]) -> None:
         """Recompute metrics for specific activities only.
 

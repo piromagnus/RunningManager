@@ -235,7 +235,9 @@ class IntervalComparisonService:
             ]
 
         results: List[MatchedSegment] = []
-        groups = self._build_structural_groups(planned_segments, len(lap_segments))
+        total_lap_time = sum(max(float(lap.time_sec), 0.0) for lap in lap_segments)
+        avg_lap_sec = total_lap_time / len(lap_segments) if lap_segments else 180.0
+        groups = self._build_structural_groups(planned_segments, len(lap_segments), avg_lap_sec)
         group_regions = self._dp_region_split(groups, lap_segments)
         for group, region_laps in group_regions:
             results.extend(self._assign_region_to_segments(group, region_laps))
@@ -245,6 +247,7 @@ class IntervalComparisonService:
         self,
         planned_segments: Sequence[PlannedSegment],
         lap_count: int,
+        avg_lap_sec: float = 180.0,
     ) -> List[StructuralGroup]:
         groups: List[StructuralGroup] = [
             StructuralGroup(
@@ -263,7 +266,11 @@ class IntervalComparisonService:
         for segment in planned_segments:
             kind, group_key = self._structural_kind_and_key(segment.section_label)
             if current_segments and (kind != current_kind or group_key != current_key):
-                groups.append(self._make_structural_group(current_kind or "other", current_segments, lap_count))
+                groups.append(
+                    self._make_structural_group(
+                        current_kind or "other", current_segments, lap_count, avg_lap_sec
+                    )
+                )
                 current_segments = []
             if not current_segments:
                 current_kind = kind
@@ -271,7 +278,11 @@ class IntervalComparisonService:
             current_segments.append(segment)
 
         if current_segments:
-            groups.append(self._make_structural_group(current_kind or "other", current_segments, lap_count))
+            groups.append(
+                self._make_structural_group(
+                    current_kind or "other", current_segments, lap_count, avg_lap_sec
+                )
+            )
 
         groups.append(
             StructuralGroup(
@@ -316,22 +327,28 @@ class IntervalComparisonService:
         kind: str,
         segments: Sequence[PlannedSegment],
         lap_count: int,
+        avg_lap_sec: float = 180.0,
     ) -> StructuralGroup:
         expected_total_sec = sum(max(int(segment.sec), 0) for segment in segments)
         expected_count = len(segments)
 
+        half_avg = max(avg_lap_sec * 0.5, 30.0)
+        duration_ceiling = max(expected_count, int(expected_total_sec / half_avg) + 2)
+
         if kind == "loop":
             min_laps = max(0, expected_count - max(expected_count // 3, 1))
-            max_laps = min(lap_count, max(expected_count + 3, expected_count * 3 // 2))
+            max_laps = min(
+                lap_count, max(expected_count + 3, expected_count * 3 // 2, duration_ceiling)
+            )
         elif kind == "between":
             min_laps = 0
-            max_laps = min(lap_count, max(2, expected_count + 2))
+            max_laps = min(lap_count, max(2, expected_count + 2, duration_ceiling))
         elif kind in {"pre", "post"}:
             min_laps = 0
-            max_laps = min(lap_count, max(3, expected_count + 4))
+            max_laps = min(lap_count, max(3, expected_count + 4, duration_ceiling))
         else:
             min_laps = 0
-            max_laps = min(lap_count, max(2, expected_count + 2))
+            max_laps = min(lap_count, max(2, expected_count + 2, duration_ceiling))
 
         max_laps = max(max_laps, min_laps)
         return StructuralGroup(

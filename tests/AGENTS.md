@@ -25,10 +25,12 @@ Pytest test suite with fixtures and fakes.
 | `test_session_templates_service.py` | Session template tests |
 | `test_planner_presenter.py` | Presenter layer tests |
 | `test_pacer_service.py` | Race pacing tests |
+| `test_trail_performance_model.py` | Trail digital-twin helper tests |
 | `test_formatting.py` | Formatting helper tests |
 | `test_config.py` | Config loading tests |
 | `test_time_ids.py` | Time/ID utility tests |
 | `test_gpx_parser.py` | GPX parsing tests |
+| `test_trail_digital_twin_benchmark.py` | Trail digital-twin benchmark config, expansion, summary, and HTML tests |
 
 ## conftest.py
 

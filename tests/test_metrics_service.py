@@ -52,6 +52,92 @@ def _bootstrap(tmp_path):
     return storage
 
 
+def test_list_activity_ids_missing_metrics(tmp_path):
+    storage = _bootstrap(tmp_path)
+    activities_repo = ActivitiesRepo(storage)
+    activities_repo.create(
+        {
+            "activityId": "act-1",
+            "athleteId": "ath-1",
+            "source": "manual",
+            "startTime": "2025-04-10T08:00:00Z",
+            "distanceKm": 10.0,
+            "elapsedSec": 3600,
+            "movingSec": 3500,
+            "ascentM": 100.0,
+            "avgHr": 140.0,
+            "maxHr": 165.0,
+            "hasTimeseries": False,
+            "polyline": "",
+            "rawJsonPath": "",
+        }
+    )
+    activities_repo.create(
+        {
+            "activityId": "act-2",
+            "athleteId": "ath-1",
+            "source": "manual",
+            "startTime": "2025-04-11T09:00:00Z",
+            "distanceKm": 12.0,
+            "elapsedSec": 4000,
+            "movingSec": 3900,
+            "ascentM": 120.0,
+            "avgHr": 145.0,
+            "maxHr": 170.0,
+            "hasTimeseries": False,
+            "polyline": "",
+            "rawJsonPath": "",
+        }
+    )
+    metrics_repo = ActivitiesMetricsRepo(storage)
+    metrics_repo.create(
+        {
+            "activityId": "act-1",
+            "athleteId": "ath-1",
+            "startDate": "2025-04-10",
+            "sportType": "Run",
+            "category": "RUN",
+            "source": "manual",
+            "distanceKm": 10.0,
+            "timeSec": 3600,
+            "ascentM": 100.0,
+            "distanceEqKm": 11.0,
+            "trimp": 50.0,
+            "avgHr": 140.0,
+            "hrSpeedShift": "",
+        }
+    )
+    service = MetricsComputationService(storage)
+    assert service.list_activity_ids_missing_metrics("ath-1") == ["act-2"]
+
+
+def test_recompute_missing_activity_metrics(tmp_path):
+    storage = _bootstrap(tmp_path)
+    activities_repo = ActivitiesRepo(storage)
+    activities_repo.create(
+        {
+            "activityId": "act-missing",
+            "athleteId": "ath-1",
+            "source": "manual",
+            "startTime": "2025-04-10T08:00:00Z",
+            "distanceKm": 10.0,
+            "elapsedSec": 3600,
+            "movingSec": 3500,
+            "ascentM": 100.0,
+            "avgHr": 140.0,
+            "maxHr": 165.0,
+            "hasTimeseries": False,
+            "polyline": "",
+            "rawJsonPath": "",
+        }
+    )
+    service = MetricsComputationService(storage)
+    recomputed = service.recompute_missing_activity_metrics("ath-1")
+    assert recomputed == ["act-missing"]
+    metrics_df = ActivitiesMetricsRepo(storage).list()
+    assert "act-missing" in set(metrics_df["activityId"].astype(str))
+
+
 def test_recompute_metrics(tmp_path):
     storage = _bootstrap(tmp_path)
     planned_repo = PlannedSessionsRepo(storage)

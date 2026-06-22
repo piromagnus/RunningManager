@@ -1,0 +1,53 @@
+execution:
+  output_dir: /tmp/trail_digital_twin_best_loo
+  per_run_csv: true
+  per_run_html: false
+  disable_inner_robustness: true
+  disable_inner_segment_grid: true
+  write_html: true
+  fail_fast: false
+
+selection:
+  primary_stage: Stage 3 HRR speed ratio LOO
+  fallback_stage: Stage 3 HRR speed ratio
+  aggregate_objectives:
+    - activity
+  aggregate_cohorts:
+    - hardTrailRun
+    - hardRunOrTrailRun
+
+groups:
+  - id: best_low_reference_loo
+    mode: variants
+    description: Tight LOO verification around the best in-sample low-reference screen.
+    runs:
+      - name: ref_055_min_030_max_180_cum_exp
+        overrides:
+          physiology.hrr_reference: 0.55
+          physiology.hrr_min_factor: 0.30
+          physiology.hrr_max_factor: 1.80
+          fitting.enabled_objectives:
+            - activity
+          fitting.validation_modes:
+            - in_sample
+            - loo
+          fitting.stage0_alpha_grid:
+            - 0.65
+            - 0.70
+            - 0.75
+          fitting.stage0_mu_grid:
+            - 0.00
+          fitting.hrr_trimp_alpha_grid:
+            - 0.40
+            - 0.45
+            - 0.50
+          fitting.hrr_trimp_kappa_grid:
+            - 0.30
+            - 0.40
+            - 0.50
+          fitting.fatigue_models:
+            - exponential
+          fitting.stage3_fatigue_states:
+            - fatigue_state: cumulative
+              acute_trimp_col: cumTrimpBefore
+              label: cumulative TRIMP

@@ -12,7 +12,11 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
-from graph.analytics import create_daily_bar_chart, create_weekly_bar_chart
+from graph.analytics import (
+    create_category_breakdown_chart,
+    create_daily_bar_chart,
+    create_weekly_bar_chart,
+)
 from graph.hr_zones import build_zone_colors
 from persistence.csv_storage import CsvStorage
 from persistence.repositories import AthletesRepo, SettingsRepo
@@ -468,6 +472,29 @@ c3.metric("Durée (h)", fmt_decimal(float(total_time_h), 1))
 c4.metric("D+ (m)", fmt_decimal(float(total_ascent_m), 0))
 c5.metric("Dist. équiv. (km)", fmt_decimal(float(total_disteq_km), 1))
 st.caption(f"Période sélectionnée: {period_label}")
+
+st.subheader("Répartition par type d'activité")
+category_breakdown_df = analytics.activity_category_weekly_breakdown(
+    athlete_id=athlete_id,
+    metric_label=metric_label,
+    selected_types=selected_types,
+    start_date=start_date,
+    end_date=end_date,
+)
+category_chart = create_category_breakdown_chart(
+    category_breakdown_df,
+    metric_label,
+    metric_cfg,
+    chart_width=CHART_WIDTH,
+)
+if category_chart is None:
+    st.info("Aucune activité à ventiler pour cette période et ces filtres.")
+else:
+    st.altair_chart(category_chart, use_container_width=False)
+    st.caption(
+        "Barres empilées par semaine. Ordre (bas → haut) : course, trail, "
+        "cyclisme, ski de rando, randonnée."
+    )
 
 # Build weekly segments directly from the grid (all weeks in selected range)
 if metric_cfg["transform"]:

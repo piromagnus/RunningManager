@@ -1,0 +1,2 @@
+runId,experimentGroup,experimentName,status,elapsedSec,runOutputDir,htmlReport,error
+000_matched_reference_loo_ref_070_min_030_max_100_cum_exp,matched_reference_loo,ref_070_min_030_max_100_cum_exp,success,41.806749133975245,/tmp/trail_digital_twin_reference_loo/runs/000_matched_reference_loo_ref_070_min_030_max_100_cum_exp,,

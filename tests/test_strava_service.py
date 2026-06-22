@@ -13,7 +13,7 @@ import pytest
 from cryptography.fernet import Fernet
 
 from persistence.csv_storage import CsvStorage
-from persistence.repositories import AthletesRepo
+from persistence.repositories import ActivitiesMetricsRepo, AthletesRepo
 from services.strava_service import API_BASE, TOKEN_URL, StravaService
 from utils.config import Config
 from utils.crypto import decrypt_text, get_fernet
@@ -308,6 +308,99 @@ def test_sync_last_14_days_imports_activity(storage: CsvStorage, config: Config)
     again = service.sync_last_14_days("athlete-1")
     assert again == []
     assert repeat_session.empty
+
+
+def test_sync_applies_metrics_after_api_error(storage: CsvStorage, config: Config) -> None:
+    now = dt.datetime(2024, 1, 20, tzinfo=dt.timezone.utc)
+    expires_at = int((now + dt.timedelta(hours=1)).timestamp())
+    first_id = "111"
+    second_id = "222"
+    AthletesRepo(storage).create(
+        {
+            "athleteId": "athlete-1",
+            "coachId": "coach-1",
+            "name": "Test",
+            "hrRest": 50,
+            "hrMax": 190,
+        }
+    )
+    detail_payload = {
+        "distance": 10000.0,
+        "elapsed_time": 4000,
+        "moving_time": 3900,
+        "total_elevation_gain": 250.5,
+        "average_heartrate": 142.2,
+        "max_heartrate": 165.0,
+        "start_date": "2024-01-19T07:00:00Z",
+        "start_date_local": "2024-01-19T08:00:00+01:00",
+        "map": {"summary_polyline": "abcd"},
+    }
+    responses = [
+        (
+            "POST",
+            TOKEN_URL,
+            FakeResponse(
+                200,
+                {
+                    "access_token": "token-abc",
+                    "refresh_token": "refresh-abc",
+                    "expires_at": expires_at,
+                },
+            ),
+        ),
+        (
+            "GET",
+            f"{API_BASE}/athlete/activities",
+            FakeResponse(
+                200,
+                [
+                    {"id": int(first_id), "start_date": "2024-01-19T07:00:00Z"},
+                    {"id": int(second_id), "start_date": "2024-01-18T07:00:00Z"},
+                ],
+            ),
+        ),
+        (
+            "GET",
+            f"{API_BASE}/activities/{first_id}",
+            FakeResponse(200, {"id": int(first_id), **detail_payload}),
+        ),
+        (
+            "GET",
+            f"{API_BASE}/activities/{first_id}/streams",
+            FakeResponse(
+                200,
+                {
+                    "time": {"data": [0, 10]},
+                    "heartrate": {"data": [120, 130]},
+                    "velocity_smooth": {"data": [3.0, 3.5]},
+                    "altitude": {"data": [200.0, 201.5]},
+                    "cadence": {"data": [80, 82]},
+                    "latlng": {"data": [[48.1, 2.3], [48.1001, 2.3001]]},
+                },
+            ),
+        ),
+        (
+            "GET",
+            f"{API_BASE}/activities/{second_id}",
+            FakeResponse(429, {"message": "rate limit"}),
+        ),
+    ]
+    session = FakeSession(responses)
+    service = StravaService(
+        storage=storage,
+        config=config,
+        session=session,
+        now_fn=lambda: now,
+        max_retries=1,
+    )
+    service.exchange_code("athlete-1", "auth-code")
+
+    with pytest.raises(RuntimeError, match="rate limit exceeded"):
+        service.sync_last_n_days("athlete-1", 7)
+
+    metrics_df = ActivitiesMetricsRepo(storage).list()
+    assert str(first_id) in set(metrics_df["activityId"].astype(str))
+    assert str(second_id) not in set(metrics_df["activityId"].astype(str))
 
 
 def test_sync_skips_cached_raw(storage: CsvStorage, config: Config) -> None:

@@ -1,0 +1,13 @@
+# Avoid Linux inotify limit (EMFILE / "inotify instance limit reached").
+# Poll-based watching still auto-reloads on code changes without inotify.
+[server]
+fileWatcherType = "poll"
+folderWatchBlacklist = [
+    "data",
+    ".venv",
+    ".git",
+    ".cursor",
+    ".taskmaster",
+    ".pytest_cache",
+    "__pycache__",
+]

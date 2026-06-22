@@ -17,6 +17,14 @@ SMOOTHING_WINDOW_SECONDS = 10
 # ==============================================================================
 
 CATEGORY_ORDER = ["RUN", "TRAIL_RUN", "HIKE", "RIDE", "BACKCOUNTRY_SKI"]
+# Bottom-to-top stack order for analytics category breakdown charts.
+CATEGORY_BREAKDOWN_STACK_ORDER = [
+    "RUN",
+    "TRAIL_RUN",
+    "RIDE",
+    "BACKCOUNTRY_SKI",
+    "HIKE",
+]
 PRIMARY_CATEGORIES = {"RUN", "TRAIL_RUN", "HIKE", "RIDE", "BACKCOUNTRY_SKI"}
 TRAINING_LOAD_CATEGORIES = {"RUN", "TRAIL_RUN", "HIKE", "BACKCOUNTRY_SKI"}
 
@@ -26,6 +34,14 @@ CATEGORY_LABELS_FR = {
     "HIKE": "Randonnée",
     "RIDE": "Cyclisme",
     "BACKCOUNTRY_SKI": "Ski de rando",
+}
+
+CATEGORY_CHART_COLORS = {
+    "RUN": "#3b82f6",
+    "TRAIL_RUN": "#16a34a",
+    "HIKE": "#eab308",
+    "RIDE": "#8b5cf6",
+    "BACKCOUNTRY_SKI": "#06b6d4",
 }
 
 # ==============================================================================

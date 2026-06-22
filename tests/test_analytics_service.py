@@ -2,7 +2,10 @@
 SPDX-License-Identifier: GPL-3.0-or-later
 """
 
+import datetime as dt
+
 import pandas as pd
+import pytest
 
 from persistence.csv_storage import CsvStorage
 from services.analytics_service import AnalyticsService
@@ -65,3 +68,100 @@ def test_build_planned_vs_actual_segments_handles_above_and_below(tmp_path):
     assert realised40["value"] == 8.0
     assert below40["value"] == 4.0
     assert realised40["maxValue"] == 12.0
+
+
+def test_activity_category_breakdown_sums_and_pct(tmp_path):
+    storage = CsvStorage(tmp_path)
+    metrics_path = storage.base_dir / "activities_metrics.csv"
+    metrics_path.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(
+        [
+            {
+                "activityId": "run-1",
+                "athleteId": "ath1",
+                "startDate": "2025-05-01",
+                "category": "RUN",
+                "distanceKm": 10.0,
+                "distanceEqKm": 10.0,
+                "timeSec": 3600.0,
+                "trimp": 50.0,
+            },
+            {
+                "activityId": "trail-1",
+                "athleteId": "ath1",
+                "startDate": "2025-05-02",
+                "category": "TRAIL_RUN",
+                "distanceKm": 5.0,
+                "distanceEqKm": 6.0,
+                "timeSec": 1800.0,
+                "trimp": 30.0,
+            },
+            {
+                "activityId": "other-ath",
+                "athleteId": "ath2",
+                "startDate": "2025-05-03",
+                "category": "RUN",
+                "distanceKm": 99.0,
+                "distanceEqKm": 99.0,
+                "timeSec": 9999.0,
+                "trimp": 999.0,
+            },
+        ]
+    ).to_csv(metrics_path, index=False)
+
+    service = AnalyticsService(storage)
+    breakdown = service.activity_category_breakdown(
+        athlete_id="ath1",
+        metric_label="Distance",
+        selected_types=["RUN", "TRAIL_RUN"],
+        start_date=dt.date(2025, 5, 1),
+        end_date=dt.date(2025, 5, 31),
+    )
+    assert set(breakdown["category"]) == {"RUN", "TRAIL_RUN"}
+    assert breakdown["value"].sum() == 15.0
+    assert breakdown["pct"].sum() == pytest.approx(100.0)
+    run_row = breakdown[breakdown["category"] == "RUN"].iloc[0]
+    assert run_row["activity_count"] == 1
+    assert run_row["pct"] == 10.0 / 15.0 * 100.0
+
+
+def test_activity_category_weekly_breakdown_groups_by_week(tmp_path):
+    storage = CsvStorage(tmp_path)
+    metrics_path = storage.base_dir / "activities_metrics.csv"
+    metrics_path.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(
+        [
+            {
+                "activityId": "run-1",
+                "athleteId": "ath1",
+                "startDate": "2025-05-05",
+                "category": "RUN",
+                "distanceKm": 10.0,
+                "distanceEqKm": 10.0,
+                "timeSec": 3600.0,
+                "trimp": 50.0,
+            },
+            {
+                "activityId": "trail-1",
+                "athleteId": "ath1",
+                "startDate": "2025-05-12",
+                "category": "TRAIL_RUN",
+                "distanceKm": 5.0,
+                "distanceEqKm": 6.0,
+                "timeSec": 1800.0,
+                "trimp": 30.0,
+            },
+        ]
+    ).to_csv(metrics_path, index=False)
+
+    service = AnalyticsService(storage)
+    weekly = service.activity_category_weekly_breakdown(
+        athlete_id="ath1",
+        metric_label="Distance",
+        selected_types=["RUN", "TRAIL_RUN"],
+        start_date=dt.date(2025, 5, 1),
+        end_date=dt.date(2025, 5, 31),
+    )
+    assert len(weekly) == 2
+    assert set(weekly["category"]) == {"RUN", "TRAIL_RUN"}
+    assert weekly["value"].sum() == 15.0

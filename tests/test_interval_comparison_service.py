@@ -355,3 +355,77 @@ def test_3x2_interval_merges_laps_consistently_across_repeats(
 
     # R3/3 A1 (480s): L9+L10 (498s) — was the bug: previously got only L8/L9
     assert matched_by_planned_index[6] == [9, 10]
+
+
+def test_single_long_interval_uses_many_autolaps(
+    service: IntervalComparisonService, config: Config
+) -> None:
+    """Regression: a single 42-min interval with 1km auto-laps must claim ~10 laps,
+    not be capped at 4 by a segment-count-based max_laps."""
+    activity_id = "act-long-interval"
+    pd.DataFrame(
+        {
+            "lapIndex": list(range(1, 16)),
+            "label": ["Run"] * 14 + ["Recovery"],
+            "startTime": [
+                "2026-03-03T17:02:32Z",
+                "2026-03-03T17:08:28Z",
+                "2026-03-03T17:14:00Z",
+                "2026-03-03T17:18:15Z",
+                "2026-03-03T17:22:21Z",
+                "2026-03-03T17:26:25Z",
+                "2026-03-03T17:30:19Z",
+                "2026-03-03T17:34:13Z",
+                "2026-03-03T17:38:08Z",
+                "2026-03-03T17:42:01Z",
+                "2026-03-03T17:45:53Z",
+                "2026-03-03T17:49:40Z",
+                "2026-03-03T17:53:19Z",
+                "2026-03-03T17:57:51Z",
+                "2026-03-03T18:00:27Z",
+            ],
+            "timeSec": [354, 332, 254, 246, 243, 234, 233, 234, 233, 231, 227, 219, 273, 156, 638],
+            "distanceKm": [
+                1.0, 0.862, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.575, 0.591, 0.842,
+            ],
+            "avgSpeedKmh": [
+                10.15, 9.36, 14.18, 14.65, 14.83, 15.37, 15.44, 15.37, 15.44, 15.59, 15.88, 16.45,
+                7.56, 13.64, 4.75,
+            ],
+            "distanceEqKm": [
+                1.032, 0.862, 1.0, 1.0, 1.0, 1.026, 1.002, 1.006, 1.0, 1.02, 1.0, 1.0,
+                0.575, 0.591, 0.878,
+            ],
+            "avgHr": [
+                132, 134.2, 166.3, 173.4, 175, 182, 183.9, 183.9, 185.8, 186.6, 189.4, 194.1,
+                156.2, 172.1, 128.3,
+            ],
+            "ascentM": [3.2, 0, 0, 0, 0, 2.6, 0.2, 0.6, 0, 2.0, 0, 0, 0, 0, 3.6],
+        }
+    ).to_csv(config.laps_dir / f"{activity_id}.csv", index=False)
+
+    planned_session = {
+        "stepsJson": {
+            "preBlocks": [{"kind": "run", "sec": 600}],
+            "loops": [
+                {
+                    "repeats": 1,
+                    "actions": [{"kind": "run", "sec": 2520}],
+                }
+            ],
+            "postBlocks": [{"kind": "recovery", "sec": 300}],
+        }
+    }
+
+    matches = service.compare(activity_id, planned_session)
+    matched_by_planned_index = {
+        entry.planned.index: [lap.lap_index for lap in entry.laps]
+        for entry in matches
+        if entry.planned is not None and entry.laps
+    }
+
+    # Warmup (600s): L1+L2 (686s) — 2 easy laps
+    assert matched_by_planned_index[1] == [1, 2]
+
+    # Boucle R1/1 A1 (2520s): L3-L12 (2354s) — 10 auto-laps at ~4 min/km
+    assert matched_by_planned_index[2] == list(range(3, 13))

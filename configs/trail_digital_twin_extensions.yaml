@@ -1,0 +1,189 @@
+paths:
+  data_dir: data
+  timeseries_dir: data/timeseries
+  metrics_ts_dir: data/metrics_ts
+  raw_strava_dir: data/raw/strava
+  output_dir: docs/science/pipeline_outputs/trail_digital_twin_extensions_large
+
+execution:
+  jobs: 8
+
+cohorts:
+  include:
+    - hardTrailRun
+    - hardRunOrTrailRun
+    - top10HardTrailByHRR
+    - selectedDateRaces
+  top_hrr_count: 10
+  selected_race_dates:
+    - "2025-10-18"
+    - "2026-04-12"
+    - "2025-08-06"
+    - "2025-09-28"
+    - "2025-06-23"
+    - "2025-07-27"
+    - "2025-07-24"
+    - "2025-08-01"
+    - "2024-08-18"
+    - "2025-11-01"
+    - "2025-04-27"
+    - "2025-07-12"
+    - "2026-02-22"
+    - "2026-04-18"
+    - "2024-07-28"
+    - "2025-08-03"
+    - "2025-06-29"
+    - "2025-08-23"
+
+physiology:
+  segment_km: 1.0
+  vma_flat_kmh: 18.0
+  vt2_threshold_name: Threshold 30
+  vt2_fallback_kmh: 15.0
+  hrr_reference: 0.85
+  hrr_min_factor: 0.30
+  hrr_max_factor: 1.2
+  decay_lambda: 0.2
+  min_fatigue_factor: 0.50
+
+readiness:
+  ctl_weight: 0.05
+  tsb_weight: 0.10
+  ctl_factor_min: 0.90
+  ctl_factor_max: 1.10
+
+fitting:
+  enabled_objectives:
+    - activity
+    - segment
+  validation_modes:
+    - in_sample
+    - loo
+  stage0_alpha_grid:
+    - 0.40
+    - 0.45
+    - 0.50
+    - 0.55
+    - 0.60
+    - 0.65
+    - 0.70
+    - 0.75
+    - 0.80
+    - 0.85
+    - 0.90
+    - 0.95
+    - 1.00
+  stage0_mu_grid:
+    - -0.50
+    - -0.45
+    - -0.40
+    - -0.35
+    - -0.30
+    - -0.25
+    - -0.20
+    - -0.15
+    - -0.10
+    - -0.05
+    - 0.00
+  hrr_trimp_alpha_grid:
+    - 0.35
+    - 0.40
+    - 0.45
+    - 0.50
+    - 0.55
+    - 0.60
+    - 0.65
+    - 0.70
+    - 0.75
+    - 0.80
+    - 0.85
+  hrr_trimp_kappa_grid:
+    - 0.00
+    - 0.10
+    - 0.20
+    - 0.30
+    - 0.40
+  fatigue_models:
+    - linear
+    - exponential
+  stage3_fatigue_states:
+    - fatigue_state: decayed
+      acute_trimp_col: decayedTrimpBefore
+      label: decayed TRIMP
+    - fatigue_state: cumulative
+      acute_trimp_col: cumTrimpBefore
+      label: cumulative TRIMP
+    - fatigue_state: progress
+      acute_trimp_col: progress
+      label: linear progress
+      fatigue_models:
+        - linear
+
+segment_grid:
+  enabled: true
+  alpha_grid:
+    - 0.30
+    - 0.35
+    - 0.40
+    - 0.45
+    - 0.50
+    - 0.55
+    - 0.60
+    - 0.65
+    - 0.70
+    - 0.75
+    - 0.80
+    - 0.85
+    - 0.90
+  mu_grid:
+    - -0.30
+    - -0.15
+    - 0.00
+  terrain_multiplier_grid:
+    - flat: 1.00
+      climb: 1.00
+      steep_climb: 1.00
+      descent: 1.00
+      steep_descent: 1.00
+      mixed_climb_descent: 1.00
+    - flat: 1.00
+      climb: 0.92
+      steep_climb: 0.82
+      descent: 0.96
+      steep_descent: 0.86
+      mixed_climb_descent: 0.90
+  technicality_coef_grid:
+    - 0.00
+    - 0.20
+  hr_coef_grid:
+    - 0.00
+    - 0.35
+  acute_trimp_coef_grid:
+    - 0.00
+    - 0.04
+
+robustness:
+  enabled: false
+  hrr_references:
+    - 0.60
+    - 0.65
+    - 0.70
+    - 0.8
+    - 0.85
+    - 0.9
+  decay_lambdas:
+    - 0.10
+    - 0.15
+    - 0.20
+    - 0.25
+  elapsed_time_sensitivity: true
+  segment_length_sensitivity: true
+  segment_length_km: 0.50
+
+outputs:
+  write_csv: true
+  write_html: true
+  write_png: false
+  self_contained_html: true
+  privacy_mode: local
+  html_filename: trail_digital_twin_report.html

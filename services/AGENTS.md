@@ -11,10 +11,13 @@ Domain services for planning, analytics, metrics, and external integrations.
 | `analytics_service.py` | Weekly/daily data loading, planned vs actual |
 | `interval_utils.py` | Interval step normalization and serialization |
 | `timeseries_service.py` | Activity timeseries loading + cached metrics |
+| `trail_performance_model.py` | Trail digital-twin notebook helpers |
 | `strava_service.py` | Strava OAuth, sync, caching |
 | `garmin_import_service.py` | Garmin import (stub) |
 | `garmin_export_service.py` | TCX export for intervals |
 | `dashboard_data_service.py` | Dashboard data preprocessing |
+| `trail_digital_twin_pipeline.py` | Configurable trail digital-twin fitting/report pipeline |
+| `trail_digital_twin_benchmark.py` | Benchmark sweep expansion, leaderboard extraction, and HTML reporting |
 | `activity_feed_service.py` | Activity list building |
 | `activity_detail_service.py` | Single activity detail loading |
 | `lap_metrics_service.py` | Lap-level metrics extraction |
@@ -74,6 +77,7 @@ Key metrics:
 ### AnalyticsService
 - `load_weekly_data(athlete_id, weeks)`: Weekly aggregates
 - `load_daily_data(athlete_id, start, end)`: Daily range data
+- `activity_category_breakdown(...)`: Actual metric totals by activity category
 
 ### SpeedProfileService
 - `preprocess_timeseries(df)`: GPS-based preprocessing (distance, speed, grade, elevation)
@@ -89,6 +93,48 @@ Key metrics:
 - `load(activity_id)`: Load raw timeseries DataFrame
 - `load_metrics_ts(activity_id)`: Load cached metrics_ts DataFrame
 - `has_elevation_metrics(activity_id)`: Check if cached elevation metrics are available
+
+### Trail Performance Model
+- `prepare_raw_timeseries_for_segments(...)`: Fast raw GPS/HR/elevation preparation for notebook segment aggregation
+- `segment_timeseries(df)`: Aggregate processed activity streams into 1 km course segments; includes distance-weighted integrated GAP and mixed climb/descent diagnostics
+- `grid_search_model(...)`: Fit paper-style `alpha` and fatigue/pacing-decay parameter
+- `leave_one_out_grid_search(...)`: Race/activity-level LOO validation for notebook experiments
+- `top_hrr_hard_trailrun_ids(...)`: Build top hard TrailRun subset by average HR reserve
+- `select_best_activity_by_dates(...)`: Build configurable selected-date race subset
+- `compute_redi_load_features(...)`: REDI slow/fast/balance load features
+- `attach_previous_daily_features(...)`: Attach strictly previous-day load/readiness features
+- `add_in_activity_trimp_features(...)`: Segment TRIMP plus cumulative/decayed acute load
+- `route_segments_from_points(...)`: Convert GPX-like route points to route-only segments
+- `estimate_hrr_duration_envelope(...)`: Empirical max-duration table by average HRR band
+- `simulate_constant_hrr_route(...)`: Pre-race route prediction with constant HRR and cumulative predicted acute TRIMP fatigue by default
+- `simulate_observed_hrr_segments(...)`: Completed-activity segment prediction using observed segment HRR without actual-time TRIMP leakage; cumulative fatigue by default
+- `sweep_constant_hrr_route(...)`: Constant-HRR candidate sweep with endurance-envelope feasibility and configurable fatigue input column
+- `select_best_constant_hrr(...)`: Fastest feasible HRR choice from a sweep
+- `segment_grid_search_model(...)`: Extension-only segment-level grid search with race-summed metrics
+- `predict_hrr_trimp_segment_times(...)`: Constrained HRR-linear plus raw acute-load fatigue speed equation; supports decayed TRIMP, cumulative TRIMP, or progress as fatigue input, and treats `trimp_scale` as deprecated/ignored
+- `hrr_trimp_grid_search_model(...)`: Small-grid constrained HRR-TRIMP calibration with segment and race metrics
+- `leave_one_out_hrr_trimp_grid_search(...)`: All-activity LOO validation for the constrained HRR-TRIMP model
+- `forbidden_anonymized_columns(...)`: Guard direct identifiers from paper feature exports
+- `fit_linear_regression(...)`: Lightweight HR and segment model fitting for notebook analysis
+
+### Trail Digital Twin Pipeline
+- `load_config(path)`: Read and validate the YAML extension pipeline config
+- `run_pipeline(config, project_root=None, config_path=None)`: Build features, fit configured model variants, and return tables; `execution.jobs` parallelizes independent cohort/objective Stage 0-3 fits
+- `write_outputs(result, output_dir)`: Write CSV assets, manifest, and self-contained HTML report
+- `table_hrr_trimp_grid_search`: Exported Stage 1-3 HRR/TRIMP alpha-kappa grid-search cells with physiology bounds and MAE metrics
+- `table_segment_type_metrics`: Stage 3 segment-level MAE, bias, MAPE, R2, and counts by terrain family
+- Default config path: `configs/trail_digital_twin_extensions.yaml`
+
+### Trail Digital Twin Benchmark
+- `load_benchmark_config(path)`: Read and validate grouped benchmark sweep YAML
+- `expand_benchmark_runs(base_config, benchmark_config, output_dir, max_runs=None)`: Materialize per-run pipeline configs
+- `summarize_benchmark_result(run, result, selection)`: Extract Stage 3 benchmark metrics from a pipeline result
+- `execute_benchmark_run(run, selection, project_root, config_path)`: Run one isolated benchmark experiment for sequential or parallel scheduling
+- `combine_benchmark_tables(...)`: Build aggregate run, leaderboard, manifest, and plan tables
+- `write_benchmark_outputs(tables, output_dir, metadata)`: Write aggregate CSV assets and self-contained HTML report
+- `read_benchmark_output_tables(output_dir)`: Reload aggregate benchmark CSV assets for report-only rebuilds
+- `write_benchmark_html(tables, output_dir, metadata)`: Rebuild only the self-contained benchmark HTML report
+- `benchmark_segment_type_metrics`: Aggregate per-run segment-type metrics when pipeline runs export them
 
 ### PacerService
 - `save_race(...)`: Persists race and invalidates comparison cache for this race

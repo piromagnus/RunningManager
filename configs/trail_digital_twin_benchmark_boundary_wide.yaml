@@ -1,0 +1,179 @@
+execution:
+  output_dir: data/exp_perf_predictions/trail_digital_twin_boundary_wide
+  per_run_csv: false
+  per_run_html: false
+  disable_inner_robustness: true
+  disable_inner_segment_grid: true
+  write_html: true
+  fail_fast: false
+  jobs: 24
+  common_overrides:
+    fitting.enabled_objectives:
+      - activity
+    fitting.validation_modes:
+      - in_sample
+    fitting.hrr_trimp_alpha_grid:
+      - 0.40
+      - 0.45
+      - 0.50
+      - 0.55
+      - 0.60
+      - 0.65
+      - 0.70
+      - 0.75
+      - 0.80
+      - 0.85
+      - 0.90
+      - 0.95
+      - 1.00
+    fitting.hrr_trimp_kappa_grid:
+      - 0.00
+      - 0.10
+      - 0.20
+      - 0.30
+      - 0.40
+      - 0.50
+      - 0.60
+      - 0.70
+      - 0.80
+    fitting.fatigue_models:
+      - linear
+      - exponential
+    fitting.stage3_fatigue_states:
+      - fatigue_state: decayed
+        acute_trimp_col: decayedTrimpBefore
+        label: decayed TRIMP
+      - fatigue_state: cumulative
+        acute_trimp_col: cumTrimpBefore
+        label: cumulative TRIMP
+    readiness.ctl_weight: 0.05
+    readiness.tsb_weight: 0.10
+    physiology.hrr_reference: 0.75
+    physiology.hrr_min_factor: 0.30
+    physiology.hrr_max_factor: 1.00
+    physiology.trimp_scale: 2.0
+    physiology.decay_lambda: 0.15
+    physiology.min_fatigue_factor: 0.50
+
+selection:
+  primary_stage: Stage 3 HRR speed ratio
+  fallback_stage: Stage 3 HRR speed ratio
+  aggregate_objectives:
+    - activity
+  aggregate_cohorts:
+    - hardTrailRun
+    - hardRunOrTrailRun
+    - top10HardTrailByHRR
+    - selectedDateRaces
+
+groups:
+  - id: frontier_anchors
+    mode: variants
+    description: Re-run prior boundary winners before the over-expanded search.
+    runs:
+      - name: refined_best_ref075_scale2_decay015
+        overrides: {}
+      - name: refined_rank2_ref075_scale2_decay005
+        overrides:
+          physiology.decay_lambda: 0.05
+      - name: refined_rank3_ref08_scale2_decay005
+        overrides:
+          physiology.hrr_reference: 0.80
+          physiology.decay_lambda: 0.05
+      - name: prior_wide_best_ref08_scale25_decay015
+        overrides:
+          physiology.hrr_reference: 0.80
+          physiology.trimp_scale: 2.5
+          physiology.decay_lambda: 0.15
+      - name: mixed_low_ref_wide_clip
+        overrides:
+          physiology.hrr_reference: 0.40
+          physiology.hrr_min_factor: 0.60
+          physiology.hrr_max_factor: 2.00
+          physiology.trimp_scale: 10.0
+          physiology.decay_lambda: 0.30
+
+  - id: high_ref_trimp_decay_surface
+    mode: grid
+    description: Over-expanded surface around the high-reference, low-TRIMP extrema.
+    overrides:
+      physiology.hrr_reference:
+        - 0.60
+        - 0.65
+        - 0.70
+        - 0.725
+        - 0.75
+        - 0.775
+        - 0.80
+        - 0.85
+        - 0.90
+      physiology.trimp_scale:
+        - 0.75
+        - 1.00
+        - 1.50
+        - 2.00
+        - 2.50
+        - 3.50
+        - 5.00
+      physiology.decay_lambda:
+        - 0.05
+        - 0.10
+        - 0.15
+        - 0.25
+        - 0.35
+
+  - id: high_ref_clip_surface
+    mode: grid
+    description: Over-expanded HRR clipping surface around the refined high-reference region.
+    overrides:
+      physiology.hrr_reference:
+        - 0.65
+        - 0.70
+        - 0.75
+        - 0.80
+        - 0.85
+      physiology.hrr_min_factor:
+        - 0.15
+        - 0.25
+        - 0.30
+        - 0.40
+        - 0.55
+      physiology.hrr_max_factor:
+        - 1.00
+        - 1.20
+        - 1.40
+        - 1.80
+
+  - id: fatigue_floor_probe
+    mode: variants
+    description: Probe fatigue-floor sensitivity after the low-TRIMP winner moved to the edge.
+    runs:
+      - name: min_fatigue_030
+        overrides:
+          physiology.min_fatigue_factor: 0.30
+      - name: min_fatigue_040
+        overrides:
+          physiology.min_fatigue_factor: 0.40
+      - name: min_fatigue_050
+        overrides:
+          physiology.min_fatigue_factor: 0.50
+      - name: min_fatigue_065
+        overrides:
+          physiology.min_fatigue_factor: 0.65
+
+  - id: readiness_anchor_probe
+    mode: variants
+    description: Keep the best sub-cohort readiness variants alive without widening readiness globally.
+    runs:
+      - name: ctl005_tsb010
+        overrides:
+          readiness.ctl_weight: 0.05
+          readiness.tsb_weight: 0.10
+      - name: ctl020_tsb020
+        overrides:
+          readiness.ctl_weight: 0.20
+          readiness.tsb_weight: 0.20
+      - name: ctl020_tsb040
+        overrides:
+          readiness.ctl_weight: 0.20
+          readiness.tsb_weight: 0.40

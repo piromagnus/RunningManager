@@ -31,6 +31,7 @@ Visualization components using Altair and Matplotlib.
 
 ### analytics.py
 - `render_planned_vs_actual_chart(df, metric)`: Stacked bars
+- `create_category_breakdown_chart(df, metric, normalized)`: Metric split by activity type
 - Metrics: Distance, DistEq, Time, TRIMP
 - Weekly/daily granularity
 

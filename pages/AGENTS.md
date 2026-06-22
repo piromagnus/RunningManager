@@ -68,6 +68,7 @@ apply_theme()
 
 ### Analytics.py
 - Weekly/daily planned vs actual bars
+- Category breakdown chart (metric by activity type, abs or %)
 - Category filters
 - Metric selection (Distance, DistEq, Time, TRIMP)
 - State prefix: `analytics_*`

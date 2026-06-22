@@ -1,0 +1,65 @@
+cohort,stage,r2,maeMin,mapePct,biasMin,validation,fitObjective,fatigueState,acuteTrimpCol,fatigueModel,alpha,fatigueCoef
+hardTrailRun,Stage 3 HRR speed ratio decayed TRIMP linear,0.9516755475735728,26.803633039338482,19.499394259468247,8.245434965156592,in_sample,activity,decayed,decayedTrimpBefore,linear,0.5,0.4
+hardTrailRun,Stage 3 HRR speed ratio decayed TRIMP linear LOO,0.9516755475735728,26.803633039338482,19.499394259468243,8.245434965156589,loo,activity,decayed,decayedTrimpBefore,linear,0.5,0.4
+hardTrailRun,Stage 3 HRR speed ratio decayed TRIMP exponential,0.9516175036738679,26.77564510446747,19.47049545679308,8.157743139736047,in_sample,activity,decayed,decayedTrimpBefore,exponential,0.5,0.4
+hardTrailRun,Stage 3 HRR speed ratio decayed TRIMP exponential LOO,0.9516175036738679,26.77564510446747,19.47049545679308,8.157743139736047,loo,activity,decayed,decayedTrimpBefore,exponential,0.5,0.4
+hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP linear,0.9515793804592492,26.59664967635371,18.741388055971715,8.565138043074263,in_sample,activity,cumulative,cumTrimpBefore,linear,0.5,0.1
+hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP linear LOO,0.9381152600261646,28.636554872967327,19.031037601117536,10.605043239687879,loo,activity,cumulative,cumTrimpBefore,linear,0.5,0.1
+hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential,0.9517571700224167,26.52817503414916,18.722389538826107,8.37277453268244,in_sample,activity,cumulative,cumTrimpBefore,exponential,0.5,0.1
+hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,0.942899297297101,28.13013119860016,18.94985396959821,9.97473069713343,loo,activity,cumulative,cumTrimpBefore,exponential,0.5,0.1
+hardTrailRun,Stage 3 HRR speed ratio decayed TRIMP linear,0.9284636001775024,25.526744306029475,13.622640447444322,-8.97970558723139,in_sample,segment,decayed,decayedTrimpBefore,linear,0.55,0.4
+hardTrailRun,Stage 3 HRR speed ratio decayed TRIMP linear LOO,0.9284636001775024,25.526744306029475,13.62264044744432,-8.979705587231386,loo,segment,decayed,decayedTrimpBefore,linear,0.55,0.4
+hardTrailRun,Stage 3 HRR speed ratio decayed TRIMP exponential,0.9282135353247681,25.551784560215474,13.61230060524824,-9.05942542852279,in_sample,segment,decayed,decayedTrimpBefore,exponential,0.55,0.4
+hardTrailRun,Stage 3 HRR speed ratio decayed TRIMP exponential LOO,0.9282135353247681,25.551784560215477,13.61230060524824,-9.059425428522792,loo,segment,decayed,decayedTrimpBefore,exponential,0.55,0.4
+hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP linear,0.9112783852758155,24.576796188290086,10.930884709283978,-17.899378186760252,in_sample,segment,cumulative,cumTrimpBefore,linear,0.6,0.2
+hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP linear LOO,0.8839439071651973,28.525248574769186,11.491532056852954,-13.739303953696144,loo,segment,cumulative,cumTrimpBefore,linear,0.6,0.2
+hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential,0.9213298607817313,23.891966989703395,10.837157551879686,-13.817113074330623,in_sample,segment,cumulative,cumTrimpBefore,exponential,0.6,0.3
+hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,0.9110125101728487,25.603057386084107,11.080118134478232,-12.106022677949902,loo,segment,cumulative,cumTrimpBefore,exponential,0.6,0.3
+hardRunOrTrailRun,Stage 3 HRR speed ratio decayed TRIMP linear,0.9452942736051193,22.954609975898407,26.36016265098034,14.423943645769373,in_sample,activity,decayed,decayedTrimpBefore,linear,0.5,0.3
+hardRunOrTrailRun,Stage 3 HRR speed ratio decayed TRIMP linear LOO,0.9326678997977207,23.879329791028802,26.531959461806885,13.499223830638977,loo,activity,decayed,decayedTrimpBefore,linear,0.5,0.3
+hardRunOrTrailRun,Stage 3 HRR speed ratio decayed TRIMP exponential,0.9452835330349738,22.9504800128703,26.347216120772526,14.396865718993013,in_sample,activity,decayed,decayedTrimpBefore,exponential,0.5,0.3
+hardRunOrTrailRun,Stage 3 HRR speed ratio decayed TRIMP exponential LOO,0.937064379182627,23.6341268759598,26.472365339554965,13.713218855903511,loo,activity,decayed,decayedTrimpBefore,exponential,0.5,0.3
+hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP linear,0.9477529631259445,17.89092541152962,17.5439809260707,6.158957732154638,in_sample,activity,cumulative,cumTrimpBefore,linear,0.55,0.2
+hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP linear LOO,0.9310368032249451,19.042254208175585,17.70746002442066,7.310286528800606,loo,activity,cumulative,cumTrimpBefore,linear,0.55,0.2
+hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential,0.9484210443989833,17.72357114699847,17.492546040153712,5.745850992839181,in_sample,activity,cumulative,cumTrimpBefore,exponential,0.55,0.2
+hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,0.9265457552980779,19.260006317342558,17.710707035564173,7.282286163183268,loo,activity,cumulative,cumTrimpBefore,exponential,0.55,0.2
+hardRunOrTrailRun,Stage 3 HRR speed ratio decayed TRIMP linear,0.9121729805839071,16.6942404380895,11.749054123411355,-6.830004769138384,in_sample,segment,decayed,decayedTrimpBefore,linear,0.6,0.4
+hardRunOrTrailRun,Stage 3 HRR speed ratio decayed TRIMP linear LOO,0.9121729805839071,16.6942404380895,11.749054123411353,-6.830004769138385,loo,segment,decayed,decayedTrimpBefore,linear,0.6,0.4
+hardRunOrTrailRun,Stage 3 HRR speed ratio decayed TRIMP exponential,0.9119021586566758,16.712093037696903,11.74748154643995,-6.870753733247316,in_sample,segment,decayed,decayedTrimpBefore,exponential,0.6,0.4
+hardRunOrTrailRun,Stage 3 HRR speed ratio decayed TRIMP exponential LOO,0.9119021586566758,16.712093037696906,11.747481546439948,-6.8707537332473185,loo,segment,decayed,decayedTrimpBefore,exponential,0.6,0.4
+hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP linear,0.9326145073170599,14.7530463420201,11.396445139994741,-4.103560590185092,in_sample,segment,cumulative,cumTrimpBefore,linear,0.6,0.2
+hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP linear LOO,0.9248419119182159,15.815881390925169,11.547358863334155,-2.948269394713763,loo,segment,cumulative,cumTrimpBefore,linear,0.6,0.2
+hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential,0.9391451208228188,14.8938063994574,11.792459978316282,-1.8089694712374904,in_sample,segment,cumulative,cumTrimpBefore,exponential,0.6,0.3
+hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,0.9316540363139325,15.641370164866453,11.898607805665169,-1.0614057058284372,loo,segment,cumulative,cumTrimpBefore,exponential,0.6,0.3
+top10HardTrailByHRR,Stage 3 HRR speed ratio decayed TRIMP linear,0.9749441854195461,7.880558727237695,10.357185634420556,2.9752935208170297,in_sample,activity,decayed,decayedTrimpBefore,linear,0.6,0.4
+top10HardTrailByHRR,Stage 3 HRR speed ratio decayed TRIMP linear LOO,0.9676097250775921,8.953967550355744,11.04824863756374,1.9018846976989727,loo,activity,decayed,decayedTrimpBefore,linear,0.6,0.35
+top10HardTrailByHRR,Stage 3 HRR speed ratio decayed TRIMP exponential,0.97493000556526,7.892694868229331,10.358540160696672,2.9179502550648726,in_sample,activity,decayed,decayedTrimpBefore,exponential,0.6,0.4
+top10HardTrailByHRR,Stage 3 HRR speed ratio decayed TRIMP exponential LOO,0.9677470298603563,8.867701453943234,10.95800007527277,1.942943669350979,loo,activity,decayed,decayedTrimpBefore,exponential,0.6,0.4
+top10HardTrailByHRR,Stage 3 HRR speed ratio cumulative TRIMP linear,0.978203767138803,7.980780396557111,9.583197559196499,-0.9682618241243132,in_sample,activity,cumulative,cumTrimpBefore,linear,0.65,0.3
+top10HardTrailByHRR,Stage 3 HRR speed ratio cumulative TRIMP linear LOO,0.970650547809102,9.22624290304329,10.50538632793251,0.2772006823618669,loo,activity,cumulative,cumTrimpBefore,linear,0.65,0.3
+top10HardTrailByHRR,Stage 3 HRR speed ratio cumulative TRIMP exponential,0.9790735653577407,7.828749162626459,9.61422378384469,0.9595166272430743,in_sample,activity,cumulative,cumTrimpBefore,exponential,0.65,0.4
+top10HardTrailByHRR,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,0.9723412888082971,8.918877407004338,10.198667751526557,-0.13061161713480335,loo,activity,cumulative,cumTrimpBefore,exponential,0.65,0.4
+top10HardTrailByHRR,Stage 3 HRR speed ratio decayed TRIMP linear,0.9590529620442348,9.576070019324929,10.340290413856135,-5.169600852579171,in_sample,segment,decayed,decayedTrimpBefore,linear,0.65,0.4
+top10HardTrailByHRR,Stage 3 HRR speed ratio decayed TRIMP linear LOO,0.9590529620442348,9.576070019324925,10.340290413856131,-5.169600852579171,loo,segment,decayed,decayedTrimpBefore,linear,0.65,0.4
+top10HardTrailByHRR,Stage 3 HRR speed ratio decayed TRIMP exponential,0.9586977499832957,9.60630075626742,10.352272920229662,-5.222533097888854,in_sample,segment,decayed,decayedTrimpBefore,exponential,0.65,0.4
+top10HardTrailByHRR,Stage 3 HRR speed ratio decayed TRIMP exponential LOO,0.9586977499832957,9.606300756267425,10.35227292022967,-5.22253309788886,loo,segment,decayed,decayedTrimpBefore,exponential,0.65,0.4
+top10HardTrailByHRR,Stage 3 HRR speed ratio cumulative TRIMP linear,0.9679524507526717,8.19446388415804,9.246415007318111,-5.659224530623866,in_sample,segment,cumulative,cumTrimpBefore,linear,0.7,0.4
+top10HardTrailByHRR,Stage 3 HRR speed ratio cumulative TRIMP linear LOO,0.9661745641517839,8.59517272324099,10.10970155471406,-5.258515691540902,loo,segment,cumulative,cumTrimpBefore,linear,0.7,0.4
+top10HardTrailByHRR,Stage 3 HRR speed ratio cumulative TRIMP exponential,0.9631083771549009,8.71757024435165,9.51920613779393,-6.459615512798085,in_sample,segment,cumulative,cumTrimpBefore,exponential,0.7,0.4
+top10HardTrailByHRR,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,0.9613403005010475,9.118004073740348,10.381900204699571,-6.059181683409383,loo,segment,cumulative,cumTrimpBefore,exponential,0.7,0.4
+selectedDateRaces,Stage 3 HRR speed ratio decayed TRIMP linear,0.9716215921563747,25.945740068819255,24.615144680528648,17.01289147497352,in_sample,activity,decayed,decayedTrimpBefore,linear,0.5,0.0
+selectedDateRaces,Stage 3 HRR speed ratio decayed TRIMP linear LOO,0.9579182429047197,29.816122937068712,25.4353008468097,14.091187253846353,loo,activity,decayed,decayedTrimpBefore,linear,0.5,0.0
+selectedDateRaces,Stage 3 HRR speed ratio decayed TRIMP exponential,0.9716215921563747,25.945740068819255,24.615144680528648,17.01289147497352,in_sample,activity,decayed,decayedTrimpBefore,exponential,0.5,0.0
+selectedDateRaces,Stage 3 HRR speed ratio decayed TRIMP exponential LOO,0.9576559506378587,29.873240085288106,25.443319802002918,14.030258158348042,loo,activity,decayed,decayedTrimpBefore,exponential,0.5,0.0
+selectedDateRaces,Stage 3 HRR speed ratio cumulative TRIMP linear,0.9861923217946585,12.790024434816887,11.127556346194204,0.5500478928841193,in_sample,activity,cumulative,cumTrimpBefore,linear,0.6,0.2
+selectedDateRaces,Stage 3 HRR speed ratio cumulative TRIMP linear LOO,0.9615741662118078,18.871802770218085,11.991118207525313,7.160880844747843,loo,activity,cumulative,cumTrimpBefore,linear,0.6,0.2
+selectedDateRaces,Stage 3 HRR speed ratio cumulative TRIMP exponential,0.9878875124281765,14.502911716073708,12.039010998650095,7.288545624653747,in_sample,activity,cumulative,cumTrimpBefore,exponential,0.6,0.3
+selectedDateRaces,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,0.9544532048019805,20.93749825126664,13.037537769180584,9.409411071364401,loo,activity,cumulative,cumTrimpBefore,exponential,0.6,0.3
+selectedDateRaces,Stage 3 HRR speed ratio decayed TRIMP linear,0.971417728916581,21.78492067735178,17.911592016475716,4.940889463600384,in_sample,segment,decayed,decayedTrimpBefore,linear,0.55,0.4
+selectedDateRaces,Stage 3 HRR speed ratio decayed TRIMP linear LOO,0.9389410183252861,26.94321811030392,18.729285455403005,-0.21740796935175233,loo,segment,decayed,decayedTrimpBefore,linear,0.55,0.4
+selectedDateRaces,Stage 3 HRR speed ratio decayed TRIMP exponential,0.9712007820017254,21.799404337438762,17.884818501585773,4.822973383528612,in_sample,segment,decayed,decayedTrimpBefore,exponential,0.55,0.4
+selectedDateRaces,Stage 3 HRR speed ratio decayed TRIMP exponential LOO,0.9385656205339441,26.952783176902678,18.701751832154205,-0.33040545593531095,loo,segment,decayed,decayedTrimpBefore,exponential,0.55,0.4
+selectedDateRaces,Stage 3 HRR speed ratio cumulative TRIMP linear,0.9861923217946585,12.790024434816887,11.127556346194204,0.5500478928841193,in_sample,segment,cumulative,cumTrimpBefore,linear,0.6,0.2
+selectedDateRaces,Stage 3 HRR speed ratio cumulative TRIMP linear LOO,0.9701829532469155,16.889294477061593,11.790010020635961,1.0922390588039803,loo,segment,cumulative,cumTrimpBefore,linear,0.6,0.2
+selectedDateRaces,Stage 3 HRR speed ratio cumulative TRIMP exponential,0.9824865684662892,11.850768795812495,7.730384904181993,-7.214989223966376,in_sample,segment,cumulative,cumTrimpBefore,exponential,0.65,0.3
+selectedDateRaces,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,0.9753436148571065,16.738704047303806,11.059645828658814,0.5710403339675062,loo,segment,cumulative,cumTrimpBefore,exponential,0.6,0.2

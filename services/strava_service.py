@@ -12,7 +12,7 @@ import logging
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, List, Optional, Union
+from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Union
 
 import pandas as pd
 import portalocker
@@ -190,7 +190,51 @@ class StravaService:
         created_rows_with_ts: set[str] = set()
         created_start_dates: list[dt.date] = []
 
-        for summary in self._iter_recent_activities(tokens["access_token"], after_ts):
+        try:
+            self._sync_recent_activity_rows(
+                athlete_id=athlete_id,
+                access_token=tokens["access_token"],
+                after_ts=after_ts,
+                existing_ids=existing_ids,
+                existing_raw_ids=existing_raw_ids,
+                imported_from_api=imported_from_api,
+                created_rows=created_rows,
+                created_rows_with_ts=created_rows_with_ts,
+                created_start_dates=created_start_dates,
+            )
+        finally:
+            self._apply_sync_metrics(
+                athlete_id=athlete_id,
+                created_rows=created_rows,
+                created_rows_with_ts=created_rows_with_ts,
+                created_start_dates=created_start_dates,
+            )
+            created_from_cache = [aid for aid in created_rows if aid not in imported_from_api]
+            self.last_sync_stats = {
+                "days": int(days),
+                "downloaded_count": len(imported_from_api),
+                "created_rows_count": len(created_rows),
+                "created_from_cache_count": len(created_from_cache),
+                "downloaded_ids": list(imported_from_api),
+                "created_from_cache_ids": created_from_cache,
+            }
+
+        return imported_from_api
+
+    def _sync_recent_activity_rows(
+        self,
+        *,
+        athlete_id: str,
+        access_token: str,
+        after_ts: int,
+        existing_ids: set[str],
+        existing_raw_ids: set[str],
+        imported_from_api: List[str],
+        created_rows: List[str],
+        created_rows_with_ts: set[str],
+        created_start_dates: list[dt.date],
+    ) -> None:
+        for summary in self._iter_recent_activities(access_token, after_ts):
             activity_id = str(summary.get("id"))
             if not activity_id:
                 continue
@@ -204,11 +248,11 @@ class StravaService:
 
             if not has_raw:
                 # Cache miss: fetch detail + streams and persist both
-                detail = self._get_activity(tokens["access_token"], activity_id)
+                detail = self._get_activity(access_token, activity_id)
                 if not detail:
                     continue
                 raw_path = self._save_raw_activity(detail)
-                streams = self._get_streams(tokens["access_token"], activity_id)
+                streams = self._get_streams(access_token, activity_id)
                 has_timeseries = self._save_timeseries(activity_id, detail, streams)
                 try:
                     self.lap_metrics.compute_and_store(athlete_id, detail)
@@ -256,45 +300,39 @@ class StravaService:
                 except Exception:
                     pass
 
-        # Recompute metrics for newly added activities (from API or cache)
-        if created_rows:
-            metrics_service = MetricsComputationService(self.storage, config=self.config)
-            metrics_service.recompute_for_activities(created_rows)
+    def _apply_sync_metrics(
+        self,
+        *,
+        athlete_id: str,
+        created_rows: Sequence[str],
+        created_rows_with_ts: set[str],
+        created_start_dates: list[dt.date],
+    ) -> None:
+        """Recompute activity metrics for rows created during a sync attempt."""
+        if not created_rows:
+            return
+        metrics_service = MetricsComputationService(self.storage, config=self.config)
+        metrics_service.recompute_for_activities(created_rows)
 
-            # Ensure new activities have a complete metrics_ts/speed profile cache.
-            for created_activity_id in sorted(created_rows_with_ts):
-                try:
-                    self.speed_profile_service.compute_all_metrics_ts(created_activity_id)
-                    self.speed_profile_service.compute_and_store_speed_profile(created_activity_id)
-                except Exception:
-                    LOGGER.exception(
-                        "Failed to compute metrics_ts artifacts for activity %s",
-                        created_activity_id,
-                    )
-
-            # Refresh metrics so hrSpeedShift can use newly computed metrics_ts.
-            if created_rows_with_ts:
-                metrics_service.recompute_for_activities(created_rows)
-
-            if created_start_dates:
-                zone_service = self._build_hr_zones_service()
-                zone_service.backfill_borders_from_date(
-                    athlete_id=athlete_id,
-                    from_date=min(created_start_dates),
+        for created_activity_id in sorted(created_rows_with_ts):
+            try:
+                self.speed_profile_service.compute_all_metrics_ts(created_activity_id)
+                self.speed_profile_service.compute_and_store_speed_profile(created_activity_id)
+            except Exception:
+                LOGGER.exception(
+                    "Failed to compute metrics_ts artifacts for activity %s",
+                    created_activity_id,
                 )
 
-        # Record stats for UI
-        created_from_cache = [aid for aid in created_rows if aid not in imported_from_api]
-        self.last_sync_stats = {
-            "days": int(days),
-            "downloaded_count": len(imported_from_api),
-            "created_rows_count": len(created_rows),
-            "created_from_cache_count": len(created_from_cache),
-            "downloaded_ids": list(imported_from_api),
-            "created_from_cache_ids": created_from_cache,
-        }
+        if created_rows_with_ts:
+            metrics_service.recompute_for_activities(created_rows)
 
-        return imported_from_api
+        if created_start_dates:
+            zone_service = self._build_hr_zones_service()
+            zone_service.backfill_borders_from_date(
+                athlete_id=athlete_id,
+                from_date=min(created_start_dates),
+            )
 
     def sync_last_14_days(self, athlete_id: str) -> List[str]:
         return self.sync_last_n_days(athlete_id, 14)

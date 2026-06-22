@@ -23,6 +23,7 @@ See `.taskmaster/docs/prd.txt` for full requirements.
 | `widgets/` | Reusable UI components | [widgets/AGENTS.md](widgets/AGENTS.md) |
 | `graph/` | Visualization components | [graph/AGENTS.md](graph/AGENTS.md) |
 | `ui/` | Complex UI widgets | [ui/AGENTS.md](ui/AGENTS.md) |
+| `scripts/` | Runnable analysis/maintenance tools | [scripts/AGENTS.md](scripts/AGENTS.md) |
 | `tests/` | Pytest suite | [tests/AGENTS.md](tests/AGENTS.md) |
 
 ## Data Model Overview
@@ -154,4 +155,3 @@ SPDX-License-Identifier: GPL-3.0-or-later
 - Logging raw secrets or storing tokens without `ENCRYPTION_KEY`
 - Bypassing locking on CSV writes (always use `CsvStorage`)
 - Mixing UI formatting into persistence layer
-

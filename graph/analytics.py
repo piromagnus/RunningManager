@@ -11,6 +11,8 @@ from __future__ import annotations
 import altair as alt
 import pandas as pd
 
+from utils.constants import CATEGORY_CHART_COLORS
+
 
 def create_weekly_bar_chart(
     stack_df: pd.DataFrame,
@@ -91,5 +93,55 @@ def create_daily_bar_chart(
             ],
         )
         .properties(height=300, width=chart_width)
+    )
+
+
+def create_category_breakdown_chart(
+    breakdown_df: pd.DataFrame,
+    metric_label: str,
+    metric_cfg: dict,
+    *,
+    chart_width: int = 860,
+) -> alt.Chart | None:
+    """Weekly stacked bars of a metric by activity category (bottom-to-top order)."""
+    if breakdown_df.empty:
+        return None
+
+    working = breakdown_df.copy()
+    working["value"] = pd.to_numeric(working["value"], errors="coerce").fillna(0.0)
+    working = working[working["value"] > 0]
+    if working.empty or "weekLabel" not in working.columns:
+        return None
+
+    stack_meta = (
+        working.sort_values("category_order")
+        .drop_duplicates("category")[["category", "category_label", "category_order"]]
+    )
+    legend_labels = stack_meta["category_label"].astype(str).tolist()
+    legend_colors = [
+        CATEGORY_CHART_COLORS.get(str(cat), "#94a3b8") for cat in stack_meta["category"]
+    ]
+    unit = metric_cfg.get("unit", "")
+    value_title = f"{metric_label} ({unit})" if unit else metric_label
+
+    return (
+        alt.Chart(working)
+        .mark_bar()
+        .encode(
+            x=alt.X("weekLabel:N", title="Semaine", sort=None),
+            y=alt.Y("value:Q", title=value_title, stack=True),
+            color=alt.Color(
+                "category_label:N",
+                title="Type d'activité",
+                scale=alt.Scale(domain=legend_labels, range=legend_colors),
+            ),
+            order=alt.Order("category_order:Q"),
+            tooltip=[
+                alt.Tooltip("weekLabel:N", title="Semaine"),
+                alt.Tooltip("category_label:N", title="Type"),
+                alt.Tooltip("value:Q", title=value_title, format=".2f"),
+            ],
+        )
+        .properties(height=400, width=chart_width)
     )
 

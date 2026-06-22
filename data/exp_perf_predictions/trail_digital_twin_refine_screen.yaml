@@ -1,0 +1,53 @@
+execution:
+  output_dir: /tmp/trail_digital_twin_refine_screen
+  per_run_csv: false
+  per_run_html: false
+  disable_inner_robustness: true
+  disable_inner_segment_grid: true
+  write_html: true
+  fail_fast: false
+
+selection:
+  primary_stage: Stage 3 HRR speed ratio
+  fallback_stage: Stage 3 HRR speed ratio
+  aggregate_objectives:
+    - activity
+  aggregate_cohorts:
+    - hardTrailRun
+    - hardRunOrTrailRun
+
+groups:
+  - id: hrr_bound_refine
+    mode: grid
+    description: Refine around the first-screen low-reference optimum.
+    overrides:
+      physiology.hrr_reference:
+        - 0.55
+        - 0.60
+        - 0.65
+      physiology.hrr_min_factor:
+        - 0.30
+        - 0.40
+      physiology.hrr_max_factor:
+        - 1.60
+        - 1.80
+        - 2.00
+
+  - id: trimp_refine_at_low_reference
+    mode: grid
+    description: Refine TRIMP scale and decay at the first-screen HRR setting.
+    overrides:
+      physiology.hrr_reference:
+        - 0.60
+      physiology.hrr_min_factor:
+        - 0.40
+      physiology.hrr_max_factor:
+        - 1.60
+      physiology.trimp_scale:
+        - 2.5
+        - 5.0
+        - 10.0
+      physiology.decay_lambda:
+        - 0.05
+        - 0.15
+        - 0.30

@@ -300,13 +300,18 @@ if int(strava_sync_days) > 31:
         "la synchronisation peut être plus lente et incomplète si la fenêtre est très large."
     )
 
-btn_save, btn_recompute_metrics, btn_recompute_zones = st.columns(3)
+btn_save, btn_recompute_metrics, btn_recompute_zones, btn_missing_metrics = st.columns(4)
 save_settings = btn_save.button("Save Settings", use_container_width=True)
 recompute_metrics = btn_recompute_metrics.button(
     "Recompute weekly & daily metrics",
     use_container_width=True,
 )
 recompute_zones = btn_recompute_zones.button("Recompute zones", use_container_width=True)
+reconstruct_missing_metrics = btn_missing_metrics.button(
+    "Reconstruire métriques manquantes",
+    use_container_width=True,
+    help="Recalcule activities_metrics pour les activités sans entrée métrique.",
+)
 
 if save_settings:
     payload = {
@@ -360,6 +365,18 @@ if save_settings:
 if recompute_metrics:
     metrics_service.recompute_all()
     st.success("Métriques recalculées.")
+
+if reconstruct_missing_metrics:
+    if not athlete_id:
+        st.warning("Aucun athlète disponible pour reconstruire les métriques.")
+    else:
+        missing_ids = metrics_service.list_activity_ids_missing_metrics(athlete_id)
+        if not missing_ids:
+            st.info("Toutes les activités ont déjà des métriques.")
+        else:
+            with st.spinner(f"Reconstruction de {len(missing_ids)} activité(s)..."):
+                metrics_service.recompute_missing_activity_metrics(athlete_id)
+            st.success(f"Métriques reconstruites pour {len(missing_ids)} activité(s).")
 
 if recompute_zones:
     if not athlete_id:

@@ -1,0 +1,741 @@
+activityId,alpha,mu,actualTimeSec,predictedTimeSec,errorSec,errorPct,cohort,stage,fitObjective,fatigueCoef,fatigueModel,fatigueState,acuteTrimpCol
+11387382620,0.65,0.0,3148.0,2929.64848243997,-218.35151756003006,-6.936198143584182,hardTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+13696739223,0.65,0.0,5809.0,6242.921874966223,433.9218749662232,7.46982053651615,hardTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+13824163131,0.65,0.0,3241.0,3447.580537056973,206.58053705697284,6.373975225454269,hardTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+14087416092,0.65,0.0,15517.0,11327.501834344617,-4189.498165655383,-26.99940816946177,hardTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+14155390870,0.65,0.0,5996.0,6094.179892590254,98.17989259025398,1.637423158609973,hardTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+14300194854,0.65,0.0,10836.0,10291.39639578238,-544.6036042176202,-5.025873054795314,hardTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+14388179928,0.65,0.0,3356.0,3540.82181410606,184.82181410606017,5.50720542628308,hardTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+14511853016,0.65,0.0,3409.0,3384.4385548224445,-24.56144517755547,-0.7204882715622021,hardTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+14736619046,0.65,0.0,7519.0,6303.807511545077,-1215.1924884549226,-16.16162373260969,hardTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+14765648151,0.65,0.0,3295.0,3373.4957112695533,78.49571126955334,2.3822674133400104,hardTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+14852373707,0.65,0.0,2322.0,1794.7507375729972,-527.2492624270028,-22.706686581696932,hardTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+14893241615,0.65,0.0,2746.0,3112.9463463977613,366.9463463977613,13.36294050975096,hardTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+14953411411,0.65,0.0,33087.0,22088.7798765659,-10998.220123434101,-33.24030623336689,hardTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+15007483824,0.65,0.0,3314.0,3725.3635521106617,411.36355211066166,12.41290139138991,hardTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+15018253166,0.65,0.0,30983.0,14616.343806489002,-16366.656193510998,-52.82463348775457,hardTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+15059995436,0.65,0.0,7678.0,7327.7063642517805,-350.29363574821946,-4.562303148583218,hardTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+15087396899,0.65,0.0,11532.0,11810.18425875077,278.1842587507708,2.4122811199338434,hardTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+15114097922,0.65,0.0,33819.0,19037.618379128762,-14781.381620871238,-43.70732907794801,hardTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+15179557231,0.65,0.0,33543.0,14618.278699113724,-18924.721300886275,-56.41928659000768,hardTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+15224440864,0.65,0.0,6297.0,6810.727782291046,513.7277822910464,8.158294144688684,hardTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+15250276952,0.65,0.0,7979.0,9306.398358205166,1327.398358205166,16.636149369659933,hardTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+15329205386,0.65,0.0,10390.0,9338.422434129809,-1051.5775658701914,-10.121054531955643,hardTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+15493651485,0.65,0.0,4622.0,4573.317005383815,-48.68299461618517,-1.0532885031628119,hardTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+15563904138,0.65,0.0,42256.0,31132.37556572974,-11123.62443427026,-26.32436679825412,hardTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+15652573322,0.65,0.0,3132.0,3037.7486390814347,-94.2513609185653,-3.009302711320731,hardTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+15717135978,0.65,0.0,14017.0,10174.019705723198,-3842.980294276802,-27.416567698343453,hardTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+15756279445,0.65,0.0,8201.0,6767.603483284189,-1433.3965167158112,-17.47831382411671,hardTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+15809536896,0.65,0.0,6794.0,5570.245135825949,-1223.7548641740514,-18.012288256903904,hardTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+15913800933,0.65,0.0,3009.0,3009.474877871322,0.4748778713219508,0.015781916627515814,hardTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+15961811819,0.65,0.0,2785.0,3660.288708898142,875.288708898142,31.428678955049982,hardTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+16043688171,0.65,0.0,7974.0,4710.923708072871,-3263.076291927129,-40.92144835624692,hardTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+16043688538,0.65,0.0,18442.0,11340.179631705425,-7101.820368294575,-38.50894896591788,hardTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+16043688740,0.65,0.0,28210.0,15969.602695677235,-12240.397304322765,-43.390277576472045,hardTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+16106633286,0.65,0.0,15404.0,7958.927900887341,-7445.072099112659,-48.33207023573526,hardTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+16121104478,0.65,0.0,5582.0,5476.6863975971355,-105.31360240286449,-1.8866643210832048,hardTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+16183294852,0.65,0.0,3140.0,3937.9632633677,797.9632633677002,25.412842782410834,hardTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+16213470764,0.65,0.0,6317.0,5680.43291151621,-636.56708848379,-10.077047466895522,hardTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+16251238864,0.65,0.0,4467.0,3719.389886731201,-747.6101132687991,-16.7362908723707,hardTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+16262137158,0.65,0.0,10091.0,6647.4477390293305,-3443.5522609706695,-34.124985243986416,hardTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+16325125849,0.65,0.0,10638.0,11034.905046916585,396.905046916585,3.7310119093493603,hardTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+16335274846,0.65,0.0,8540.0,6961.9184016713825,-1578.0815983286175,-18.478707240381937,hardTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+17383625132,0.65,0.0,5217.0,5335.3732581204995,118.37325812049949,2.2689909549645293,hardTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+17481444994,0.65,0.0,12779.0,13303.215886869522,524.2158868695224,4.102166733465236,hardTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+18160385145,0.65,0.0,13509.0,11752.892500257427,-1756.107499742573,-12.999537343567793,hardTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+18516570001,0.65,0.0,8382.0,6149.3831489394715,-2232.6168510605285,-26.635848855410742,hardTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+11387382620,0.4,,3148.0,4168.22856209868,1020.2285620986804,32.40878532714995,hardTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+13696739223,0.4,,5809.0,8932.518092140066,3123.518092140066,53.7703235004315,hardTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+13824163131,0.4,,3241.0,4887.577032652912,1646.5770326529118,50.80459835399296,hardTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+14087416092,0.4,,15517.0,16254.163452585153,737.1634525851532,4.75068281617035,hardTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+14155390870,0.4,,5996.0,8698.545266405608,2702.5452664056083,45.072469419706614,hardTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+14300194854,0.4,,10836.0,14814.527689301796,3978.5276893017963,36.715833234604986,hardTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+14388179928,0.4,,3356.0,5024.565161871864,1668.565161871864,49.71886656352395,hardTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+14511853016,0.4,,3409.0,4800.089636305134,1391.0896363051343,40.80638416852843,hardTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+14736619046,0.4,,7519.0,8970.835739523089,1451.8357395230887,19.3088939955192,hardTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+14765648151,0.4,,3295.0,4790.350593276579,1495.3505932765793,45.38241557743791,hardTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+14852373707,0.4,,2322.0,2533.22427011889,211.22427011889022,9.096652459900525,hardTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+14893241615,0.4,,2746.0,4409.556798090308,1663.556798090308,60.58109242863466,hardTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+14953411411,0.4,,33087.0,31764.53514571683,-1322.464854283171,-3.996931889513014,hardTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+15007483824,0.4,,3314.0,5280.479130820596,1966.4791308205959,59.338537441780204,hardTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+15018253166,0.4,,30983.0,20928.74815165345,-10054.25184834655,-32.45086611479376,hardTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+15059995436,0.4,,7678.0,10413.69619588283,2735.6961958828306,35.63032294715851,hardTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+15087396899,0.4,,11532.0,16938.252238732868,5406.252238732868,46.880439114922545,hardTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+15114097922,0.4,,33819.0,27223.584609540943,-6595.415390459057,-19.502100566128675,hardTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+15179557231,0.4,,33543.0,20778.24710146002,-12764.75289853998,-38.05489341603309,hardTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+15224440864,0.4,,6297.0,9717.203501969858,3420.203501969858,54.314808670316935,hardTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+15250276952,0.4,,7979.0,13264.795368886553,5285.795368886553,66.24633875030145,hardTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+15329205386,0.4,,10390.0,13230.184805938292,2840.184805938292,27.33575366639357,hardTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+15493651485,0.4,,4622.0,6469.082247754101,1847.0822477541014,39.9628353040697,hardTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+15563904138,0.4,,42256.0,45033.468924803914,2777.468924803914,6.572957508528762,hardTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+15652573322,0.4,,3132.0,4312.821683505364,1180.8216835053636,37.70184174665912,hardTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+15717135978,0.4,,14017.0,14501.74397584287,484.74397584287,3.45825765743647,hardTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+15756279445,0.4,,8201.0,9605.034929114243,1404.034929114243,17.120289344156113,hardTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+15809536896,0.4,,6794.0,8017.625187858046,1223.625187858046,18.010379568119607,hardTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+15913800933,0.4,,3009.0,4272.894531845432,1263.8945318454316,42.00380630925329,hardTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+15961811819,0.4,,2785.0,5217.080346636622,2432.0803466366224,87.32784009467225,hardTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+16043688171,0.4,,7974.0,6665.168912322615,-1308.8310876773849,-16.413733228961437,hardTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+16043688538,0.4,,18442.0,16058.749773203212,-2383.2502267967884,-12.922948849348165,hardTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+16043688740,0.4,,28210.0,22813.655210672045,-5396.344789327955,-19.129191029166805,hardTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+16106633286,0.4,,15404.0,11289.996455668184,-4114.003544331816,-26.707371749752113,hardTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+16121104478,0.4,,5582.0,7773.0114262709385,2191.0114262709385,39.251369155695784,hardTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+16183294852,0.4,,3140.0,5611.397275439557,2471.3972754395572,78.70691959998591,hardTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+16213470764,0.4,,6317.0,8076.863943296112,1759.8639432961118,27.859172760742627,hardTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+16251238864,0.4,,4467.0,5252.452236878325,785.4522368783246,17.58343937493451,hardTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+16262137158,0.4,,10091.0,9443.166966854878,-647.8330331451216,-6.419909158112393,hardTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+16325125849,0.4,,10638.0,15810.608091209333,5172.608091209333,48.62387752593846,hardTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+16335274846,0.4,,8540.0,9838.959051977521,1298.959051977521,15.210293348682915,hardTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+17383625132,0.4,,5217.0,7580.862582499074,2363.862582499074,45.310764471900974,hardTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+17481444994,0.4,,12779.0,19036.353637724693,6257.353637724693,48.96590999080283,hardTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+18160385145,0.4,,13509.0,16854.73564616682,3345.7356461668205,24.766715864733293,hardTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+18516570001,0.4,,8382.0,8719.000799324676,337.00079932467634,4.020529698457127,hardTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+11387382620,0.4,,3148.0,4478.604533377556,1330.6045333775564,42.268250742616154,hardTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+13696739223,0.4,,5809.0,8925.380471852177,3116.380471852177,53.64745174474397,hardTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+13824163131,0.4,,3241.0,4861.4808513988555,1620.4808513988555,49.99940917614488,hardTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+14087416092,0.4,,15517.0,16217.714460928211,700.7144609282113,4.515785660425413,hardTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+14155390870,0.4,,5996.0,8654.752129872624,2658.752129872624,44.34209689580761,hardTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+14300194854,0.4,,10836.0,14740.18225027063,3904.182250270631,36.02973652889102,hardTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+14388179928,0.4,,3356.0,4990.3598611120415,1634.3598611120415,48.699638292969055,hardTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+14511853016,0.4,,3409.0,4783.421111120724,1374.4211111207242,40.317427724280556,hardTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+14736619046,0.4,,7519.0,8849.975105939337,1330.9751059393366,17.701490968737023,hardTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+14765648151,0.4,,3295.0,4725.406349370628,1430.406349370628,43.41142183218902,hardTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+14852373707,0.4,,2322.0,2510.290856511603,188.29085651160312,8.10899468180892,hardTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+14893241615,0.4,,2746.0,4379.479910283157,1633.4799102831566,59.48579425648786,hardTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+14953411411,0.4,,33087.0,31631.44896658683,-1455.5510334131686,-4.399162914175261,hardTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+15007483824,0.4,,3314.0,5222.588039004288,1908.5880390042876,57.59167287279081,hardTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+15018253166,0.4,,30983.0,20682.960931316844,-10300.039068683156,-33.24416314973745,hardTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+15059995436,0.4,,7678.0,10258.670524609766,2580.6705246097663,33.611233714636185,hardTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+15087396899,0.4,,11532.0,16701.19353219,5169.193532189998,44.824779155306956,hardTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+15114097922,0.4,,33819.0,26710.08109112966,-7108.918908870339,-21.020488213342613,hardTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+15179557231,0.4,,33543.0,20373.230505304684,-13169.769494695316,-39.26234831319594,hardTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+15224440864,0.4,,6297.0,9539.096024626251,3242.096024626251,51.48635897453154,hardTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+15250276952,0.4,,7979.0,13022.449987703056,5043.449987703056,63.20904859886021,hardTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+15329205386,0.4,,10390.0,13013.767544239754,2623.767544239754,25.252815632721404,hardTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+15493651485,0.4,,4622.0,6404.734649233424,1782.7346492334236,38.570632826339754,hardTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+15563904138,0.4,,42256.0,45262.64553546756,3006.6455354675636,7.115310335733538,hardTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.4,exponential,decayed,decayedTrimpBefore
+15652573322,0.4,,3132.0,4263.830986263933,1131.8309862639326,36.13764323958916,hardTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+15717135978,0.4,,14017.0,14494.356111426825,477.356111426825,3.40555119802258,hardTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+15756279445,0.4,,8201.0,9541.131169958391,1340.1311699583912,16.34107023482979,hardTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+15809536896,0.4,,6794.0,7974.335623959966,1180.3356239599661,17.3732061224605,hardTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+15913800933,0.4,,3009.0,4259.642776348246,1250.6427763482461,41.563402337927755,hardTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+15961811819,0.4,,2785.0,5205.044564415922,2420.0445644159217,86.89567556251066,hardTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+16043688171,0.4,,7974.0,6607.3595559306195,-1366.6404440693805,-17.13870634649336,hardTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+16043688538,0.4,,18442.0,15919.466583075402,-2522.533416924598,-13.67819876870512,hardTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+16043688740,0.4,,28210.0,22776.739992002236,-5433.260007997764,-19.260049656142375,hardTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+16106633286,0.4,,15404.0,11183.620817708148,-4220.379182291852,-27.397943276368814,hardTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+16121104478,0.4,,5582.0,7688.06176304388,2106.06176304388,37.72951922328699,hardTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+16183294852,0.4,,3140.0,5566.159899793859,2426.159899793859,77.26623884693818,hardTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+16213470764,0.4,,6317.0,8019.378744434107,1702.378744434107,26.949164863607834,hardTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+16251238864,0.4,,4467.0,5218.486006876179,751.4860068761791,16.823058134680526,hardTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+16262137158,0.4,,10091.0,9385.903763020982,-705.0962369790177,-6.987377236934076,hardTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+16325125849,0.4,,10638.0,15738.644242984205,5100.6442429842045,47.94739841120704,hardTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+16335274846,0.4,,8540.0,9736.662192010597,1196.6621920105972,14.012437845557344,hardTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+17383625132,0.4,,5217.0,7516.846941514721,2299.846941514721,44.08370599031476,hardTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+17481444994,0.4,,12779.0,18889.031877622725,6110.031877622725,47.81306735756104,hardTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+18160385145,0.4,,13509.0,16924.55036949469,3415.550369494689,25.283517429082014,hardTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+18516570001,0.4,,8382.0,8722.986298637794,340.9862986377939,4.068078008086302,hardTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.3,exponential,decayed,decayedTrimpBefore
+11387382620,0.5,,3148.0,3593.362983265801,445.3629832658012,14.147489938557852,hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+13696739223,0.5,,5809.0,7339.72108219105,1530.7210821910503,26.350853540902914,hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+13824163131,0.5,,3241.0,4090.7158359712826,849.7158359712826,26.217705522100665,hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+14087416092,0.5,,15517.0,14685.877043638719,-831.1229563612815,-5.356209037579954,hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+14155390870,0.5,,5996.0,7392.288404769021,1396.2884047690213,23.28699807820249,hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+14300194854,0.5,,10836.0,12689.86956873962,1853.8695687396194,17.10843086692155,hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+14388179928,0.5,,3356.0,4128.948547393016,772.9485473930163,23.03183991039977,hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+14511853016,0.5,,3409.0,4046.6220908951,637.6220908951,18.70408010839249,hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+14736619046,0.5,,7519.0,8041.300153409315,522.3001534093146,6.946404487422724,hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+14765648151,0.5,,3295.0,3908.8911104546955,613.8911104546955,18.630989695134918,hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+14852373707,0.5,,2322.0,2021.2667610934627,-300.7332389065373,-12.951474543778522,hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+14893241615,0.5,,2746.0,3590.4236105075224,844.4236105075224,30.751041897579114,hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+14953411411,0.5,,33087.0,34710.46986970584,1623.4698697058411,4.90666989967613,hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15007483824,0.5,,3314.0,4260.386757061496,946.3867570614957,28.557234672947967,hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15018253166,0.5,,30983.0,25037.180244986037,-5945.819755013963,-19.190587596468912,hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15059995436,0.5,,7678.0,9470.877104022215,1792.8771040222146,23.350834905212484,hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15087396899,0.5,,11532.0,14413.84800918281,2881.8480091828096,24.990010485456203,hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15114097922,0.5,,33819.0,30744.59536425564,-3074.4046357443585,-9.090761512003189,hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15179557231,0.5,,33543.0,31996.868373028323,-1546.1316269716772,-4.609401743945614,hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15224440864,0.5,,6297.0,8026.712909770612,1729.712909770612,27.468840872965096,hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15250276952,0.5,,7979.0,10987.032633031273,3008.032633031273,37.699368755875085,hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15329205386,0.5,,10390.0,13155.171723534328,2765.1717235343276,26.61377982227457,hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15493651485,0.5,,4622.0,5902.041092159598,1280.0410921595976,27.694528173076538,hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15563904138,0.5,,42256.0,50382.969973403575,8126.969973403575,19.232700618618832,hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15652573322,0.5,,3132.0,3438.4669092281765,306.4669092281765,9.785022644577793,hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15717135978,0.5,,14017.0,14551.042152945409,534.0421529454088,3.809960426235349,hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15756279445,0.5,,8201.0,9290.612730481322,1089.6127304813217,13.286339842474353,hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15809536896,0.5,,6794.0,6718.8951235618215,-75.10487643817851,-1.1054588819278555,hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15913800933,0.5,,3009.0,3589.7783854932873,580.7783854932873,19.301375390272092,hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15961811819,0.5,,2785.0,4166.760461675656,1381.7604616756562,49.614379234314406,hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16043688171,0.5,,7974.0,7678.5225320607515,-295.4774679392485,-3.705511260838331,hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16043688538,0.5,,18442.0,22896.175898847203,4454.175898847203,24.152347353037648,hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16043688740,0.5,,28210.0,26304.430607407652,-1905.5693925923479,-6.754942901780744,hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16106633286,0.5,,15404.0,15502.45474803444,98.45474803444085,0.639150532552849,hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16121104478,0.5,,5582.0,6790.784125494157,1208.7841254941568,21.655036286172642,hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16183294852,0.5,,3140.0,4510.530522445556,1370.530522445556,43.647468867692865,hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16213470764,0.5,,6317.0,7128.225623785166,811.2256237851661,12.841944337267156,hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16251238864,0.5,,4467.0,7247.602526175716,2780.602526175716,62.247650015126844,hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16262137158,0.5,,10091.0,10394.994691075088,303.99469107508776,3.0125328617093228,hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16325125849,0.5,,10638.0,13584.428005324517,2946.4280053245166,27.697198771616062,hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16335274846,0.5,,8540.0,11776.892734913165,3236.8927349131645,37.902725233175225,hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+17383625132,0.5,,5217.0,6392.7008621131035,1175.7008621131035,22.53595672058853,hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+17481444994,0.5,,12779.0,16334.397443185455,3555.397443185455,27.82218830257027,hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+18160385145,0.5,,13509.0,14795.053443428385,1286.0534434283854,9.519975153071178,hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+18516570001,0.5,,8382.0,9593.985560370626,1211.9855603706255,14.459383922341035,hardTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+11387382620,0.5,,3148.0,3593.362983265801,445.3629832658012,14.147489938557852,hardTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+13696739223,0.5,,5809.0,7339.72108219105,1530.7210821910503,26.350853540902914,hardTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+13824163131,0.5,,3241.0,4090.7158359712826,849.7158359712826,26.217705522100665,hardTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+14087416092,0.5,,15517.0,14685.877043638719,-831.1229563612815,-5.356209037579954,hardTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+14155390870,0.5,,5996.0,7392.288404769021,1396.2884047690213,23.28699807820249,hardTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+14300194854,0.5,,10836.0,12689.86956873962,1853.8695687396194,17.10843086692155,hardTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+14388179928,0.5,,3356.0,4128.948547393016,772.9485473930163,23.03183991039977,hardTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+14511853016,0.5,,3409.0,4046.6220908951,637.6220908951,18.70408010839249,hardTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+14736619046,0.5,,7519.0,8041.300153409315,522.3001534093146,6.946404487422724,hardTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+14765648151,0.5,,3295.0,3908.8911104546955,613.8911104546955,18.630989695134918,hardTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+14852373707,0.5,,2322.0,2021.2667610934627,-300.7332389065373,-12.951474543778522,hardTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+14893241615,0.5,,2746.0,3590.4236105075224,844.4236105075224,30.751041897579114,hardTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+14953411411,0.5,,33087.0,34710.46986970584,1623.4698697058411,4.90666989967613,hardTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15007483824,0.5,,3314.0,4260.386757061496,946.3867570614957,28.557234672947967,hardTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15018253166,0.5,,30983.0,25037.180244986037,-5945.819755013963,-19.190587596468912,hardTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15059995436,0.5,,7678.0,9470.877104022215,1792.8771040222146,23.350834905212484,hardTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15087396899,0.5,,11532.0,14413.84800918281,2881.8480091828096,24.990010485456203,hardTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15114097922,0.5,,33819.0,30744.59536425564,-3074.4046357443585,-9.090761512003189,hardTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15179557231,0.5,,33543.0,31996.868373028323,-1546.1316269716772,-4.609401743945614,hardTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15224440864,0.5,,6297.0,8026.712909770612,1729.712909770612,27.468840872965096,hardTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15250276952,0.5,,7979.0,10987.032633031273,3008.032633031273,37.699368755875085,hardTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15329205386,0.5,,10390.0,13155.171723534328,2765.1717235343276,26.61377982227457,hardTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15493651485,0.5,,4622.0,5902.041092159598,1280.0410921595976,27.694528173076538,hardTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15563904138,0.5,,42256.0,50382.969973403575,8126.969973403575,19.232700618618832,hardTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15652573322,0.5,,3132.0,3438.4669092281765,306.4669092281765,9.785022644577793,hardTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15717135978,0.5,,14017.0,14551.042152945409,534.0421529454088,3.809960426235349,hardTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15756279445,0.5,,8201.0,9290.612730481322,1089.6127304813217,13.286339842474353,hardTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15809536896,0.5,,6794.0,6718.8951235618215,-75.10487643817851,-1.1054588819278555,hardTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15913800933,0.5,,3009.0,3589.7783854932873,580.7783854932873,19.301375390272092,hardTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15961811819,0.5,,2785.0,4166.760461675656,1381.7604616756562,49.614379234314406,hardTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16043688171,0.5,,7974.0,7678.5225320607515,-295.4774679392485,-3.705511260838331,hardTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16043688538,0.5,,18442.0,22896.175898847203,4454.175898847203,24.152347353037648,hardTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16043688740,0.5,,28210.0,26304.430607407652,-1905.5693925923479,-6.754942901780744,hardTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16106633286,0.5,,15404.0,15502.45474803444,98.45474803444085,0.639150532552849,hardTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16121104478,0.5,,5582.0,6790.784125494157,1208.7841254941568,21.655036286172642,hardTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16183294852,0.5,,3140.0,4510.530522445556,1370.530522445556,43.647468867692865,hardTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16213470764,0.5,,6317.0,7128.225623785166,811.2256237851661,12.841944337267156,hardTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16251238864,0.5,,4467.0,7247.602526175716,2780.602526175716,62.247650015126844,hardTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16262137158,0.5,,10091.0,10394.994691075088,303.99469107508776,3.0125328617093228,hardTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16325125849,0.5,,10638.0,13584.428005324517,2946.4280053245166,27.697198771616062,hardTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16335274846,0.5,,8540.0,11776.892734913165,3236.8927349131645,37.902725233175225,hardTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+17383625132,0.5,,5217.0,6392.7008621131035,1175.7008621131035,22.53595672058853,hardTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+17481444994,0.5,,12779.0,16334.397443185455,3555.397443185455,27.82218830257027,hardTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+18160385145,0.5,,13509.0,14795.053443428385,1286.0534434283854,9.519975153071178,hardTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+18516570001,0.5,,8382.0,9593.985560370626,1211.9855603706255,14.459383922341035,hardTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+11277623453,0.65,0.0,1918.0,2191.367871416276,273.3678714162761,14.252756591046719,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+11387382620,0.65,0.0,3148.0,2929.64848243997,-218.35151756003006,-6.936198143584182,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+11462693706,0.65,0.0,3174.0,3456.8256780229212,282.82567802292124,8.910701891081324,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+11562663514,0.65,0.0,3229.0,3377.15113854626,148.15113854625997,4.588143033331062,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+11587123521,0.65,0.0,1887.0,2322.4088330370637,435.4088330370637,23.07412999666474,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+11637384443,0.65,0.0,3410.0,3979.2809712812586,569.2809712812586,16.694456635814035,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+11704501213,0.65,0.0,3874.0,4582.827256938676,708.8272569386763,18.297038124385036,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+11730667820,0.65,0.0,3369.0,3700.791893472259,331.79189347225883,9.848379147291743,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+11759480552,0.65,0.0,5536.0,6441.460055425748,905.4600554257477,16.35585360234371,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+11815743705,0.65,0.0,3211.0,3948.949885759665,737.949885759665,22.981933533468236,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+12000338229,0.65,0.0,9824.0,9687.647318353716,-136.3526816462836,-1.3879548213180333,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+12033703768,0.65,0.0,4341.0,4406.195663251381,65.19566325138112,1.5018581721119817,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+12063923301,0.65,0.0,3335.0,3729.31873738266,394.31873738265995,11.823650296331632,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+12122982163,0.65,0.0,5150.0,5108.985923898282,-41.014076101718274,-0.7963898272178307,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+12147822484,0.65,0.0,2076.0,2618.442316734875,542.442316734875,26.12920600842365,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+12177245147,0.65,0.0,8181.0,9009.212182315758,828.2121823157577,10.123605699984815,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+12215183637,0.65,0.0,2398.0,2727.5454036934993,329.54540369349934,13.742510579378623,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+12231235107,0.65,0.0,4474.0,4880.239023155606,406.23902315560645,9.079996047286688,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+12351986883,0.65,0.0,2360.0,2083.926709018685,-276.07329098131504,-11.69802080429301,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+12368406803,0.65,0.0,2107.0,2110.798624760739,3.7986247607391306,0.18028594023441533,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+12385954488,0.65,0.0,2041.0,2123.4710885108184,82.47108851081839,4.0407196722595975,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+12415493314,0.65,0.0,3761.0,3882.383601320194,121.38360132019397,3.2274289104013287,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+12435526893,0.65,0.0,2374.0,2585.4960471636514,211.49604716365138,8.90884781649753,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+12453142102,0.65,0.0,2902.0,2812.925037837571,-89.07496216242907,-3.069433568657101,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+12469144311,0.65,0.0,6714.0,6791.1729889334865,77.17298893348652,1.1494338536414435,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+12532587467,0.65,0.0,2807.0,3023.255315538275,216.25531553827523,7.704143766949599,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+12588932008,0.65,0.0,17378.0,14890.986404842253,-2487.0135951577467,-14.311276298525415,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+12923277981,0.65,0.0,2108.0,1893.6959709138137,-214.30402908618635,-10.166225288718516,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+13024493247,0.65,0.0,3462.0,3316.5591311911458,-145.44086880885425,-4.201064956928199,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+13066363809,0.65,0.0,1923.0,1862.5241580478983,-60.475841952101746,-3.1448695762923426,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+13169655589,0.65,0.0,1961.0,2202.617850360667,241.61785036066703,12.321155041339471,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+13180970159,0.65,0.0,1911.0,2179.554700401453,268.5547004014529,14.053097875533904,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+13194703589,0.65,0.0,1956.0,2238.080545741008,282.0805457410079,14.421295794530057,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+13602011720,0.65,0.0,2276.0,2622.649592782817,346.64959278281685,15.230649946520952,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+13626651040,0.65,0.0,2805.0,3379.5411654661666,574.5411654661666,20.482750997011287,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+13688400233,0.65,0.0,2363.0,2863.216563317884,500.2165633178838,21.16870771552619,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+13696739223,0.65,0.0,5809.0,6242.921874966223,433.9218749662232,7.46982053651615,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+13725623458,0.65,0.0,2081.0,2764.5739369123244,683.5739369123244,32.84833911159656,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+13798314040,0.65,0.0,3877.0,3812.1615601113926,-64.83843988860735,-1.672386894212209,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+13824163131,0.65,0.0,3241.0,3447.580537056973,206.58053705697284,6.373975225454269,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+13845021507,0.65,0.0,2393.0,3032.798114312931,639.7981143129309,26.736235449767275,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+13910406111,0.65,0.0,2366.0,2865.4932710404046,499.4932710404046,21.111296324615576,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+13947675380,0.65,0.0,8133.0,8113.708383042964,-19.29161695703624,-0.23720173314934512,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+14087416092,0.65,0.0,15517.0,11327.501834344617,-4189.498165655383,-26.99940816946177,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+14155390870,0.65,0.0,5996.0,6094.179892590254,98.17989259025398,1.637423158609973,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+14243922808,0.65,0.0,3758.0,4227.65327327866,469.65327327866,12.497426111725918,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+14283547293,0.65,0.0,1893.0,2326.411397573158,433.41139757315796,22.895477948925407,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+14300194854,0.65,0.0,10836.0,10291.39639578238,-544.6036042176202,-5.025873054795314,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+14388179928,0.65,0.0,3356.0,3540.82181410606,184.82181410606017,5.50720542628308,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+14511853016,0.65,0.0,3409.0,3384.4385548224445,-24.56144517755547,-0.7204882715622021,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+14531574734,0.65,0.0,4250.0,4555.9940237911205,305.9940237911205,7.199859383320482,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+14736619046,0.65,0.0,7519.0,6303.807511545077,-1215.1924884549226,-16.16162373260969,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+14765648151,0.65,0.0,3295.0,3373.4957112695533,78.49571126955334,2.3822674133400104,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+14852373707,0.65,0.0,2322.0,1794.7507375729972,-527.2492624270028,-22.706686581696932,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+14893241615,0.65,0.0,2746.0,3112.9463463977613,366.9463463977613,13.36294050975096,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+14953411411,0.65,0.0,33087.0,22088.7798765659,-10998.220123434101,-33.24030623336689,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+15007483824,0.65,0.0,3314.0,3725.3635521106617,411.36355211066166,12.41290139138991,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+15018253166,0.65,0.0,30983.0,14616.343806489002,-16366.656193510998,-52.82463348775457,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+15059995436,0.65,0.0,7678.0,7327.7063642517805,-350.29363574821946,-4.562303148583218,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+15087396899,0.65,0.0,11532.0,11810.18425875077,278.1842587507708,2.4122811199338434,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+15114097922,0.65,0.0,33819.0,19037.618379128762,-14781.381620871238,-43.70732907794801,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+15179557231,0.65,0.0,33543.0,14618.278699113724,-18924.721300886275,-56.41928659000768,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+15224440864,0.65,0.0,6297.0,6810.727782291046,513.7277822910464,8.158294144688684,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+15250276952,0.65,0.0,7979.0,9306.398358205166,1327.398358205166,16.636149369659933,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+15310799882,0.65,0.0,5452.0,5769.941688682358,317.9416886823583,5.831652396961817,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+15329205386,0.65,0.0,10390.0,9338.422434129809,-1051.5775658701914,-10.121054531955643,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+15367390310,0.65,0.0,3783.0,4214.401088909216,431.401088909216,11.40367668277071,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+15424641872,0.65,0.0,5476.0,4581.921566061945,-894.0784339380552,-16.327217566436364,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+15493651485,0.65,0.0,4622.0,4573.317005383815,-48.68299461618517,-1.0532885031628119,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+15563904138,0.65,0.0,42256.0,31132.37556572974,-11123.62443427026,-26.32436679825412,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+15652573322,0.65,0.0,3132.0,3037.7486390814347,-94.2513609185653,-3.009302711320731,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+15717135978,0.65,0.0,14017.0,10174.019705723198,-3842.980294276802,-27.416567698343453,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+15756279445,0.65,0.0,8201.0,6767.603483284189,-1433.3965167158112,-17.47831382411671,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+15809536896,0.65,0.0,6794.0,5570.245135825949,-1223.7548641740514,-18.012288256903904,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+15913800933,0.65,0.0,3009.0,3009.474877871322,0.4748778713219508,0.015781916627515814,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+15923504065,0.65,0.0,4057.0,3672.0850864150148,-384.91491358498524,-9.487673492358523,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+15961811819,0.65,0.0,2785.0,3660.288708898142,875.288708898142,31.428678955049982,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+16043688171,0.65,0.0,7974.0,4710.923708072871,-3263.076291927129,-40.92144835624692,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+16043688538,0.65,0.0,18442.0,11340.179631705425,-7101.820368294575,-38.50894896591788,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+16043688740,0.65,0.0,28210.0,15969.602695677235,-12240.397304322765,-43.390277576472045,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+16078947736,0.65,0.0,2945.0,3579.609726123304,634.609726123304,21.548717355630014,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+16106633286,0.65,0.0,15404.0,7958.927900887341,-7445.072099112659,-48.33207023573526,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+16121104478,0.65,0.0,5582.0,5476.6863975971355,-105.31360240286449,-1.8866643210832048,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+16163570178,0.65,0.0,3062.0,3510.8444437558046,448.8444437558046,14.658538332978596,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+16183294852,0.65,0.0,3140.0,3937.9632633677,797.9632633677002,25.412842782410834,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+16213470764,0.65,0.0,6317.0,5680.43291151621,-636.56708848379,-10.077047466895522,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+16235724470,0.65,0.0,3841.0,3831.8583947899324,-9.14160521006761,-0.23800065634125514,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+16251238864,0.65,0.0,4467.0,3719.389886731201,-747.6101132687991,-16.7362908723707,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+16262137158,0.65,0.0,10091.0,6647.4477390293305,-3443.5522609706695,-34.124985243986416,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+16285738312,0.65,0.0,3949.0,4422.568103511027,473.5681035110274,11.992101886832804,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+16325125849,0.65,0.0,10638.0,11034.905046916585,396.905046916585,3.7310119093493603,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+16335274846,0.65,0.0,8540.0,6961.9184016713825,-1578.0815983286175,-18.478707240381937,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+16466621813,0.65,0.0,7487.0,7228.054330499743,-258.9456695002573,-3.4586038399927514,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+17383625132,0.65,0.0,5217.0,5335.3732581204995,118.37325812049949,2.2689909549645293,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+17437915260,0.65,0.0,2526.0,2878.957608221248,352.95760822124794,13.972985281917971,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+17481444994,0.65,0.0,12779.0,13303.215886869522,524.2158868695224,4.102166733465236,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+17528738922,0.65,0.0,2736.0,3252.9478130486773,516.9478130486773,18.894291412597855,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+17591239723,0.65,0.0,4034.0,5048.869135627493,1014.869135627493,25.15788635665575,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+17646695382,0.65,0.0,7474.0,7989.837192744146,515.8371927441458,6.901755321703851,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+17815897198,0.65,0.0,13634.0,14362.806692449078,728.8066924490777,5.345508966180708,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+18160385145,0.65,0.0,13509.0,11752.892500257427,-1756.107499742573,-12.999537343567793,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+18223569115,0.65,0.0,1879.0,2041.4804275407373,162.4804275407373,8.64717549445116,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+18516570001,0.65,0.0,8382.0,6149.3831489394715,-2232.6168510605285,-26.635848855410742,hardRunOrTrailRun,Stage 0 reproduction Stage 3 LOO,activity,,,,
+11277623453,0.45,,1918.0,2761.1042792821063,843.1042792821063,43.95747024411399,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+11387382620,0.45,,3148.0,3746.7371119617655,598.7371119617655,19.019603302470315,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+11462693706,0.45,,3174.0,4379.7693187517325,1205.7693187517325,37.98895144145345,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+11562663514,0.45,,3229.0,4278.252807210084,1049.252807210084,32.49466730288275,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+11587123521,0.45,,1887.0,2934.5037485077246,1047.5037485077246,55.511592395745865,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+11637384443,0.45,,3410.0,5055.175471315967,1645.1754713159671,48.245614994603145,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+11704501213,0.45,,3874.0,5824.6635076744615,1950.6635076744615,50.35269766841666,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+11730667820,0.45,,3369.0,4693.060859883634,1324.0608598836343,39.30130186653708,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+11759480552,0.45,,5536.0,8216.858899649786,2680.8588996497856,48.42591943009006,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+11815743705,0.45,,3211.0,5009.579640427255,1798.579640427255,56.01306883921692,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+12000338229,0.45,,9824.0,12499.82160204011,2675.8216020401105,27.237597740636303,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+12033703768,0.45,,4341.0,5582.809856390997,1241.809856390997,28.6065389631651,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+12063923301,0.45,,3335.0,4689.99849273991,1354.99849273991,40.62963996221619,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+12122982163,0.45,,5150.0,6537.504064926855,1387.5040649268549,26.941826503434076,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+12147822484,0.45,,2076.0,3317.5634889576922,1241.5634889576922,59.80556305191196,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+12177245147,0.45,,8181.0,11623.090722415503,3442.0907224155035,42.0742051389256,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+12215183637,0.45,,2398.0,3460.2940393201707,1062.2940393201707,44.2991676113499,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+12231235107,0.45,,4474.0,6238.753188401044,1764.753188401044,39.44463988379624,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+12351986883,0.45,,2360.0,2639.660875953463,279.6608759534629,11.850037116672157,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+12368406803,0.45,,2107.0,2660.964679778747,553.9646797787468,26.291631693343465,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+12385954488,0.45,,2041.0,2685.374077894736,644.3740778947358,31.571488382887598,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+12415493314,0.45,,3761.0,4945.780042352038,1184.7800423520384,31.501729389844147,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+12435526893,0.45,,2374.0,3265.8524030220633,891.8524030220633,37.56749802114841,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+12453142102,0.45,,2902.0,3572.1119748046845,670.1119748046845,23.09138438334543,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+12469144311,0.45,,6714.0,8760.646229572169,2046.6462295721685,30.4832622813847,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+12532587467,0.45,,2807.0,3835.589317869316,1028.589317869316,36.64372347236608,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+12588932008,0.45,,17378.0,19117.498456628822,1739.4984566288222,10.00977360242158,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+12923277981,0.45,,2108.0,2396.3877784585748,288.38777845857476,13.680634651735046,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+13024493247,0.45,,3462.0,4219.8356362476925,757.8356362476925,21.89011081015865,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+13066363809,0.45,,1923.0,2349.1178489428403,426.1178489428403,22.159014505607917,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+13169655589,0.45,,1961.0,2779.161993769067,818.1619937690671,41.72167229826961,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+13180970159,0.45,,1911.0,2754.936121333901,843.9361213339012,44.16201576838834,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+13194703589,0.45,,1956.0,2820.5962249179715,864.5962249179715,44.20226098762636,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+13602011720,0.45,,2276.0,3326.082811253509,1050.0828112535091,46.13720611834399,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+13626651040,0.45,,2805.0,4285.6954945875505,1480.6954945875505,52.78771816711409,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+13688400233,0.45,,2363.0,3625.453358324856,1262.4533583248558,53.425872125469986,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+13696739223,0.45,,5809.0,8059.398461324222,2250.398461324222,38.739859895407506,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+13725623458,0.45,,2081.0,3491.373550720251,1410.373550720251,67.77383713216007,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+13798314040,0.45,,3877.0,4801.464821828556,924.4648218285556,23.844849673163672,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+13824163131,0.45,,3241.0,4382.657165833394,1141.6571658333942,35.22546022318402,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+13845021507,0.45,,2393.0,3831.711723880733,1438.7117238807332,60.121676718793694,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+13910406111,0.45,,2366.0,3624.296114252239,1258.296114252239,53.182422411337235,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+13947675380,0.45,,8133.0,10271.420845160204,2138.4208451602044,26.29313715923035,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+14087416092,0.45,,15517.0,14693.131589639632,-823.8684103603682,-5.309456791650243,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+14155390870,0.45,,5996.0,7835.625550482759,1839.6255504827586,30.680879761220126,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+14243922808,0.45,,3758.0,5378.193963012984,1620.1939630129837,43.1131975256249,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+14283547293,0.45,,1893.0,2931.6479790613075,1038.6479790613075,54.86782773699459,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+14300194854,0.45,,10836.0,13420.375710937487,2584.3757109374874,23.84990504741129,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+14388179928,0.45,,3356.0,4508.357672594967,1152.357672594967,34.337236966476965,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+14511853016,0.45,,3409.0,4305.400391237008,896.4003912370081,26.29511267929035,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+14531574734,0.45,,4250.0,5752.135268189899,1502.1352681898989,35.34435925152703,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+14736619046,0.45,,7519.0,8064.426418532659,545.4264185326592,7.25397550914562,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+14765648151,0.45,,3295.0,4300.114055312359,1005.1140553123587,30.50422019157386,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+14852373707,0.45,,2322.0,2264.8601437707707,-57.13985622922928,-2.460803455177833,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+14893241615,0.45,,2746.0,3951.842691422318,1205.8426914223178,43.91269815813247,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+14953411411,0.45,,33087.0,28754.643449652016,-4332.356550347984,-13.093833077486577,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+15007483824,0.45,,3314.0,4734.3785927539975,1420.3785927539975,42.859945466324604,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+15018253166,0.45,,30983.0,18892.156176559638,-12090.843823440362,-39.02412233625008,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+15059995436,0.45,,7678.0,9352.929973877992,1674.9299738779919,21.81466493719708,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+15087396899,0.45,,11532.0,15306.196587584325,3774.1965875843252,32.72803145667989,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+15114097922,0.45,,33819.0,24552.450205855675,-9266.549794144325,-27.4004251874518,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+15179557231,0.45,,33543.0,18663.870823331366,-14879.129176668634,-44.358373361561675,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+15224440864,0.45,,6297.0,8750.619781537365,2453.6197815373653,38.964900453189856,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+15250276952,0.45,,7979.0,11936.974645950471,3957.9746459504713,49.60489592618713,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+15310799882,0.45,,5452.0,7358.063799550328,1906.0637995503284,34.96081804017477,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+15329205386,0.45,,10390.0,11857.79244832157,1467.7924483215702,14.126972553624354,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+15367390310,0.45,,3783.0,5345.660986892617,1562.660986892617,41.307454054787655,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+15424641872,0.45,,5476.0,5803.472193864101,327.4721938641014,5.980135023084395,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+15493651485,0.45,,4622.0,5791.994011706995,1169.9940117069946,25.313587444980413,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+15563904138,0.45,,42256.0,40927.650834884094,-1328.3491651159056,-3.1435752676919386,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+15652573322,0.45,,3132.0,3871.0379142702477,739.0379142702477,23.596357416036007,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+15717135978,0.45,,14017.0,13050.511836470598,-966.4881635294023,-6.895114243628468,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+15756279445,0.45,,8201.0,8618.995971949165,417.9959719491653,5.096890281053107,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+15809536896,0.45,,6794.0,7263.946889683948,469.94688968394803,6.917086983867354,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+15913800933,0.45,,3009.0,3835.372523101991,826.3725231019912,27.463360688002364,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+15923504065,0.45,,4057.0,4630.087209632583,573.0872096325829,14.12588636018198,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+15961811819,0.45,,2785.0,4695.506087909752,1910.5060879097518,68.59985952997314,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+16043688171,0.45,,7974.0,5968.420024361954,-2005.5799756380457,-25.15149204462059,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+16043688538,0.45,,18442.0,14388.59087452617,-4053.4091254738305,-21.979227445362927,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+16043688740,0.45,,28210.0,20561.367432960342,-7648.632567039658,-27.11319591293746,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+16078947736,0.45,,2945.0,4540.805225581519,1595.8052255815192,54.18693465472052,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+16106633286,0.45,,15404.0,10127.491117419559,-5276.508882580441,-34.25414751090912,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+16121104478,0.45,,5582.0,6975.154026225654,1393.154026225654,24.95797252285299,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+16163570178,0.45,,3062.0,4446.1931621396125,1384.1931621396125,45.20552456367121,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+16183294852,0.45,,3140.0,5048.966562961166,1908.9665629611663,60.79511347010084,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+16213470764,0.45,,6317.0,7256.625294225845,939.6252942258452,14.874549536581371,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+16235724470,0.45,,3841.0,4862.8460402776645,1021.8460402776645,26.603645932769187,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+16251238864,0.45,,4467.0,4697.5732513777375,230.5732513777375,5.161702515731755,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+16262137158,0.45,,10091.0,8479.032992536539,-1611.9670074634614,-15.974303909062149,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+16285738312,0.45,,3949.0,5630.570797711544,1681.5707977115444,42.582192902292846,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+16325125849,0.45,,10638.0,14277.550087060905,3639.550087060905,34.2127287747782,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+16335274846,0.45,,8540.0,8803.844517042047,263.8445170420473,3.089514251077837,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+16466621813,0.45,,7487.0,9201.816413875864,1714.8164138758639,22.903918977906557,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+17383625132,0.45,,5217.0,6807.810784641428,1590.8107846414277,30.492827000985773,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+17437915260,0.45,,2526.0,3644.7933418212033,1118.7933418212033,44.291106168693716,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+17481444994,0.45,,12779.0,17175.93367133519,4396.933671335191,34.4074941023178,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+17528738922,0.45,,2736.0,4129.516138404733,1393.5161384047333,50.93260739783382,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+17591239723,0.45,,4034.0,6424.904680595013,2390.904680595013,59.268831943356794,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+17646695382,0.45,,7474.0,10190.355381260559,2716.3553812605587,36.34406450709873,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+17815897198,0.45,,13634.0,18381.46526561971,4747.46526561971,34.82078088323097,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+18160385145,0.45,,13509.0,15229.72065348978,1720.7206534897796,12.737587189945812,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+18223569115,0.45,,1879.0,2578.4661366578953,699.4661366578953,37.22544633623711,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+18516570001,0.45,,8382.0,7818.754225491754,-563.2457745082456,-6.71970620983352,hardRunOrTrailRun,Stage 1 TRIMP fatigue CTL LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+11277623453,0.45,,1918.0,2761.1042792821063,843.1042792821063,43.95747024411399,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+11387382620,0.45,,3148.0,4025.7278517752816,877.7278517752816,27.882079154233853,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+11462693706,0.45,,3174.0,4655.815892911289,1481.8158929112888,46.686070980191836,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+11562663514,0.45,,3229.0,4520.1536651278275,1291.1536651278275,39.98617730343225,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+11587123521,0.45,,1887.0,3081.6179254776034,1194.6179254776034,63.30778619383166,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+11637384443,0.45,,3410.0,5286.390822136551,1876.390822136551,55.02612381632114,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+11704501213,0.45,,3874.0,6020.116635065675,2146.116635065675,55.397951343977155,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+11730667820,0.45,,3369.0,4827.140681035831,1458.1406810358312,43.28111252703565,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+11759480552,0.45,,5536.0,8420.972908182495,2884.9729081824953,52.11294993104219,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+11815743705,0.45,,3211.0,5098.948845776694,1887.9488457766938,58.79628918644328,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+12000338229,0.45,,9824.0,12576.327124623094,2752.3271246230943,28.016359167580358,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+12033703768,0.45,,4341.0,5582.428169690749,1241.4281696907492,28.59774636467978,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+12063923301,0.45,,3335.0,4689.17293835922,1354.17293835922,40.60488570792264,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+12122982163,0.45,,5150.0,6546.554753497471,1396.5547534974712,27.11756802907711,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+12147822484,0.45,,2076.0,3312.221006072559,1236.2210060725588,59.54821801890938,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+12177245147,0.45,,8181.0,11599.891551647313,3418.8915516473135,41.790631361047716,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+12215183637,0.45,,2398.0,3436.399050787398,1038.3990507873982,43.30271271006665,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+12231235107,0.45,,4474.0,6196.78120330922,1722.7812033092196,38.50650879099731,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+12351986883,0.45,,2360.0,2642.352433864177,282.3524338641769,11.964086180685461,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+12368406803,0.45,,2107.0,2663.3718311629073,556.3718311629073,26.405877131604523,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+12385954488,0.45,,2041.0,2688.104415040396,647.1044150403959,31.7052628633217,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+12415493314,0.45,,3761.0,4955.99887686314,1194.9988768631401,31.773434641402293,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+12435526893,0.45,,2374.0,3269.262300506875,895.2623005068749,37.71113313002843,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+12453142102,0.45,,2902.0,3575.4293384256084,673.4293384256084,23.205697395782508,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+12469144311,0.45,,6714.0,8765.623612717643,2051.6236127176435,30.55739667437658,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+12532587467,0.45,,2807.0,3835.6617981861295,1028.6617981861295,36.646305599790864,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+12588932008,0.45,,17378.0,19155.566410844556,1777.5664108445562,10.22883191877406,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+12923277981,0.45,,2108.0,2403.9469666678306,295.94696666783057,14.039229917828774,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+13024493247,0.45,,3462.0,4232.577644163886,770.5776441638864,22.258164187287303,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+13066363809,0.45,,1923.0,2354.043661554838,431.04366155483785,22.41516700753187,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+13169655589,0.45,,1961.0,2788.4096913432836,827.4096913432836,42.19325300067739,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+13180970159,0.45,,1911.0,2762.9716179147094,851.9716179147094,44.58250224566768,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+13194703589,0.45,,1956.0,2827.196093990191,871.196093990191,44.53967760686048,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+13602011720,0.45,,2276.0,3338.891510832161,1062.8915108321612,46.6999785075642,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+13626651040,0.45,,2805.0,4298.42893673149,1493.4289367314896,53.241673323760764,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+13688400233,0.45,,2363.0,3626.5999960162444,1263.5999960162444,53.47439678443692,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+13696739223,0.45,,5809.0,8052.958516241286,2243.958516241286,38.62899838597497,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+13725623458,0.45,,2081.0,3479.386871795636,1398.3868717956361,67.197831417378,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+13798314040,0.45,,3877.0,4774.228021636465,897.2280216364652,23.142327099212412,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+13824163131,0.45,,3241.0,4359.2568971501805,1118.2568971501805,34.50345255014442,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+13845021507,0.45,,2393.0,3808.0252863905603,1415.0252863905603,59.13185484289847,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+13910406111,0.45,,2366.0,3609.8959649852436,1243.8959649852436,52.573793955420264,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+13947675380,0.45,,8133.0,10227.33377366236,2094.33377366236,25.75106078522513,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+14087416092,0.45,,15517.0,14660.183118788616,-856.8168812113836,-5.521794684612899,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+14155390870,0.45,,5996.0,7796.176814051063,1800.176814051063,30.02296220899038,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+14243922808,0.45,,3758.0,5349.022756638578,1591.0227566385784,42.33695467372481,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+14283547293,0.45,,1893.0,2916.640155131772,1023.6401551317722,54.075021401572755,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+14300194854,0.45,,10836.0,13353.026704265252,2517.026704265252,23.228374900934405,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+14388179928,0.45,,3356.0,4477.666513229742,1121.6665132297421,33.422720894807576,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+14511853016,0.45,,3409.0,4290.449696502577,881.4496965025774,25.856547272002857,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+14531574734,0.45,,4250.0,5729.58224544318,1479.58224544318,34.81369989278071,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+14736619046,0.45,,7519.0,7955.777490524841,436.7774905248407,5.808983781418283,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+14765648151,0.45,,3295.0,4241.8160976589925,946.8160976589925,28.73493467857337,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+14852373707,0.45,,2322.0,2244.3562448256857,-77.64375517431426,-3.34383097219269,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+14893241615,0.45,,2746.0,3924.887798968525,1178.8877989685252,42.93109246061636,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+14953411411,0.45,,33087.0,28634.168032290978,-4452.831967709022,-13.457950154770822,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+15007483824,0.45,,3314.0,4682.474525146464,1368.4745251464637,41.29373944316427,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+15018253166,0.45,,30983.0,18670.286692577392,-12312.713307422608,-39.74022304948716,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+15059995436,0.45,,7678.0,9213.695621319905,1535.6956213199046,20.00124539359084,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+15087396899,0.45,,11532.0,15091.979257838437,3559.9792578384368,30.870441014901463,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+15114097922,0.45,,33819.0,24089.330828038463,-9729.669171961537,-28.76983107709139,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+15179557231,0.45,,33543.0,18300.06836227499,-15242.93163772501,-45.44295870293358,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+15224440864,0.45,,6297.0,8590.228902189541,2293.2289021895413,36.41780057471083,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+15250276952,0.45,,7979.0,11718.888306108696,3739.8883061086963,46.871641886310265,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+15310799882,0.45,,5452.0,7236.968653047179,1784.968653047179,32.73970383432096,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+15329205386,0.45,,10390.0,11663.824562831152,1273.8245628311524,12.260101663437464,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+15367390310,0.45,,3783.0,5258.788417921901,1475.7884179219009,39.01106047903518,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+15424641872,0.45,,5476.0,5740.135330252368,264.13533025236757,4.8235085875158425,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+15493651485,0.45,,4622.0,5734.381371918888,1112.3813719188884,24.067100214601652,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+15563904138,0.45,,42256.0,40682.44649211895,-1573.5535078810499,-3.7238581689725714,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+15652573322,0.45,,3132.0,3827.065577738593,695.0655777385932,22.1923875395464,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+15717135978,0.45,,14017.0,13043.863297359132,-973.136702640868,-6.942546212747863,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+15756279445,0.45,,8201.0,8561.652480038774,360.65248003877423,4.397664675512428,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+15809536896,0.45,,6794.0,7224.726661041998,430.72666104199834,6.339809553164533,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+15913800933,0.45,,3009.0,3823.477677924331,814.4776779243311,27.068051775484587,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+15923504065,0.45,,4057.0,4613.479104653735,556.4791046537348,13.716517245593659,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+15961811819,0.45,,2785.0,4684.6735752906025,1899.6735752906025,68.21090036950098,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+16043688171,0.45,,7974.0,5916.653816359697,-2057.346183640303,-25.800679503891434,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+16043688538,0.45,,18442.0,14263.793560491667,-4178.206439508333,-22.655929072271622,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+16043688740,0.45,,28210.0,20528.096684896125,-7681.903315103875,-27.231135466514978,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+16078947736,0.45,,2945.0,4492.5922388746985,1547.5922388746985,52.549821353979574,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+16106633286,0.45,,15404.0,10032.068737724368,-5371.9312622756315,-34.8736124531007,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+16121104478,0.45,,5582.0,6898.923984483774,1316.923984483774,23.592332219343852,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+16163570178,0.45,,3062.0,4405.577820120611,1343.5778201206112,43.87909275377568,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+16183294852,0.45,,3140.0,5008.263332407356,1868.2633324073558,59.498832242272485,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+16213470764,0.45,,6317.0,7204.977953001056,887.9779530010564,14.056956672487834,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+16235724470,0.45,,3841.0,4827.740056776269,986.7400567762688,25.689665628124676,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+16251238864,0.45,,4467.0,4667.195278135461,200.1952781354612,4.4816493874067875,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+16262137158,0.45,,10091.0,8427.616280720451,-1663.383719279549,-16.48383430065949,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+16285738312,0.45,,3949.0,5596.370215502452,1647.370215502452,41.71613612313123,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+16325125849,0.45,,10638.0,14212.564133227595,3574.5641332275954,33.601843703963105,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+16335274846,0.45,,8540.0,8712.30986942611,172.3098694261098,2.0176799698607706,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+16466621813,0.45,,7487.0,9185.339903781956,1698.3399037819563,22.68385072501611,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+17383625132,0.45,,5217.0,6750.323082373206,1533.3230823732056,29.39089672940781,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+17437915260,0.45,,2526.0,3609.9467088192573,1083.9467088192573,42.91158783924217,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+17481444994,0.45,,12779.0,17043.00964460135,4264.009644601349,33.36731860553524,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+17528738922,0.45,,2736.0,4082.460452176821,1346.460452176821,49.21273582517621,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+17591239723,0.45,,4034.0,6349.233476671526,2315.2334766715258,57.39299644698874,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+17646695382,0.45,,7474.0,10100.591861653935,2626.5918616539348,35.14305407618323,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+17815897198,0.45,,13634.0,18347.988854456682,4713.988854456682,34.57524464175357,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+18160385145,0.45,,13509.0,15292.80433252843,1783.8043325284307,13.204562384546826,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+18223569115,0.45,,1879.0,2580.0928868683895,701.0928868683895,37.31202165345341,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+18516570001,0.45,,8382.0,7822.328217547992,-559.6717824520083,-6.677067316296926,hardRunOrTrailRun,Stage 2 TRIMP fatigue REDI LOO,activity,0.5,exponential,decayed,decayedTrimpBefore
+11277623453,0.5,,1918.0,2565.3989909423744,647.3989909423744,33.753857713366756,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+11387382620,0.5,,3148.0,3593.362983265801,445.3629832658012,14.147489938557852,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+11462693706,0.5,,3174.0,4392.891652252438,1218.8916522524378,38.40238349881657,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+11562663514,0.5,,3229.0,4341.2531998198365,1112.2531998198365,34.44574790398998,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+11587123521,0.5,,1887.0,2883.871749580475,996.8717495804749,52.828391604688655,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+11637384443,0.5,,3410.0,4874.789245428874,1464.789245428874,42.9556963468878,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+11704501213,0.5,,3874.0,5815.52771069002,1941.5277106900203,50.116874307950965,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+11730667820,0.5,,3369.0,4515.584929121727,1146.5849291217273,34.03339059429288,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+11759480552,0.5,,5536.0,8078.78619041894,2542.7861904189404,45.93183147433057,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+11815743705,0.5,,3211.0,4808.300443489889,1597.3004434898894,49.74464165337557,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+12000338229,0.5,,9824.0,11978.703017598013,2154.7030175980126,21.933051889230583,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+12033703768,0.5,,4341.0,5667.378936432794,1326.378936432794,30.554686395595347,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+12063923301,0.5,,3335.0,5455.509954420317,2120.5099544203167,63.58350687916992,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+12122982163,0.5,,5150.0,6162.691293749323,1012.6912937493234,19.663908616491717,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+12147822484,0.5,,2076.0,3047.596022611666,971.5960226116658,46.80134983678544,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+12177245147,0.5,,8181.0,10996.218530041784,2815.218530041784,34.41166764505298,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+12215183637,0.5,,2398.0,3165.2011164703476,767.2011164703476,31.99337433154077,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+12231235107,0.5,,4474.0,5677.314702710542,1203.3147027105424,26.895724244759556,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+12351986883,0.5,,2360.0,2419.2391042330564,59.23910423305642,2.510131535299001,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+12368406803,0.5,,2107.0,2563.365071839555,456.3650718395552,21.659471848104186,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+12385954488,0.5,,2041.0,2434.906811770255,393.906811770255,19.29969680403013,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+12415493314,0.5,,3761.0,4537.505939896167,776.5059398961666,20.646262693330677,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+12435526893,0.5,,2374.0,3049.9901227051882,675.9901227051882,28.474731369216016,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+12453142102,0.5,,2902.0,3429.773886985748,527.773886985748,18.186557098061616,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+12469144311,0.5,,6714.0,8226.447927410047,1512.4479274100468,22.526778781799923,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+12532587467,0.5,,2807.0,3678.2919274791975,871.2919274791975,31.039968916252136,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+12588932008,0.5,,17378.0,21064.824213788143,3686.8242137881425,21.2154690631151,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+12923277981,0.5,,2108.0,2409.201438920745,301.2014389207452,14.288493307435731,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+13024493247,0.5,,3462.0,3889.305529718318,427.3055297183182,12.342736271470775,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+13066363809,0.5,,1923.0,2182.8598966720474,259.8598966720474,13.51325515715275,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+13169655589,0.5,,1961.0,2557.849426508164,596.849426508164,30.43597279490892,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+13180970159,0.5,,1911.0,2548.9277981896416,637.9277981896416,33.38188373572169,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+13194703589,0.5,,1956.0,2633.136800407728,677.1368004077281,34.618445828615954,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+13602011720,0.5,,2276.0,3058.125794858289,782.1257948582888,34.364050740698104,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+13626651040,0.5,,2805.0,3901.658154695056,1096.658154695056,39.09654740445833,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+13688400233,0.5,,2363.0,3307.723393785476,944.7233937854762,39.9798304606634,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+13696739223,0.5,,5809.0,7339.72108219105,1530.7210821910503,26.350853540902914,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+13725623458,0.5,,2081.0,3248.9930039081573,1167.9930039081573,56.12652589659574,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+13798314040,0.5,,3877.0,5608.834060576654,1731.8340605766543,44.66943669271742,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+13824163131,0.5,,3241.0,4090.7158359712826,849.7158359712826,26.217705522100665,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+13845021507,0.5,,2393.0,3735.5595002711493,1342.5595002711493,56.10361472090052,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+13910406111,0.5,,2366.0,3304.2812859617425,938.2812859617425,39.65685908544981,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+13947675380,0.5,,8133.0,11764.438313046321,3631.438313046321,44.650661662932755,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+14087416092,0.5,,15517.0,14685.877043638719,-831.1229563612815,-5.356209037579954,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+14155390870,0.5,,5996.0,7392.288404769021,1396.2884047690213,23.28699807820249,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+14243922808,0.5,,3758.0,4992.8499986123325,1234.8499986123325,32.859233597986496,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+14283547293,0.5,,1893.0,2673.3224494308974,780.3224494308974,41.2214711796565,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+14300194854,0.5,,10836.0,12689.86956873962,1853.8695687396194,17.10843086692155,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+14388179928,0.5,,3356.0,4128.948547393016,772.9485473930163,23.03183991039977,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+14511853016,0.5,,3409.0,4046.6220908951,637.6220908951,18.70408010839249,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+14531574734,0.5,,4250.0,6069.276688569207,1819.2766885692072,42.80651031927547,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+14736619046,0.5,,7519.0,8041.300153409315,522.3001534093146,6.946404487422724,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+14765648151,0.5,,3295.0,3908.8911104546955,613.8911104546955,18.630989695134918,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+14852373707,0.5,,2322.0,2021.2667610934627,-300.7332389065373,-12.951474543778522,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+14893241615,0.5,,2746.0,3590.4236105075224,844.4236105075224,30.751041897579114,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+14953411411,0.5,,33087.0,34710.46986970584,1623.4698697058411,4.90666989967613,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15007483824,0.5,,3314.0,4260.386757061496,946.3867570614957,28.557234672947967,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15018253166,0.5,,30983.0,25037.180244986037,-5945.819755013963,-19.190587596468912,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15059995436,0.5,,7678.0,9470.877104022215,1792.8771040222146,23.350834905212484,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15087396899,0.5,,11532.0,14413.84800918281,2881.8480091828096,24.990010485456203,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15114097922,0.5,,33819.0,30744.59536425564,-3074.4046357443585,-9.090761512003189,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15179557231,0.5,,33543.0,31996.868373028323,-1546.1316269716772,-4.609401743945614,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15224440864,0.5,,6297.0,8026.712909770612,1729.712909770612,27.468840872965096,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15250276952,0.5,,7979.0,10987.032633031273,3008.032633031273,37.699368755875085,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15310799882,0.5,,5452.0,6919.404189029073,1467.4041890290728,26.914970451743812,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15329205386,0.5,,10390.0,13155.171723534328,2765.1717235343276,26.61377982227457,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15367390310,0.5,,3783.0,4970.138381874744,1187.1383818747436,31.380871844428853,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15424641872,0.5,,5476.0,6560.040778891116,1084.0407788911161,19.796215830736234,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15493651485,0.5,,4622.0,5902.041092159598,1280.0410921595976,27.694528173076538,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15563904138,0.5,,42256.0,50382.969973403575,8126.969973403575,19.232700618618832,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15652573322,0.5,,3132.0,3438.4669092281765,306.4669092281765,9.785022644577793,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15717135978,0.5,,14017.0,14551.042152945409,534.0421529454088,3.809960426235349,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15756279445,0.5,,8201.0,9290.612730481322,1089.6127304813217,13.286339842474353,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15809536896,0.5,,6794.0,6718.8951235618215,-75.10487643817851,-1.1054588819278555,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15913800933,0.5,,3009.0,3589.7783854932873,580.7783854932873,19.301375390272092,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15923504065,0.5,,4057.0,5603.492836050074,1546.4928360500744,38.11912339290299,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15961811819,0.5,,2785.0,4166.760461675656,1381.7604616756562,49.614379234314406,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16043688171,0.5,,7974.0,7678.5225320607515,-295.4774679392485,-3.705511260838331,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16043688538,0.5,,18442.0,22896.175898847203,4454.175898847203,24.152347353037648,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16043688740,0.5,,28210.0,26304.430607407652,-1905.5693925923479,-6.754942901780744,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16078947736,0.5,,2945.0,4257.658403432837,1312.658403432837,44.57244154271094,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16106633286,0.5,,15404.0,15502.45474803444,98.45474803444085,0.639150532552849,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16121104478,0.5,,5582.0,6790.784125494157,1208.7841254941568,21.655036286172642,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16163570178,0.5,,3062.0,4131.519840585707,1069.5198405857072,34.92879949659397,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16183294852,0.5,,3140.0,4510.530522445556,1370.530522445556,43.647468867692865,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16213470764,0.5,,6317.0,7128.225623785166,811.2256237851661,12.841944337267156,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16235724470,0.5,,3841.0,4726.747065600767,885.7470656007672,23.060324540504222,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16251238864,0.5,,4467.0,7247.602526175716,2780.602526175716,62.247650015126844,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16262137158,0.5,,10091.0,10394.994691075088,303.99469107508776,3.0125328617093228,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16285738312,0.5,,3949.0,5277.397789903477,1328.3977899034771,33.63883995703918,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16325125849,0.5,,10638.0,13584.428005324517,2946.4280053245166,27.697198771616062,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16335274846,0.5,,8540.0,11776.892734913165,3236.8927349131645,37.902725233175225,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16466621813,0.5,,7487.0,9359.805888734118,1872.8058887341176,25.014102961588318,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+17383625132,0.5,,5217.0,6392.7008621131035,1175.7008621131035,22.53595672058853,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+17437915260,0.5,,2526.0,3457.665650897364,931.6656508973638,36.88304239498669,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+17481444994,0.5,,12779.0,16334.397443185455,3555.397443185455,27.82218830257027,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+17528738922,0.5,,2736.0,3735.7525050572262,999.7525050572262,36.54066173454774,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+17591239723,0.5,,4034.0,6177.872885906925,2143.872885906925,53.145088892090364,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+17646695382,0.5,,7474.0,9841.611141504154,2367.611141504154,31.677965500456974,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+17815897198,0.5,,13634.0,17901.734877506453,4267.734877506453,31.302148140725045,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+18160385145,0.5,,13509.0,14795.053443428385,1286.0534434283854,9.519975153071178,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+18223569115,0.5,,1879.0,2428.8421529199313,549.8421529199313,29.262488180943656,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+18516570001,0.5,,8382.0,9593.985560370626,1211.9855603706255,14.459383922341035,hardRunOrTrailRun,Stage 3 HRR speed ratio cumulative TRIMP exponential LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+11277623453,0.5,,1918.0,2565.3989909423744,647.3989909423744,33.753857713366756,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+11387382620,0.5,,3148.0,3593.362983265801,445.3629832658012,14.147489938557852,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+11462693706,0.5,,3174.0,4392.891652252438,1218.8916522524378,38.40238349881657,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+11562663514,0.5,,3229.0,4341.2531998198365,1112.2531998198365,34.44574790398998,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+11587123521,0.5,,1887.0,2883.871749580475,996.8717495804749,52.828391604688655,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+11637384443,0.5,,3410.0,4874.789245428874,1464.789245428874,42.9556963468878,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+11704501213,0.5,,3874.0,5815.52771069002,1941.5277106900203,50.116874307950965,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+11730667820,0.5,,3369.0,4515.584929121727,1146.5849291217273,34.03339059429288,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+11759480552,0.5,,5536.0,8078.78619041894,2542.7861904189404,45.93183147433057,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+11815743705,0.5,,3211.0,4808.300443489889,1597.3004434898894,49.74464165337557,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+12000338229,0.5,,9824.0,11978.703017598013,2154.7030175980126,21.933051889230583,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+12033703768,0.5,,4341.0,5667.378936432794,1326.378936432794,30.554686395595347,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+12063923301,0.5,,3335.0,5455.509954420317,2120.5099544203167,63.58350687916992,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+12122982163,0.5,,5150.0,6162.691293749323,1012.6912937493234,19.663908616491717,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+12147822484,0.5,,2076.0,3047.596022611666,971.5960226116658,46.80134983678544,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+12177245147,0.5,,8181.0,10996.218530041784,2815.218530041784,34.41166764505298,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+12215183637,0.5,,2398.0,3165.2011164703476,767.2011164703476,31.99337433154077,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+12231235107,0.5,,4474.0,5677.314702710542,1203.3147027105424,26.895724244759556,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+12351986883,0.5,,2360.0,2419.2391042330564,59.23910423305642,2.510131535299001,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+12368406803,0.5,,2107.0,2563.365071839555,456.3650718395552,21.659471848104186,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+12385954488,0.5,,2041.0,2434.906811770255,393.906811770255,19.29969680403013,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+12415493314,0.5,,3761.0,4537.505939896167,776.5059398961666,20.646262693330677,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+12435526893,0.5,,2374.0,3049.9901227051882,675.9901227051882,28.474731369216016,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+12453142102,0.5,,2902.0,3429.773886985748,527.773886985748,18.186557098061616,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+12469144311,0.5,,6714.0,8226.447927410047,1512.4479274100468,22.526778781799923,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+12532587467,0.5,,2807.0,3678.2919274791975,871.2919274791975,31.039968916252136,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+12588932008,0.5,,17378.0,21064.824213788143,3686.8242137881425,21.2154690631151,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+12923277981,0.5,,2108.0,2409.201438920745,301.2014389207452,14.288493307435731,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+13024493247,0.5,,3462.0,3889.305529718318,427.3055297183182,12.342736271470775,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+13066363809,0.5,,1923.0,2182.8598966720474,259.8598966720474,13.51325515715275,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+13169655589,0.5,,1961.0,2557.849426508164,596.849426508164,30.43597279490892,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+13180970159,0.5,,1911.0,2548.9277981896416,637.9277981896416,33.38188373572169,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+13194703589,0.5,,1956.0,2633.136800407728,677.1368004077281,34.618445828615954,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+13602011720,0.5,,2276.0,3058.125794858289,782.1257948582888,34.364050740698104,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+13626651040,0.5,,2805.0,3901.658154695056,1096.658154695056,39.09654740445833,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+13688400233,0.5,,2363.0,3307.723393785476,944.7233937854762,39.9798304606634,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+13696739223,0.5,,5809.0,7339.72108219105,1530.7210821910503,26.350853540902914,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+13725623458,0.5,,2081.0,3248.9930039081573,1167.9930039081573,56.12652589659574,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+13798314040,0.5,,3877.0,5608.834060576654,1731.8340605766543,44.66943669271742,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+13824163131,0.5,,3241.0,4090.7158359712826,849.7158359712826,26.217705522100665,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+13845021507,0.5,,2393.0,3735.5595002711493,1342.5595002711493,56.10361472090052,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+13910406111,0.5,,2366.0,3304.2812859617425,938.2812859617425,39.65685908544981,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+13947675380,0.5,,8133.0,11764.438313046321,3631.438313046321,44.650661662932755,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+14087416092,0.5,,15517.0,14685.877043638719,-831.1229563612815,-5.356209037579954,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+14155390870,0.5,,5996.0,7392.288404769021,1396.2884047690213,23.28699807820249,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+14243922808,0.5,,3758.0,4992.8499986123325,1234.8499986123325,32.859233597986496,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+14283547293,0.5,,1893.0,2673.3224494308974,780.3224494308974,41.2214711796565,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+14300194854,0.5,,10836.0,12689.86956873962,1853.8695687396194,17.10843086692155,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+14388179928,0.5,,3356.0,4128.948547393016,772.9485473930163,23.03183991039977,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+14511853016,0.5,,3409.0,4046.6220908951,637.6220908951,18.70408010839249,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+14531574734,0.5,,4250.0,6069.276688569207,1819.2766885692072,42.80651031927547,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+14736619046,0.5,,7519.0,8041.300153409315,522.3001534093146,6.946404487422724,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+14765648151,0.5,,3295.0,3908.8911104546955,613.8911104546955,18.630989695134918,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+14852373707,0.5,,2322.0,2021.2667610934627,-300.7332389065373,-12.951474543778522,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+14893241615,0.5,,2746.0,3590.4236105075224,844.4236105075224,30.751041897579114,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+14953411411,0.5,,33087.0,34710.46986970584,1623.4698697058411,4.90666989967613,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15007483824,0.5,,3314.0,4260.386757061496,946.3867570614957,28.557234672947967,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15018253166,0.5,,30983.0,25037.180244986037,-5945.819755013963,-19.190587596468912,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15059995436,0.5,,7678.0,9470.877104022215,1792.8771040222146,23.350834905212484,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15087396899,0.5,,11532.0,14413.84800918281,2881.8480091828096,24.990010485456203,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15114097922,0.5,,33819.0,30744.59536425564,-3074.4046357443585,-9.090761512003189,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15179557231,0.5,,33543.0,31996.868373028323,-1546.1316269716772,-4.609401743945614,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15224440864,0.5,,6297.0,8026.712909770612,1729.712909770612,27.468840872965096,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15250276952,0.5,,7979.0,10987.032633031273,3008.032633031273,37.699368755875085,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15310799882,0.5,,5452.0,6919.404189029073,1467.4041890290728,26.914970451743812,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15329205386,0.5,,10390.0,13155.171723534328,2765.1717235343276,26.61377982227457,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15367390310,0.5,,3783.0,4970.138381874744,1187.1383818747436,31.380871844428853,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15424641872,0.5,,5476.0,6560.040778891116,1084.0407788911161,19.796215830736234,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15493651485,0.5,,4622.0,5902.041092159598,1280.0410921595976,27.694528173076538,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15563904138,0.5,,42256.0,50382.969973403575,8126.969973403575,19.232700618618832,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15652573322,0.5,,3132.0,3438.4669092281765,306.4669092281765,9.785022644577793,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15717135978,0.5,,14017.0,14551.042152945409,534.0421529454088,3.809960426235349,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15756279445,0.5,,8201.0,9290.612730481322,1089.6127304813217,13.286339842474353,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15809536896,0.5,,6794.0,6718.8951235618215,-75.10487643817851,-1.1054588819278555,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15913800933,0.5,,3009.0,3589.7783854932873,580.7783854932873,19.301375390272092,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15923504065,0.5,,4057.0,5603.492836050074,1546.4928360500744,38.11912339290299,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+15961811819,0.5,,2785.0,4166.760461675656,1381.7604616756562,49.614379234314406,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16043688171,0.5,,7974.0,7678.5225320607515,-295.4774679392485,-3.705511260838331,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16043688538,0.5,,18442.0,22896.175898847203,4454.175898847203,24.152347353037648,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16043688740,0.5,,28210.0,26304.430607407652,-1905.5693925923479,-6.754942901780744,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16078947736,0.5,,2945.0,4257.658403432837,1312.658403432837,44.57244154271094,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16106633286,0.5,,15404.0,15502.45474803444,98.45474803444085,0.639150532552849,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16121104478,0.5,,5582.0,6790.784125494157,1208.7841254941568,21.655036286172642,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16163570178,0.5,,3062.0,4131.519840585707,1069.5198405857072,34.92879949659397,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16183294852,0.5,,3140.0,4510.530522445556,1370.530522445556,43.647468867692865,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16213470764,0.5,,6317.0,7128.225623785166,811.2256237851661,12.841944337267156,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16235724470,0.5,,3841.0,4726.747065600767,885.7470656007672,23.060324540504222,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16251238864,0.5,,4467.0,7247.602526175716,2780.602526175716,62.247650015126844,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16262137158,0.5,,10091.0,10394.994691075088,303.99469107508776,3.0125328617093228,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16285738312,0.5,,3949.0,5277.397789903477,1328.3977899034771,33.63883995703918,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16325125849,0.5,,10638.0,13584.428005324517,2946.4280053245166,27.697198771616062,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16335274846,0.5,,8540.0,11776.892734913165,3236.8927349131645,37.902725233175225,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+16466621813,0.5,,7487.0,9359.805888734118,1872.8058887341176,25.014102961588318,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+17383625132,0.5,,5217.0,6392.7008621131035,1175.7008621131035,22.53595672058853,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+17437915260,0.5,,2526.0,3457.665650897364,931.6656508973638,36.88304239498669,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+17481444994,0.5,,12779.0,16334.397443185455,3555.397443185455,27.82218830257027,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+17528738922,0.5,,2736.0,3735.7525050572262,999.7525050572262,36.54066173454774,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+17591239723,0.5,,4034.0,6177.872885906925,2143.872885906925,53.145088892090364,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+17646695382,0.5,,7474.0,9841.611141504154,2367.611141504154,31.677965500456974,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+17815897198,0.5,,13634.0,17901.734877506453,4267.734877506453,31.302148140725045,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+18160385145,0.5,,13509.0,14795.053443428385,1286.0534434283854,9.519975153071178,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+18223569115,0.5,,1879.0,2428.8421529199313,549.8421529199313,29.262488180943656,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
+18516570001,0.5,,8382.0,9593.985560370626,1211.9855603706255,14.459383922341035,hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,activity,0.3,exponential,cumulative,cumTrimpBefore
