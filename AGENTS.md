@@ -155,3 +155,10 @@ SPDX-License-Identifier: GPL-3.0-or-later
 - Bypassing locking on CSV writes (always use `CsvStorage`)
 - Mixing UI formatting into persistence layer
 
+## Cursor Cloud specific instructions
+
+- Package manager `uv` is installed to `~/.local/bin` by the startup update script. Always use `uv run ...` (e.g. `uv run pytest`, `uv run ruff check .`).
+- Run the app headless (no browser auto-open in cloud): `uv run streamlit run app.py --server.headless true --server.port 8501`. Standard run commands are in the `## Commands` table above.
+- Dependency versions float: `uv.lock` is gitignored, so `uv sync` resolves the latest allowed versions. With current `pandas`, a few checks surface version drift (not data or setup bugs): ~5 `pytest` tests fail (stricter int64 dtype coercion) and the Dashboard page shows a `pandas.errors.OptionError: mode.use_inf_as_na` (option removed in newer pandas). The rest of the suite and app work. Do not "fix" these by editing app code unless asked; pin versions if a green suite is required.
+- Real dataset lives on disk under `data/` for running the app end-to-end. Per `.gitignore`, `data/timeseries/`, `data/tokens*`, `data/raw/`, `data/exp_perf_predictions/` and `.env` are NOT committed — they exist only on the VM disk. `.env` holds `ENCRYPTION_KEY` (needed to decrypt `data/tokens.csv`) plus Strava keys; the app runs fine without it (Strava sync just won't authenticate).
+
