@@ -1,0 +1,184 @@
+execution:
+  output_dir: data/exp_perf_predictions/trail_digital_twin_boundary_refined
+  per_run_csv: false
+  per_run_html: false
+  disable_inner_robustness: true
+  disable_inner_segment_grid: true
+  write_html: true
+  fail_fast: false
+  jobs: 24
+  common_overrides:
+    fitting.enabled_objectives:
+      - activity
+    fitting.validation_modes:
+      - in_sample
+      - loo
+    fitting.hrr_trimp_alpha_grid:
+      - 0.70
+      - 0.80
+      - 0.90
+      - 1.00
+      - 1.10
+      - 1.20
+    fitting.hrr_trimp_kappa_grid:
+      - 0.20
+      - 0.40
+      - 0.60
+      - 0.80
+      - 1.00
+      - 1.20
+    fitting.fatigue_models:
+      - linear
+      - exponential
+    fitting.stage3_fatigue_states:
+      - fatigue_state: decayed
+        acute_trimp_col: decayedTrimpBefore
+        label: decayed TRIMP
+      - fatigue_state: cumulative
+        acute_trimp_col: cumTrimpBefore
+        label: cumulative TRIMP
+    readiness.ctl_weight: 0.05
+    readiness.tsb_weight: 0.10
+    physiology.hrr_reference: 0.85
+    physiology.hrr_min_factor: 0.30
+    physiology.hrr_max_factor: 1.00
+    physiology.trimp_scale: 1.00
+    physiology.decay_lambda: 0.25
+    physiology.min_fatigue_factor: 0.50
+
+selection:
+  primary_stage: Stage 3 HRR speed ratio LOO
+  fallback_stage: Stage 3 HRR speed ratio
+  aggregate_objectives:
+    - activity
+  aggregate_cohorts:
+    - hardTrailRun
+    - hardRunOrTrailRun
+    - top10HardTrailByHRR
+    - selectedDateRaces
+
+groups:
+  - id: boundary_refined_anchors
+    mode: variants
+    description: Boundary-wide winner anchors before the LOO refinement.
+    runs:
+      - name: wide_best_ref085_scale1_decay025
+        overrides: {}
+      - name: wide_rank2_ref085_scale15_decay010
+        overrides:
+          physiology.trimp_scale: 1.50
+          physiology.decay_lambda: 0.10
+      - name: wide_rank3_ref085_scale1_decay010
+        overrides:
+          physiology.decay_lambda: 0.10
+      - name: clip_rank4_ref065_min04_max14
+        overrides:
+          physiology.hrr_reference: 0.65
+          physiology.hrr_min_factor: 0.40
+          physiology.hrr_max_factor: 1.40
+          physiology.trimp_scale: 2.00
+          physiology.decay_lambda: 0.15
+      - name: prior_refined_best_ref075_scale2_decay015
+        overrides:
+          physiology.hrr_reference: 0.75
+          physiology.trimp_scale: 2.00
+          physiology.decay_lambda: 0.15
+
+  - id: high_ref_low_trimp_refine
+    mode: grid
+    description: LOO refinement around the high-reference, very-low-TRIMP wide winner.
+    overrides:
+      physiology.hrr_reference:
+        - 0.80
+        - 0.85
+        - 0.90
+      physiology.trimp_scale:
+        - 0.75
+        - 0.87
+        - 1.00
+        - 1.25
+        - 1.50
+      physiology.decay_lambda:
+        - 0.10
+        - 0.15
+        - 0.20
+        - 0.25
+        - 0.30
+        - 0.35
+
+  - id: high_ref_clip_probe
+    mode: grid
+    description: Check whether the high-reference winner still wants the HRR max cap fixed at 1.0.
+    overrides:
+      physiology.hrr_reference:
+        - 0.85
+      physiology.hrr_min_factor:
+        - 0.25
+        - 0.30
+        - 0.40
+      physiology.hrr_max_factor:
+        - 1.00
+        - 1.20
+        - 1.40
+
+  - id: low_ref_clip_refine
+    mode: grid
+    description: LOO refinement around the lower-reference clip-surface runner-up.
+    overrides:
+      physiology.hrr_reference:
+        - 0.60
+        - 0.65
+        - 0.70
+      physiology.hrr_min_factor:
+        - 0.25
+        - 0.40
+      physiology.hrr_max_factor:
+        - 1.20
+        - 1.40
+        - 1.80
+      physiology.trimp_scale:
+        - 2.00
+      physiology.decay_lambda:
+        - 0.15
+
+  - id: fatigue_state_refine
+    mode: variants
+    description: Keep the decayed-versus-cumulative comparison after decayed fatigue dominated the wide screen.
+    runs:
+      - name: decayed_exponential_only
+        overrides:
+          fitting.fatigue_models:
+            - exponential
+          fitting.stage3_fatigue_states:
+            - fatigue_state: decayed
+              acute_trimp_col: decayedTrimpBefore
+              label: decayed TRIMP
+      - name: decayed_linear_only
+        overrides:
+          fitting.fatigue_models:
+            - linear
+          fitting.stage3_fatigue_states:
+            - fatigue_state: decayed
+              acute_trimp_col: decayedTrimpBefore
+              label: decayed TRIMP
+      - name: cumulative_exponential_only
+        overrides:
+          fitting.fatigue_models:
+            - exponential
+          fitting.stage3_fatigue_states:
+            - fatigue_state: cumulative
+              acute_trimp_col: cumTrimpBefore
+              label: cumulative TRIMP
+
+  - id: readiness_boundary_anchor
+    mode: variants
+    description: Keep only the readiness anchors that previously helped the high-HRR cohort.
+    runs:
+      - name: ctl005_tsb010
+        overrides:
+          readiness.ctl_weight: 0.05
+          readiness.tsb_weight: 0.10
+      - name: ctl020_tsb020
+        overrides:
+          readiness.ctl_weight: 0.20
+          readiness.tsb_weight: 0.20

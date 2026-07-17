@@ -1,0 +1,2 @@
+segmentId,type,startKm,endKm,plannedTimeSec,plannedSpeedKmh,plannedSpeedEqKmh,actualTimeSec,actualSpeedKmh,actualSpeedEqKmh,timeDeltaSec,speedDeltaKmh,speedEqDeltaKmh
+0,flat,0.0014520698468433835,42.7547102979948,12661.0,12.0,0.0,13755.0,11.23252754088785,11.924133826445525,1094.0,-0.7674724591121507,11.924133826445525

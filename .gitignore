@@ -19,3 +19,6 @@ data/hr_zones
 uv.lock
 requirements.lock.txt
 .cursor/mcp.json
+
+# Large experiment outputs (recomputable, ~278M) — kept on disk, not in git
+data/exp_perf_predictions/

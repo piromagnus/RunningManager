@@ -1,0 +1,213 @@
+execution:
+  output_dir: data/exp_perf_predictions/trail_digital_twin_refined_screen
+  per_run_csv: false
+  per_run_html: false
+  disable_inner_robustness: true
+  disable_inner_segment_grid: true
+  write_html: true
+  fail_fast: false
+  jobs: 24
+  common_overrides:
+    fitting.enabled_objectives:
+      - activity
+    fitting.validation_modes:
+      - in_sample
+      - loo
+    fitting.hrr_trimp_alpha_grid:
+      - 0.30
+      - 0.35
+      - 0.40
+      - 0.45
+      - 0.50
+      - 0.55
+      - 0.60
+      - 0.65
+      - 0.70
+      - 0.75
+      - 0.80
+    fitting.hrr_trimp_kappa_grid:
+      - 0.00
+      - 0.10
+      - 0.20
+      - 0.30
+      - 0.40
+      - 0.50
+      - 0.60
+    fitting.fatigue_models:
+      - linear
+      - exponential
+    fitting.stage3_fatigue_states:
+      - fatigue_state: decayed
+        acute_trimp_col: decayedTrimpBefore
+        label: decayed TRIMP
+      - fatigue_state: cumulative
+        acute_trimp_col: cumTrimpBefore
+        label: cumulative TRIMP
+    readiness.ctl_weight: 0.05
+    readiness.tsb_weight: 0.10
+    physiology.hrr_reference: 0.70
+    physiology.hrr_min_factor: 0.40
+    physiology.hrr_max_factor: 1.60
+    physiology.trimp_scale: 10.0
+    physiology.decay_lambda: 0.30
+    physiology.min_fatigue_factor: 0.50
+
+selection:
+  primary_stage: Stage 3 HRR speed ratio LOO
+  fallback_stage: Stage 3 HRR speed ratio
+  aggregate_objectives:
+    - activity
+  aggregate_cohorts:
+    - hardTrailRun
+    - hardRunOrTrailRun
+    - top10HardTrailByHRR
+    - selectedDateRaces
+
+groups:
+  - id: refined_anchors
+    mode: variants
+    description: Exact anchors from the wide screen plus one balanced reference setting.
+    runs:
+      - name: balanced_ref07_bounds
+        overrides: {}
+      - name: wide_rank1_ref08_low_trimp
+        overrides:
+          physiology.hrr_reference: 0.80
+          physiology.hrr_min_factor: 0.30
+          physiology.hrr_max_factor: 1.00
+          physiology.trimp_scale: 2.5
+          physiology.decay_lambda: 0.15
+      - name: hardtrail_ref08_fast_decay
+        overrides:
+          physiology.hrr_reference: 0.80
+          physiology.hrr_min_factor: 0.30
+          physiology.hrr_max_factor: 1.00
+          physiology.trimp_scale: 2.5
+          physiology.decay_lambda: 0.05
+      - name: mixed_ref04_wide_clip
+        overrides:
+          physiology.hrr_reference: 0.40
+          physiology.hrr_min_factor: 0.60
+          physiology.hrr_max_factor: 2.00
+      - name: hardtrail_ref055_wide_clip
+        overrides:
+          physiology.hrr_reference: 0.55
+          physiology.hrr_min_factor: 0.60
+          physiology.hrr_max_factor: 1.80
+
+  - id: high_reference_low_trimp
+    mode: grid
+    description: Refine the high-HRR-reference, low-acute-TRIMP region that won the wide screen.
+    overrides:
+      physiology.hrr_reference:
+        - 0.75
+        - 0.80
+        - 0.85
+      physiology.hrr_min_factor:
+        - 0.30
+      physiology.hrr_max_factor:
+        - 1.00
+      physiology.trimp_scale:
+        - 2.0
+        - 2.5
+        - 5.0
+      physiology.decay_lambda:
+        - 0.05
+        - 0.15
+
+  - id: mixed_reference_bounds
+    mode: grid
+    description: Refine the lower-reference and wide-HRR-clipping region that helped mixed hard runs.
+    overrides:
+      physiology.hrr_reference:
+        - 0.40
+        - 0.50
+        - 0.55
+        - 0.60
+        - 0.70
+      physiology.hrr_min_factor:
+        - 0.40
+        - 0.60
+      physiology.hrr_max_factor:
+        - 1.80
+        - 2.00
+
+  - id: readiness_focus
+    mode: variants
+    description: Small LOO check around the only readiness region that beat defaults in sub-cohorts.
+    runs:
+      - name: ctl005_tsb010
+        overrides:
+          readiness.ctl_weight: 0.05
+          readiness.tsb_weight: 0.10
+      - name: ctl010_tsb010
+        overrides:
+          readiness.ctl_weight: 0.10
+          readiness.tsb_weight: 0.10
+      - name: ctl020_tsb005
+        overrides:
+          readiness.ctl_weight: 0.20
+          readiness.tsb_weight: 0.05
+      - name: ctl020_tsb020
+        overrides:
+          readiness.ctl_weight: 0.20
+          readiness.tsb_weight: 0.20
+      - name: ctl020_tsb040
+        overrides:
+          readiness.ctl_weight: 0.20
+          readiness.tsb_weight: 0.40
+
+  - id: fatigue_focus
+    mode: variants
+    description: LOO comparison of the fatigue states and shapes that survived the wide screen.
+    runs:
+      - name: cumulative_exponential_only
+        overrides:
+          fitting.fatigue_models:
+            - exponential
+          fitting.stage3_fatigue_states:
+            - fatigue_state: cumulative
+              acute_trimp_col: cumTrimpBefore
+              label: cumulative TRIMP
+      - name: cumulative_linear_only
+        overrides:
+          fitting.fatigue_models:
+            - linear
+          fitting.stage3_fatigue_states:
+            - fatigue_state: cumulative
+              acute_trimp_col: cumTrimpBefore
+              label: cumulative TRIMP
+      - name: decayed_exponential_only
+        overrides:
+          fitting.fatigue_models:
+            - exponential
+          fitting.stage3_fatigue_states:
+            - fatigue_state: decayed
+              acute_trimp_col: decayedTrimpBefore
+              label: decayed TRIMP
+      - name: both_states_exponential
+        overrides:
+          fitting.fatigue_models:
+            - exponential
+      - name: both_states_linear
+        overrides:
+          fitting.fatigue_models:
+            - linear
+
+  - id: objective_modes
+    mode: variants
+    description: Activity-level versus segment-level objective comparison at the refined balanced setting.
+    runs:
+      - name: objective_activity_only
+        overrides:
+          fitting.enabled_objectives:
+            - activity
+      - name: objective_segment_only
+        overrides:
+          fitting.enabled_objectives:
+            - segment
+      - name: objective_both
+        overrides:
+          fitting.enabled_objectives:
+            - activity
+            - segment
