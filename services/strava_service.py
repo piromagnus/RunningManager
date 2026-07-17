@@ -12,11 +12,11 @@ import logging
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Union
+from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence
+from urllib.parse import urlparse
 
 import pandas as pd
 import portalocker
-from urllib.parse import urlparse
 import requests
 
 from persistence.csv_storage import CsvStorage
@@ -39,6 +39,11 @@ from utils.constants import (
     STRAVA_TOKEN_URL,
 )
 from utils.crypto import decrypt_text, encrypt_text, get_fernet
+from utils.strava_merge import (
+    merge_activity_row_updates,
+    merge_fill_empty,
+    raw_needs_enrichment,
+)
 
 LOGGER = logging.getLogger(__name__)
 API_BASE = STRAVA_API_BASE
@@ -164,16 +169,15 @@ class StravaService:
         - For each activity in that window:
           - If raw JSON is missing, fetch detail + streams, persist both, and create
             the activity row in ``activities.csv``.
-          - If raw JSON already exists, do not call the network again (cache hit),
-            but ensure there's an entry in ``activities.csv`` built from the cache
-            if it is currently missing.
-        - After creating any new ``activities.csv`` rows, recompute metrics only
-          for the affected athlete(s) via ``MetricsComputationService`` (which in
-          turn updates activity, daily and weekly metrics incrementally).
+          - If raw JSON exists but is incomplete (no timeseries / empty laps /
+            empty polyline), fetch from the API and **merge** missing fields into
+            the existing artifacts (never create a duplicate row).
+          - If raw JSON is complete, cache hit: ensure ``activities.csv`` row exists.
+        - After creating or merging rows, recompute metrics for touched IDs.
 
         Returns the list of activity IDs newly downloaded from Strava during this
-        call (i.e., cache misses). Activities created from cache are not counted
-        in the returned list to keep backward-compatible semantics.
+        call (i.e., cache misses and enrichment fetches). Activities created from
+        complete cache are not counted in the returned list.
         """
         if days <= 0:
             raise ValueError("days must be positive")
@@ -185,8 +189,9 @@ class StravaService:
         existing_ids = self._existing_activity_ids()
         existing_raw_ids = self._existing_raw_ids()
 
-        imported_from_api: List[str] = []  # strictly newly downloaded raw
+        imported_from_api: List[str] = []  # newly downloaded or enriched from API
         created_rows: List[str] = []  # activity rows newly created (from API or cache)
+        merged_rows: List[str] = []  # existing rows that received merge fills
         created_rows_with_ts: set[str] = set()
         created_start_dates: list[dt.date] = []
 
@@ -199,13 +204,15 @@ class StravaService:
                 existing_raw_ids=existing_raw_ids,
                 imported_from_api=imported_from_api,
                 created_rows=created_rows,
+                merged_rows=merged_rows,
                 created_rows_with_ts=created_rows_with_ts,
                 created_start_dates=created_start_dates,
             )
         finally:
+            touched_rows = list(dict.fromkeys([*created_rows, *merged_rows]))
             self._apply_sync_metrics(
                 athlete_id=athlete_id,
-                created_rows=created_rows,
+                created_rows=touched_rows,
                 created_rows_with_ts=created_rows_with_ts,
                 created_start_dates=created_start_dates,
             )
@@ -214,9 +221,11 @@ class StravaService:
                 "days": int(days),
                 "downloaded_count": len(imported_from_api),
                 "created_rows_count": len(created_rows),
+                "merged_rows_count": len(merged_rows),
                 "created_from_cache_count": len(created_from_cache),
                 "downloaded_ids": list(imported_from_api),
                 "created_from_cache_ids": created_from_cache,
+                "merged_ids": list(merged_rows),
             }
 
         return imported_from_api
@@ -231,6 +240,7 @@ class StravaService:
         existing_raw_ids: set[str],
         imported_from_api: List[str],
         created_rows: List[str],
+        merged_rows: List[str],
         created_rows_with_ts: set[str],
         created_start_dates: list[dt.date],
     ) -> None:
@@ -242,63 +252,97 @@ class StravaService:
             has_raw = activity_id in existing_raw_ids
             raw_path = self.config.raw_strava_dir / f"{activity_id}.json"
             has_row = activity_id in existing_ids
-
             detail: Dict[str, Any] | None = None
-            has_timeseries = (self.config.timeseries_dir / f"{activity_id}.csv").exists()
+            has_timeseries = self._timeseries_exists(activity_id)
+            did_merge = False
+            fetched_from_api = False
 
-            if not has_raw:
-                # Cache miss: fetch detail + streams and persist both
-                detail = self._get_activity(access_token, activity_id)
-                if not detail:
-                    continue
-                raw_path = self._save_raw_activity(detail)
-                streams = self._get_streams(access_token, activity_id)
-                has_timeseries = self._save_timeseries(activity_id, detail, streams)
+            if has_raw:
+                detail = self._load_raw_activity(activity_id)
+
+            needs_fetch = (not has_raw) or raw_needs_enrichment(
+                detail, has_timeseries=has_timeseries
+            )
+
+            if needs_fetch:
+                api_detail = self._get_activity(access_token, activity_id)
+                if not api_detail:
+                    if not has_raw:
+                        continue
+                else:
+                    fetched_from_api = True
+                    if has_raw and detail is not None:
+                        detail = merge_fill_empty(detail, api_detail)
+                        did_merge = True
+                    else:
+                        detail = api_detail
+                    raw_path = self._save_raw_activity(detail)
+                    existing_raw_ids.add(activity_id)
+                    has_raw = True
+
+                    if not has_timeseries:
+                        streams = self._get_streams(access_token, activity_id)
+                        has_timeseries = self._save_timeseries(activity_id, detail, streams)
+                        if has_timeseries:
+                            did_merge = did_merge or activity_id in existing_ids
+
+                if fetched_from_api:
+                    imported_from_api.append(activity_id)
+                    try:
+                        self.lap_metrics.compute_and_store(athlete_id, detail)
+                    except Exception:
+                        LOGGER.exception(
+                            "Failed to compute lap metrics for activity %s", activity_id
+                        )
+            elif detail is not None and not has_row:
                 try:
                     self.lap_metrics.compute_and_store(athlete_id, detail)
                 except Exception:
-                    LOGGER.exception("Failed to compute lap metrics for activity %s", activity_id)
-                existing_raw_ids.add(activity_id)
-                imported_from_api.append(activity_id)
-            else:
-                # Cache hit: reuse cached raw to build activities row if needed
-                if not has_row:
-                    try:
-                        with raw_path.open("r", encoding="utf-8") as fh:
-                            detail = json.load(fh)
-                    except Exception:
-                        detail = None
-                    if detail is not None:
-                        try:
-                            self.lap_metrics.compute_and_store(athlete_id, detail)
-                        except Exception:
-                            LOGGER.exception(
-                                "Failed to compute lap metrics from cache for activity %s",
-                                activity_id,
-                            )
+                    LOGGER.exception(
+                        "Failed to compute lap metrics from cache for activity %s",
+                        activity_id,
+                    )
 
-            # Ensure we have an activities.csv row if it does not exist yet
-            if not has_row and detail is not None:
-                row = self._map_activity_row(
-                    detail=detail,
-                    athlete_id=athlete_id,
-                    has_timeseries=has_timeseries,
-                    raw_path=raw_path,
-                )
-                self.activities.create(row)
+            if detail is None:
+                continue
+
+            mapped = self._map_activity_row(
+                detail=detail,
+                athlete_id=athlete_id,
+                has_timeseries=has_timeseries,
+                raw_path=raw_path,
+            )
+            if not has_row:
+                self.activities.create(mapped)
                 existing_ids.add(activity_id)
                 created_rows.append(activity_id)
                 if has_timeseries:
                     created_rows_with_ts.add(activity_id)
-                try:
-                    start_date = pd.to_datetime(
-                        detail.get("start_date_local") or detail.get("start_date"),
-                        errors="coerce",
-                    )
-                    if pd.notna(start_date):
-                        created_start_dates.append(start_date.date())
-                except Exception:
-                    pass
+                self._append_start_date(detail, created_start_dates)
+            else:
+                existing_row = self.activities.get(activity_id) or {}
+                updates = merge_activity_row_updates(existing_row, mapped)
+                if updates:
+                    self.activities.update(activity_id, updates)
+                    did_merge = True
+                if did_merge and activity_id not in merged_rows:
+                    merged_rows.append(activity_id)
+                    if has_timeseries:
+                        created_rows_with_ts.add(activity_id)
+                    self._append_start_date(detail, created_start_dates)
+
+    def _append_start_date(
+        self, detail: Dict[str, Any], created_start_dates: list[dt.date]
+    ) -> None:
+        try:
+            start_date = pd.to_datetime(
+                detail.get("start_date_local") or detail.get("start_date"),
+                errors="coerce",
+            )
+            if pd.notna(start_date):
+                created_start_dates.append(start_date.date())
+        except Exception:
+            pass
 
     def _apply_sync_metrics(
         self,
@@ -308,7 +352,7 @@ class StravaService:
         created_rows_with_ts: set[str],
         created_start_dates: list[dt.date],
     ) -> None:
-        """Recompute activity metrics for rows created during a sync attempt."""
+        """Recompute activity metrics for rows created or merged during sync/import."""
         if not created_rows:
             return
         metrics_service = MetricsComputationService(self.storage, config=self.config)
@@ -549,12 +593,102 @@ class StravaService:
             return set()
         return {path.stem for path in raw_dir.glob("*.json")}
 
+    def _timeseries_exists(self, activity_id: str) -> bool:
+        path = self.config.timeseries_dir / f"{activity_id}.csv"
+        if not path.exists() or path.stat().st_size == 0:
+            return False
+        try:
+            df = pd.read_csv(path)
+            return not df.empty
+        except Exception:
+            LOGGER.warning("Unreadable timeseries for activity %s; treating as missing", activity_id)
+            return False
+
+    def _load_raw_activity(self, activity_id: str) -> Optional[Dict[str, Any]]:
+        path = self.config.raw_strava_dir / f"{activity_id}.json"
+        if not path.exists():
+            return None
+        try:
+            with path.open("r", encoding="utf-8") as fh:
+                payload = json.load(fh)
+            return payload if isinstance(payload, dict) else None
+        except Exception:
+            LOGGER.exception("Failed to load raw Strava JSON for activity %s", activity_id)
+            return None
+
     def _save_raw_activity(self, detail: Dict[str, Any]) -> Path:
         activity_id = str(detail.get("id"))
         path = self.config.raw_strava_dir / f"{activity_id}.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("w", encoding="utf-8") as fh:
             json.dump(detail, fh, ensure_ascii=False)
         return path
+
+    def merge_and_save_raw(
+        self, activity_id: str, incoming: Dict[str, Any]
+    ) -> tuple[Dict[str, Any], Path, bool]:
+        """Merge ``incoming`` into existing raw JSON (fill empty only) and save.
+
+        Returns ``(merged_detail, path, changed)``.
+        """
+        existing = self._load_raw_activity(activity_id)
+        if existing is None:
+            detail = dict(incoming)
+            if "id" not in detail:
+                detail["id"] = int(activity_id) if str(activity_id).isdigit() else activity_id
+            path = self._save_raw_activity(detail)
+            return detail, path, True
+        merged = merge_fill_empty(existing, incoming)
+        changed = merged != existing
+        path = self._save_raw_activity(merged) if changed else (
+            self.config.raw_strava_dir / f"{activity_id}.json"
+        )
+        return merged, path, changed
+
+    def save_timeseries_dataframe(self, activity_id: str, df: pd.DataFrame) -> bool:
+        """Write a timeseries DataFrame if missing/empty; never overwrite existing data."""
+        if self._timeseries_exists(activity_id):
+            return False
+        if df is None or df.empty:
+            return False
+        path = self.config.timeseries_dir / f"{activity_id}.csv"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        columns = ["timestamp", "hr", "paceKmh", "elevationM", "cadence", "lat", "lon"]
+        out = df.copy()
+        for col in columns:
+            if col not in out.columns:
+                out[col] = None
+        out[columns].to_csv(path, index=False)
+        return True
+
+    def upsert_activity_row_from_detail(
+        self,
+        *,
+        athlete_id: str,
+        detail: Dict[str, Any],
+        has_timeseries: bool,
+        raw_path: Path,
+    ) -> tuple[str, bool, bool]:
+        """Create or merge-fill an activities.csv row.
+
+        Returns ``(activity_id, created, merged)``.
+        """
+        activity_id = str(detail.get("id"))
+        mapped = self._map_activity_row(
+            detail=detail,
+            athlete_id=athlete_id,
+            has_timeseries=has_timeseries,
+            raw_path=raw_path,
+        )
+        existing = self.activities.get(activity_id)
+        if existing is None:
+            self.activities.create(mapped)
+            return activity_id, True, False
+        updates = merge_activity_row_updates(existing, mapped)
+        if updates:
+            self.activities.update(activity_id, updates)
+            return activity_id, False, True
+        return activity_id, False, False
 
     def _save_timeseries(
         self,

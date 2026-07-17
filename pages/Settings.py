@@ -13,6 +13,7 @@ from persistence.repositories import AthletesRepo, SettingsRepo, TokensRepo
 from services.hr_zones_service import HrZonesService
 from services.metrics_service import MetricsComputationService
 from services.speed_profile_service import SpeedProfileService
+from services.strava_archive_service import StravaArchiveService
 from services.strava_service import StravaService
 from services.timeseries_service import TimeseriesService
 from utils.coercion import coerce_float, coerce_int
@@ -476,6 +477,67 @@ if flash:
 st.markdown("### Strava")
 missing_config = _strava_missing_config()
 
+if athlete_id:
+    st.markdown("#### Archive GDPR Strava")
+    st.caption(
+        "Charge l'historique depuis le ZIP officiel « Download Your Data ». "
+        "La synchronisation API reste utile pour les activités récentes et "
+        "complète les trous (laps, polyline). Mêmes Activity ID → pas de doublons."
+    )
+    archive_file = st.file_uploader(
+        "ZIP d'archive Strava",
+        type=["zip"],
+        key="strava-archive-zip",
+    )
+    if st.button(
+        "Importer l’archive Strava",
+        key="strava-import-archive",
+        disabled=archive_file is None,
+    ):
+        try:
+            archive_service = StravaArchiveService(storage=storage, config=cfg)
+            status_container = st.status("Import de l'archive Strava...", expanded=True)
+            with status_container:
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+
+                def update_archive_progress(current: int, total: int, activity_name: str) -> None:
+                    if total > 0:
+                        progress_bar.progress(current / total)
+                        status_text.text(
+                            f"Import archive: {current}/{total} — {activity_name}"
+                        )
+                    else:
+                        status_text.text("Préparation de l'import...")
+
+                result = archive_service.import_strava_archive(
+                    archive_file.getvalue(),
+                    athlete_id,
+                    progress_callback=update_archive_progress,
+                )
+                progress_bar.progress(1.0)
+                status_text.text("Import terminé.")
+                st.write(
+                    f"✓ Importées: {result.get('imported', 0)} · "
+                    f"fusionnées: {result.get('merged', 0)} · "
+                    f"déjà complètes: {result.get('already_complete', 0)}"
+                )
+                if result.get("missing_file") or result.get("parse_failed"):
+                    st.write(
+                        f"Fichiers manquants: {result.get('missing_file', 0)} · "
+                        f"échecs de parse: {result.get('parse_failed', 0)}"
+                    )
+            status_container.update(label="Import archive terminé", state="complete")
+            st.success(
+                f"Archive importée — {result.get('imported', 0)} nouvelle(s), "
+                f"{result.get('merged', 0)} fusionnée(s), "
+                f"{result.get('already_complete', 0)} déjà complète(s)."
+            )
+            st.session_state["strava_last_archive"] = result
+            st.cache_data.clear()
+        except Exception as exc:  # pragma: no cover - runtime archive failures
+            st.error(f"Import de l'archive Strava impossible : {exc}")
+
 if missing_config:
     env_list = ", ".join(missing_config)
     st.info(
@@ -538,10 +600,12 @@ else:
                 downloaded = int(stats.get("downloaded_count", len(imported) if imported else 0))
                 from_cache = int(stats.get("created_from_cache_count", 0))
                 total_created = int(stats.get("created_rows_count", downloaded + from_cache))
-                if downloaded or from_cache:
+                merged_n = int(stats.get("merged_rows_count", 0))
+                if downloaded or from_cache or merged_n:
                     st.success(
                         f"{downloaded} téléchargée(s) + {from_cache} créée(s) depuis le cache "
-                        f"sur les {sync_days} derniers jours (total {total_created})."
+                        f"+ {merged_n} fusionnée(s) sur les {sync_days} derniers jours "
+                        f"(total nouvelles lignes {total_created})."
                     )
                 else:
                     st.info(f"Aucune nouvelle activité sur les {sync_days} derniers jours.")
@@ -551,9 +615,11 @@ else:
                     "downloaded_count": downloaded,
                     "created_from_cache_count": from_cache,
                     "created_rows_count": total_created,
+                    "merged_rows_count": merged_n,
                     # Keep IDs but cap display later for readability
                     "downloaded_ids": list(stats.get("downloaded_ids", [])),
                     "created_from_cache_ids": list(stats.get("created_from_cache_ids", [])),
+                    "merged_ids": list(stats.get("merged_ids", [])),
                 }
             except Exception as exc:  # pragma: no cover - runtime API failures
                 st.error(f"La synchronisation Strava a échoué : {exc}")
@@ -647,9 +713,10 @@ else:
             fc = int(last_sync.get("created_from_cache_count", 0))
             total = int(last_sync.get("created_rows_count", dl + fc))
             days = int(last_sync.get("days", sync_days))
+            merged_n = int(last_sync.get("merged_rows_count", 0))
             st.info(
-                f"{dl} téléchargée(s), {fc} depuis cache · fenêtre: {days}j"
-                f"· total lignes créées: {total}."
+                f"{dl} téléchargée(s), {fc} depuis cache, {merged_n} fusionnée(s) · "
+                f"fenêtre: {days}j · total lignes créées: {total}."
             )
             # Show a concise list of IDs for quick inspection (trim if long)
             max_ids = 6

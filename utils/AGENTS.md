@@ -24,7 +24,9 @@ General-purpose helpers for config, formatting, time, crypto, and UI.
 | `grade_classification.py` | Grade classification utilities |
 | `segments.py` | Segment merging for plots |
 | `series_filters.py` | Outlier filtering for numeric series |
-| `gpx_parser.py` | GPX file parsing |
+| `gpx_parser.py` | GPX file parsing (race routes) |
+| `strava_track_parser.py` | FIT/GPX/TCX(+gz) → activity timeseries for archive import |
+| `strava_merge.py` | Fill-empty merge helpers for archive + API sync enrichment |
 | `metrics_formulas.py` | TRIMP and physiology formulas |
 | `timeseries_preprocessing.py` | Shared moving average, distance, grade helpers |
 

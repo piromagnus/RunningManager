@@ -14,7 +14,7 @@ Streamlit UI pages for the Running Manager application.
 | `SessionCreator.py` | Template creation wizard |
 | `Athlete.py` | Athlete profile management |
 | `Goals.py` | Race/goal management |
-| `Settings.py` | App settings, Strava OAuth, metrics recompute |
+| `Settings.py` | App settings, Strava OAuth/archive import, metrics recompute |
 | `Session.py` | Session detail view |
 | `RacePacing.py` | Race pacing strategy |
 
@@ -75,10 +75,12 @@ apply_theme()
 
 ### Settings.py
 - Strava OAuth flow
+- Strava GDPR ZIP archive import (historique; same Activity IDs as API sync)
 - Metrics recomputation trigger
 - Distance-equivalent factor configuration
 - Bike/ski DistEq factors
-- Strava sync/rebuild now refresh metrics dependencies and HR zones automatically
+- Strava sync/rebuild refresh metrics dependencies and HR zones automatically
+- Sync merges missing fields into incomplete archive activities (no duplicates)
 
 ## State Management
 

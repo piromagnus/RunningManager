@@ -12,7 +12,8 @@ Domain services for planning, analytics, metrics, and external integrations.
 | `interval_utils.py` | Interval step normalization and serialization |
 | `timeseries_service.py` | Activity timeseries loading + cached metrics |
 | `trail_performance_model.py` | Trail digital-twin notebook helpers |
-| `strava_service.py` | Strava OAuth, sync, caching |
+| `strava_service.py` | Strava OAuth, sync, caching, merge enrichment |
+| `strava_archive_service.py` | Strava GDPR ZIP archive import (same IDs/storage as sync) |
 | `garmin_import_service.py` | Garmin import (stub) |
 | `garmin_export_service.py` | TCX export for intervals |
 | `dashboard_data_service.py` | Dashboard data preprocessing |
@@ -65,9 +66,16 @@ Key metrics:
 ### StravaService
 - `authorization_url(state)`: OAuth initiation
 - `exchange_code(athlete_id, code)`: Token exchange
-- `sync_last_n_days(athlete_id, days)`: Incremental sync with dependency + zone refresh
+- `sync_last_n_days(athlete_id, days)`: Incremental sync; incomplete cache (missing timeseries / empty laps / empty polyline) is **merged** from API into the same `activityId`
 - `rebuild_from_cache(athlete_id)`: Cache rebuild with single metrics pass
-- Sync/rebuild now ensure `metrics_ts` + speed profile + lap metrics + HR zones
+- `merge_and_save_raw` / `save_timeseries_dataframe` / `upsert_activity_row_from_detail`: shared fill-empty writers used by archive import
+- Sync/rebuild ensure `metrics_ts` + speed profile + lap metrics + HR zones
+
+### StravaArchiveService
+- `import_strava_archive(zip_source, athlete_id, progress_callback=None)`: Import official Strava GDPR ZIP (`activities.csv` + `activities/*.{fit,gpx,tcx}[.gz]`)
+- Uses Strava **Activity ID** as `activityId` (same as API sync → no duplicates)
+- Fills missing artifacts only; re-import of complete data → `already_complete`
+- Writes `raw/strava/{id}.json`, `timeseries/{id}.csv`, `activities.csv`; then `_apply_sync_metrics`
 
 ### HrZonesService
 - `backfill_all_borders(athlete_id=None)`: Full zone-border rebuild

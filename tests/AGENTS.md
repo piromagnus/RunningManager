@@ -17,6 +17,7 @@ Pytest test suite with fixtures and fakes.
 | `test_interval_utils.py` | Interval normalization tests |
 | `test_intervals_thresholds.py` | Threshold-based interval tests |
 | `test_strava_service.py` | Strava OAuth/sync tests |
+| `test_strava_archive_service.py` | Strava GDPR ZIP import + sync merge enrichment |
 | `test_linking_service.py` | Activity linking tests |
 | `test_activity_feed_service.py` | Feed building tests |
 | `test_activity_detail_service.py` | Detail loading tests |

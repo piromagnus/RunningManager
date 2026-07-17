@@ -9,7 +9,7 @@ Traces how data is gathered, computed, stored, and displayed for every user-faci
 
 1. [Architecture Overview](#1-architecture-overview)
 2. [CSV Data Model](#2-csv-data-model)
-3. [Data Ingestion: Strava Sync](#3-data-ingestion-strava-sync)
+3. [Data Ingestion: Strava Sync](#3-data-ingestion-strava-sync) (incl. GDPR archive §3b)
 4. [Data Ingestion: Rebuild from Cache](#4-data-ingestion-rebuild-from-cache)
 5. [Metrics Computation Pipeline](#5-metrics-computation-pipeline)
 6. [HR Zones Recomputation](#6-hr-zones-recomputation)
@@ -108,6 +108,8 @@ activities_metrics.csv ──→ daily_metrics.csv  (aggregated by date)
 
 **Trigger:** Settings page → `"Synchroniser les {N} derniers jours"` button
 
+Archive history can also be loaded offline via GDPR ZIP (see §3b). Sync and archive share the same Strava numeric `activityId` and storage paths; incomplete cache entries are **merged** (fill empty only), never duplicated.
+
 ### Call Chain
 
 ```
@@ -123,26 +125,47 @@ Settings.py: st.button("Synchroniser les {sync_days} derniers jours")
       │     → lap_metrics.compute_and_store()
       │     → _map_activity_row() → activities.csv row
       │
-      ├── For each activity already in cache:
+      ├── For each activity with incomplete cache
+      │   (missing timeseries / empty laps / empty polyline):
+      │     → Fetch detail (+ streams if needed)
+      │     → merge_fill_empty into existing raw/strava/{id}.json
+      │     → fill missing timeseries; update empty activities.csv columns
+      │     → never create a second row for the same activityId
+      │
+      ├── For each activity with complete cache:
       │     → Read raw/strava/{id}.json
       │     → lap_metrics.compute_and_store() (best effort)
       │     → _map_activity_row() → activities.csv row (if missing)
       │
-      ├── metrics_service.recompute_for_activities(created_rows)      [pass 1]
+      ├── metrics_service.recompute_for_activities(touched_rows)      [pass 1]
       │     → ensures missing dependencies (metrics_ts, speed profile, laps)
       │     → updates activities_metrics/daily_metrics/weekly_metrics
       │
-      ├── For each new activity with timeseries:
+      ├── For each new/merged activity with timeseries:
       │     → speed_profile_service.compute_all_metrics_ts(id)
       │     → speed_profile_service.compute_and_store_speed_profile(id)
       │
-      ├── metrics_service.recompute_for_activities(created_rows)      [pass 2]
+      ├── metrics_service.recompute_for_activities(touched_rows)      [pass 2]
       │     → refreshes hrSpeedShift after fresh metrics_ts
       │
       └── hr_zones_service.backfill_borders_from_date(athlete_id, earliest_new_date)
             → recomputes zone borders for all activities from that date onward
             → writes hr_zones/{id}.csv + hrZone_z*_upper columns
 ```
+
+### 3b. Strava GDPR Archive Import
+
+**Trigger:** Settings → upload official Strava “Download Your Data” ZIP → `"Importer l’archive Strava"`
+
+```
+StravaArchiveService.import_strava_archive(zip, athlete_id)
+  → parse activities.csv (Activity ID = activityId)
+  → for each activity: merge raw/strava/{id}.json + parse FIT/GPX/TCX → timeseries
+  → create or fill-empty activities.csv row
+  → _apply_sync_metrics(touched_ids)
+```
+
+Identity is the Strava Activity ID so a later API sync overlapping the same IDs merges missing fields instead of creating duplicates.
 
 ### Strava API Endpoints
 

@@ -434,8 +434,25 @@ def test_sync_skips_cached_raw(storage: CsvStorage, config: Config) -> None:
     service.exchange_code("athlete-1", "auth")
     assert exchange_session.empty
 
+    # Complete cache: enrichment should not fire
     raw_path = config.raw_strava_dir / f"{activity_id}.json"
-    raw_path.write_text("{}", encoding="utf-8")
+    raw_path.write_text(
+        json.dumps(
+            {
+                "id": int(activity_id),
+                "laps": [{"lap_index": 1}],
+                "map": {"summary_polyline": "cached"},
+                "start_date": "2024-02-09T08:00:00Z",
+            }
+        ),
+        encoding="utf-8",
+    )
+    ts_path = config.timeseries_dir / f"{activity_id}.csv"
+    ts_path.write_text(
+        "timestamp,hr,paceKmh,elevationM,cadence,lat,lon\n"
+        "2024-02-09T08:00:00+00:00,120,10,100,80,45.0,5.0\n",
+        encoding="utf-8",
+    )
 
     fetch_session = FakeSession(
         [

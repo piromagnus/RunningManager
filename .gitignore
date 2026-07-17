@@ -23,3 +23,7 @@ data/exp_perf_predictions/**/benchmark_hrr_trimp_grid_search.csv
 uv.lock
 requirements.lock.txt
 .cursor/mcp.json
+
+# Local portable exports
+*.zip
+RunningManager_portable_data_*.zip
