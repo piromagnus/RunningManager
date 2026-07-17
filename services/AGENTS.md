@@ -104,14 +104,16 @@ Key metrics:
 - `compute_redi_load_features(...)`: REDI slow/fast/balance load features
 - `attach_previous_daily_features(...)`: Attach strictly previous-day load/readiness features
 - `add_in_activity_trimp_features(...)`: Segment TRIMP plus cumulative/decayed acute load
-- `route_segments_from_points(...)`: Convert GPX-like route points to route-only segments
+- `route_segments_from_points(...)`: Convert GPX-like route points to route-only segments; ignores GPX timestamps because planned-route exports may contain synthetic timing
 - `estimate_hrr_duration_envelope(...)`: Empirical max-duration table by average HRR band
+- `estimate_hrr_duration_power_law(...)`: Monotone representative-window fit for sustainable HRR over duration; supports performance-weighted frontier fitting
+- `max_duration_for_hrr_power_law(...)`: Invert fitted HRR-duration power law for pre-race feasibility checks
 - `simulate_constant_hrr_route(...)`: Pre-race route prediction with constant HRR and cumulative predicted acute TRIMP fatigue by default
 - `simulate_observed_hrr_segments(...)`: Completed-activity segment prediction using observed segment HRR without actual-time TRIMP leakage; cumulative fatigue by default
 - `sweep_constant_hrr_route(...)`: Constant-HRR candidate sweep with endurance-envelope feasibility and configurable fatigue input column
 - `select_best_constant_hrr(...)`: Fastest feasible HRR choice from a sweep
 - `segment_grid_search_model(...)`: Extension-only segment-level grid search with race-summed metrics
-- `predict_hrr_trimp_segment_times(...)`: Constrained HRR-linear plus raw acute-load fatigue speed equation; supports decayed TRIMP, cumulative TRIMP, or progress as fatigue input, and treats `trimp_scale` as deprecated/ignored
+- `predict_hrr_trimp_segment_times(...)`: Constrained HRR-linear plus raw acute-load fatigue speed equation; supports decayed TRIMP, cumulative TRIMP, progress, or decayed-plus-secondary fatigue input, and treats `trimp_scale` as deprecated/ignored
 - `hrr_trimp_grid_search_model(...)`: Small-grid constrained HRR-TRIMP calibration with segment and race metrics
 - `leave_one_out_hrr_trimp_grid_search(...)`: All-activity LOO validation for the constrained HRR-TRIMP model
 - `forbidden_anonymized_columns(...)`: Guard direct identifiers from paper feature exports
@@ -134,7 +136,10 @@ Key metrics:
 - `write_benchmark_outputs(tables, output_dir, metadata)`: Write aggregate CSV assets and self-contained HTML report
 - `read_benchmark_output_tables(output_dir)`: Reload aggregate benchmark CSV assets for report-only rebuilds
 - `write_benchmark_html(tables, output_dir, metadata)`: Rebuild only the self-contained benchmark HTML report
+- `benchmark_hrr_trimp_grid_search`: Aggregate per-run HRR/TRIMP alpha, fatigue, and secondary-fatigue grid cells
 - `benchmark_segment_type_metrics`: Aggregate per-run segment-type metrics when pipeline runs export them
+- `benchmark_activity_error_strata`: Aggregate Stage 3 LOO error cuts by duration, in-race TRIMP, HRR-frequency, and terrain family
+- `benchmark_bootstrap_uncertainty`: Deterministic bootstrap confidence intervals for Stage 3 LOO MAE and bias
 
 ### PacerService
 - `save_race(...)`: Persists race and invalidates comparison cache for this race

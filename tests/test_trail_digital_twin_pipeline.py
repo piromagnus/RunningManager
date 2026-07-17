@@ -74,11 +74,20 @@ def test_config_merges_defaults_and_normalises_stage3_states() -> None:
         "decayed",
         "cumulative",
         "progress",
+        "decayed_cumulative",
+        "decayed_progress",
     }
     progress_state = [
         state for state in config["fitting"]["stage3_fatigue_states"] if state["fatigue_state"] == "progress"
     ][0]
     assert progress_state["fatigue_models"] == ["linear"]
+    combined_state = [
+        state
+        for state in config["fitting"]["stage3_fatigue_states"]
+        if state["fatigue_state"] == "decayed_cumulative"
+    ][0]
+    assert combined_state["secondary_acute_trimp_col"] == "cumTrimpBefore"
+    assert config["fitting"]["hrr_trimp_secondary_kappa_grid"] == [0.0, 0.1, 0.2, 0.3, 0.4]
 
 
 def test_stage_models_include_activity_and_segment_objectives() -> None:
@@ -141,10 +150,19 @@ def test_stage_models_include_activity_and_segment_objectives() -> None:
 
     assert set(tables["table_stage_metrics"]["fitObjective"]) == {"activity", "segment"}
     comparison = tables["table_stage3_fatigue_state_comparison"]
-    assert set(comparison["fatigueState"]) == {"decayed", "cumulative", "progress"}
+    assert set(comparison["fatigueState"]) == {
+        "decayed",
+        "cumulative",
+        "progress",
+        "decayed_cumulative",
+        "decayed_progress",
+    }
     assert set(comparison["fatigueModel"]) == {"linear", "exponential"}
     progress_comparison = comparison[comparison["fatigueState"].astype(str).eq("progress")]
     assert set(progress_comparison["fatigueModel"]) == {"linear"}
+    combined = comparison[comparison["fatigueState"].astype(str).str.startswith("decayed_")]
+    assert set(combined["secondaryFatigueModel"]) == {"exponential"}
+    assert set(combined["secondaryAcuteTrimpCol"]) == {"cumTrimpBefore", "progress"}
     grid = tables["table_hrr_trimp_grid_search"]
     assert not grid.empty
     assert {
@@ -157,6 +175,7 @@ def test_stage_models_include_activity_and_segment_objectives() -> None:
         "segmentMaeMin",
         "hrrReference",
         "minFatigueFactor",
+        "secondaryFatigueCoef",
     }.issubset(grid.columns)
     assert "Stage 3 HRR speed ratio" in set(grid["stage"].astype(str))
     assert {objective for _cohort, objective in best.keys()} == {"activity", "segment"}

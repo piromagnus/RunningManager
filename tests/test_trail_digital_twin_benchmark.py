@@ -9,6 +9,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from scripts import generate_trail_digital_twin_hypothesis_refined as refine
 from services import trail_digital_twin_benchmark as benchmark
 from services import trail_digital_twin_pipeline as pipeline
 
@@ -296,6 +297,11 @@ def test_benchmark_html_renderer_is_self_contained() -> None:
     html = benchmark.render_benchmark_html(tables, {"benchmarkConfigPath": "/tmp/benchmark.yaml"})
 
     assert "Trail Digital Twin Benchmark Report" in html
+    assert "H1 high-reference validation" in html
+    assert "H2 alpha-kappa and muscular fatigue" in html
+    assert "H3 hard-trail low-reference validation" in html
+    assert "H4 stress and terrain strata" in html
+    assert "H5 bootstrap uncertainty" in html
     assert "Leaderboard table" in html
     assert "Segment-type evaluation" in html
     assert "Segment-type metrics" in html
@@ -390,6 +396,197 @@ def test_benchmark_html_renderer_adds_swept_parameter_sections() -> None:
     assert "Sweep: Minimum fatigue factor" in html
     assert "Performance by Decay lambda" in html
     assert "Performance by Minimum fatigue factor" in html
+
+
+def test_benchmark_summary_adds_hypothesis_diagnostics(tmp_path: Path) -> None:
+    config = _base_pipeline_config()
+    run = benchmark.BenchmarkRun(
+        run_id="000_diag",
+        group="h1_high_reference_confirmation",
+        name="diagnostic",
+        description="synthetic",
+        overrides={},
+        output_dir=tmp_path / "run",
+        config=config,
+    )
+    result = pipeline.PipelineResult(
+        tables={
+            "table_stage_metrics": pd.DataFrame(
+                [
+                    {
+                        "cohort": "hardTrailRun",
+                        "stage": "Stage 3 HRR speed ratio LOO",
+                        "fitObjective": "activity",
+                        "r2": 0.9,
+                        "maeMin": 5.0,
+                        "mapePct": 6.0,
+                        "biasMin": 1.0,
+                    }
+                ]
+            ),
+            "activity_loo_predictions": pd.DataFrame(
+                [
+                    {
+                        "activityId": "a",
+                        "cohort": "hardTrailRun",
+                        "stage": "Stage 3 HRR speed ratio LOO",
+                        "fitObjective": "activity",
+                        "actualTimeSec": 600.0,
+                        "predictedTimeSec": 660.0,
+                    },
+                    {
+                        "activityId": "b",
+                        "cohort": "hardTrailRun",
+                        "stage": "Stage 3 HRR speed ratio LOO",
+                        "fitObjective": "activity",
+                        "actualTimeSec": 1200.0,
+                        "predictedTimeSec": 1080.0,
+                    },
+                    {
+                        "activityId": "c",
+                        "cohort": "hardTrailRun",
+                        "stage": "Stage 3 HRR speed ratio LOO",
+                        "fitObjective": "activity",
+                        "actualTimeSec": 1800.0,
+                        "predictedTimeSec": 1860.0,
+                    },
+                ]
+            ),
+            "segment_predictions": pd.DataFrame(
+                [
+                    {
+                        "cohort": "hardTrailRun",
+                        "fitObjective": "activity",
+                        "activityId": "a",
+                        "actualTimeSec": 300.0,
+                        "segmentTrimp": 0.5,
+                        "meanHrReserve": 0.65,
+                        "terrainFamily": "flat",
+                    },
+                    {
+                        "cohort": "hardTrailRun",
+                        "fitObjective": "activity",
+                        "activityId": "b",
+                        "actualTimeSec": 900.0,
+                        "segmentTrimp": 1.5,
+                        "meanHrReserve": 0.75,
+                        "terrainFamily": "climb",
+                    },
+                    {
+                        "cohort": "hardTrailRun",
+                        "fitObjective": "activity",
+                        "activityId": "c",
+                        "actualTimeSec": 1200.0,
+                        "segmentTrimp": 2.0,
+                        "meanHrReserve": 0.82,
+                        "terrainFamily": "steep_climb",
+                    },
+                ]
+            ),
+            "table_hrr_trimp_grid_search": pd.DataFrame(
+                [
+                    {
+                        "cohort": "hardTrailRun",
+                        "stage": "Stage 3 HRR speed ratio",
+                        "fitObjective": "activity",
+                        "alpha": 0.9,
+                        "fatigueCoef": 0.3,
+                        "raceMaeMin": 5.0,
+                    }
+                ]
+            ),
+            "table_stage3_fatigue_state_comparison": pd.DataFrame(),
+            "table_fitted_parameters": pd.DataFrame(),
+            "table_segment_type_metrics": pd.DataFrame(),
+        },
+        metadata={"config": config},
+    )
+
+    tables = benchmark.summarize_benchmark_result(run, result, benchmark.DEFAULT_BENCHMARK_CONFIG["selection"])
+
+    assert not tables["benchmark_hrr_trimp_grid_search"].empty
+    assert set(tables["benchmark_activity_error_strata"]["strataType"]) == {
+        "duration_tertile",
+        "in_race_trimp_tertile",
+        "hrr70_share_tertile",
+        "dominant_terrain",
+    }
+    uncertainty = tables["benchmark_bootstrap_uncertainty"]
+    assert uncertainty.iloc[0]["activityCount"] == 3
+    assert uncertainty.iloc[0]["maeMinP05"] <= uncertainty.iloc[0]["maeMinP95"]
+
+
+def test_hypothesis_refined_generator_is_deterministic(tmp_path: Path) -> None:
+    stage1_dir = tmp_path / "stage1"
+    stage1_dir.mkdir()
+    pd.DataFrame(
+        [
+            {
+                "runId": "h1_worse",
+                "experimentGroup": "h1_high_reference_confirmation",
+                "meanStage3MaeMin": 12.0,
+                "meanStage3MapePct": 8.0,
+                "maxStage3MaeMin": 20.0,
+                "hrrReference": 0.82,
+                "hrrMaxFactor": 1.0,
+                "decayLambda": 0.20,
+                "minFatigueFactor": 0.50,
+            },
+            {
+                "runId": "h1_best",
+                "experimentGroup": "h1_high_reference_confirmation",
+                "meanStage3MaeMin": 10.0,
+                "meanStage3MapePct": 7.0,
+                "maxStage3MaeMin": 18.0,
+                "hrrReference": 0.85,
+                "hrrMaxFactor": 1.1,
+                "decayLambda": 0.25,
+                "minFatigueFactor": 0.60,
+            },
+        ]
+    ).to_csv(stage1_dir / "benchmark_leaderboard.csv", index=False)
+    pd.DataFrame(
+        [
+            {
+                "runId": "h3_best",
+                "experimentGroup": "h3_hard_trail_low_reference",
+                "cohort": "hardTrailRun",
+                "stage": "Stage 3 HRR speed ratio LOO",
+                "fitObjective": "activity",
+                "maeMin": 11.0,
+                "mapePct": 8.0,
+                "hrrReference": 0.60,
+                "hrrMinFactor": 0.40,
+                "hrrMaxFactor": 1.60,
+                "decayLambda": 0.15,
+            }
+        ]
+    ).to_csv(stage1_dir / "benchmark_stage_metrics.csv", index=False)
+
+    first, best_high, best_hard = refine.build_refined_config(
+        stage1_dir,
+        output_dir="data/out",
+        high_cap=4,
+        hard_cap=4,
+    )
+    second, _, _ = refine.build_refined_config(
+        stage1_dir,
+        output_dir="data/out",
+        high_cap=4,
+        hard_cap=4,
+    )
+    output_path = refine.write_refined_config(first, tmp_path / "refined.yaml")
+
+    assert first == second
+    assert best_high["runId"] == "h1_best"
+    assert best_hard["runId"] == "h3_best"
+    assert len(first["groups"][0]["runs"]) == 4
+    assert len(first["groups"][1]["runs"]) == 4
+    run_names = [run["name"] for group in first["groups"] for run in group["runs"]]
+    assert len(run_names) == len(set(run_names))
+    assert output_path.exists()
+    loaded = benchmark.load_benchmark_config(output_path)
+    assert loaded["execution"]["output_dir"] == "data/out"
 
 
 def test_read_benchmark_output_tables_and_write_html(tmp_path: Path) -> None:

@@ -103,6 +103,12 @@ fitting:
     - 0.20
     - 0.30
     - 0.40
+  hrr_trimp_secondary_kappa_grid:
+    - 0.00
+    - 0.10
+    - 0.20
+    - 0.30
+    - 0.40
   fatigue_models:
     - linear
     - exponential
@@ -118,6 +124,20 @@ fitting:
       label: linear progress
       fatigue_models:
         - linear
+    - fatigue_state: decayed_cumulative
+      acute_trimp_col: decayedTrimpBefore
+      label: decayed exp + cumulative TRIMP
+      fatigue_models:
+        - exponential
+      secondary_acute_trimp_col: cumTrimpBefore
+      secondary_fatigue_model: exponential
+    - fatigue_state: decayed_progress
+      acute_trimp_col: decayedTrimpBefore
+      label: decayed exp + progress
+      fatigue_models:
+        - exponential
+      secondary_acute_trimp_col: progress
+      secondary_fatigue_model: exponential
 
 segment_grid:
   enabled: true

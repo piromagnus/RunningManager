@@ -44,7 +44,7 @@ REQUIRED_CONFIG_SECTIONS = (
 )
 VALID_OBJECTIVES = {"activity", "segment"}
 VALID_FATIGUE_MODELS = {"linear", "exponential"}
-VALID_FATIGUE_STATES = {"decayed", "cumulative", "progress"}
+VALID_FATIGUE_STATES = {"decayed", "cumulative", "progress", "decayed_cumulative", "decayed_progress"}
 VALID_FATIGUE_LOAD_COLUMNS = {"decayedTrimpBefore", "cumTrimpBefore", "progress"}
 VALID_VALIDATION_MODES = {"in_sample", "loo"}
 STAGE_ORDER = [
@@ -111,6 +111,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "stage0_mu_grid": [-0.50, -0.45, -0.40, -0.35, -0.30, -0.25, -0.20, -0.15, -0.10, -0.05, 0.00],
         "hrr_trimp_alpha_grid": [0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85],
         "hrr_trimp_kappa_grid": [0.0, 0.10, 0.20, 0.30, 0.40],
+        "hrr_trimp_secondary_kappa_grid": [0.0, 0.10, 0.20, 0.30, 0.40],
         "fatigue_models": ["linear", "exponential"],
         "stage3_fatigue_states": [
             {"fatigue_state": "decayed", "acute_trimp_col": "decayedTrimpBefore", "label": "decayed TRIMP"},
@@ -120,6 +121,22 @@ DEFAULT_CONFIG: dict[str, Any] = {
                 "acute_trimp_col": "progress",
                 "label": "linear progress",
                 "fatigue_models": ["linear"],
+            },
+            {
+                "fatigue_state": "decayed_cumulative",
+                "acute_trimp_col": "decayedTrimpBefore",
+                "label": "decayed exp + cumulative TRIMP",
+                "fatigue_models": ["exponential"],
+                "secondary_acute_trimp_col": "cumTrimpBefore",
+                "secondary_fatigue_model": "exponential",
+            },
+            {
+                "fatigue_state": "decayed_progress",
+                "acute_trimp_col": "decayedTrimpBefore",
+                "label": "decayed exp + progress",
+                "fatigue_models": ["exponential"],
+                "secondary_acute_trimp_col": "progress",
+                "secondary_fatigue_model": "exponential",
             },
         ],
     },
@@ -212,6 +229,18 @@ def _normalise_stage3_states(states: object) -> list[dict[str, object]]:
             "acute_trimp_col": acute_col,
             "label": label,
         }
+        secondary_col = state.get("secondary_acute_trimp_col", state.get("secondaryAcuteTrimpCol"))
+        if secondary_col is not None:
+            secondary_col = str(secondary_col)
+            if secondary_col not in VALID_FATIGUE_LOAD_COLUMNS:
+                raise ValueError(f"invalid secondary fatigue load column: {secondary_col}")
+            secondary_model = str(
+                state.get("secondary_fatigue_model", state.get("secondaryFatigueModel", "exponential"))
+            )
+            if secondary_model not in VALID_FATIGUE_MODELS:
+                raise ValueError(f"invalid secondary fatigue model: {secondary_model}")
+            normalised_state["secondary_acute_trimp_col"] = secondary_col
+            normalised_state["secondary_fatigue_model"] = secondary_model
         state_models = state.get("fatigue_models", state.get("fatigueModels"))
         if state_models is not None:
             models = _as_str_list(state_models, "fitting.stage3_fatigue_states[].fatigue_models")
@@ -253,7 +282,13 @@ def normalise_config(raw_config: Mapping[str, Any], *, require_sections: bool = 
     fitting["fatigue_models"] = fatigue_models
     fitting["stage3_fatigue_states"] = _normalise_stage3_states(fitting.get("stage3_fatigue_states"))
 
-    for key in ["stage0_alpha_grid", "stage0_mu_grid", "hrr_trimp_alpha_grid", "hrr_trimp_kappa_grid"]:
+    for key in [
+        "stage0_alpha_grid",
+        "stage0_mu_grid",
+        "hrr_trimp_alpha_grid",
+        "hrr_trimp_kappa_grid",
+        "hrr_trimp_secondary_kappa_grid",
+    ]:
         fitting[key] = _as_float_list(fitting.get(key), f"fitting.{key}")
     for key in ["hrr_references", "decay_lambdas"]:
         config["robustness"][key] = _as_float_list(config["robustness"].get(key), f"robustness.{key}")
@@ -904,6 +939,9 @@ def _stage3_metadata(
     fatigue_model: str,
     alpha: float,
     fatigue_coef: float,
+    secondary_acute_trimp_col: str = "",
+    secondary_fatigue_model: str = "",
+    secondary_fatigue_coef: float = 0.0,
 ) -> dict[str, object]:
     row.update(
         {
@@ -914,6 +952,9 @@ def _stage3_metadata(
             "fatigueModel": fatigue_model,
             "alpha": alpha,
             "fatigueCoef": fatigue_coef,
+            "secondaryAcuteTrimpCol": secondary_acute_trimp_col,
+            "secondaryFatigueModel": secondary_fatigue_model,
+            "secondaryFatigueCoef": secondary_fatigue_coef,
         }
     )
     return row
@@ -965,6 +1006,8 @@ def _hrr_trimp_grid_frame(
     use_hrr_effort: bool,
     fatigue_state: str,
     acute_trimp_col: str,
+    secondary_acute_trimp_col: str = "",
+    secondary_fatigue_model: str = "",
 ) -> pd.DataFrame:
     if grid.empty:
         return pd.DataFrame()
@@ -977,6 +1020,8 @@ def _hrr_trimp_grid_frame(
     out["useHrrEffort"] = bool(use_hrr_effort)
     out["fatigueState"] = fatigue_state
     out["acuteTrimpCol"] = acute_trimp_col
+    out["secondaryAcuteTrimpCol"] = secondary_acute_trimp_col
+    out["secondaryFatigueModel"] = secondary_fatigue_model
     out["vmaFlatKmh"] = float(physiology.get("vma_flat_kmh", np.nan))
     out["hrrReference"] = float(physiology.get("hrr_reference", np.nan))
     out["hrrMinFactor"] = float(physiology.get("hrr_min_factor", np.nan))
@@ -1146,6 +1191,9 @@ def _run_paper_stage_models_for_objective(task: tuple[object, ...]) -> dict[str,
     local_stage3_rows: list[dict[str, object]] = []
     for state_spec in fitting["stage3_fatigue_states"]:
         state_models = state_spec.get("fatigue_models") or fitting["fatigue_models"]
+        secondary_col = str(state_spec.get("secondary_acute_trimp_col", ""))
+        secondary_model = str(state_spec.get("secondary_fatigue_model", ""))
+        secondary_grid = fitting["hrr_trimp_secondary_kappa_grid"] if secondary_col else [0.0]
         for fatigue_model in state_models:
             variant_stage = f"Stage 3 HRR speed ratio {state_spec['label']} {fatigue_model}"
             best, grid, prediction = tpm.hrr_trimp_grid_search_model(
@@ -1153,6 +1201,7 @@ def _run_paper_stage_models_for_objective(task: tuple[object, ...]) -> dict[str,
                 v_anchor_kmh=float(physiology["vma_flat_kmh"]),
                 alpha_grid=fitting["hrr_trimp_alpha_grid"],
                 fatigue_coef_grid=fitting["hrr_trimp_kappa_grid"],
+                secondary_fatigue_coef_grid=secondary_grid,
                 fatigue_models=(fatigue_model,),
                 hrr_reference=float(physiology["hrr_reference"]),
                 hrr_min_factor=float(physiology["hrr_min_factor"]),
@@ -1161,6 +1210,8 @@ def _run_paper_stage_models_for_objective(task: tuple[object, ...]) -> dict[str,
                 load_factor_col="rediReadinessFactor",
                 use_hrr_effort=True,
                 acute_trimp_col=state_spec["acute_trimp_col"],
+                secondary_acute_trimp_col=secondary_col or None,
+                secondary_fatigue_model=secondary_model or None,
                 objective=_model_objective(objective),
                 observed_activity_times_sec=observed,
             )
@@ -1174,6 +1225,8 @@ def _run_paper_stage_models_for_objective(task: tuple[object, ...]) -> dict[str,
                 use_hrr_effort=True,
                 fatigue_state=str(state_spec["fatigue_state"]),
                 acute_trimp_col=str(state_spec["acute_trimp_col"]),
+                secondary_acute_trimp_col=secondary_col,
+                secondary_fatigue_model=secondary_model,
             )
             grid_search_frames.append(grid_frame)
             stage3_variant_grids[(str(state_spec["fatigue_state"]), str(fatigue_model))] = grid_frame
@@ -1187,6 +1240,9 @@ def _run_paper_stage_models_for_objective(task: tuple[object, ...]) -> dict[str,
                 fatigue_model=fatigue_model,
                 alpha=float(best.get("alpha", np.nan)),
                 fatigue_coef=float(best.get("fatigueCoef", np.nan)),
+                secondary_acute_trimp_col=secondary_col,
+                secondary_fatigue_model=secondary_model,
+                secondary_fatigue_coef=float(best.get("secondaryFatigueCoef", 0.0)),
             )
             stage3_fatigue_rows.append(in_sample_row)
             local_stage3_rows.append(in_sample_row)
@@ -1197,6 +1253,7 @@ def _run_paper_stage_models_for_objective(task: tuple[object, ...]) -> dict[str,
                     v_anchor_kmh=float(physiology["vma_flat_kmh"]),
                     alpha_grid=fitting["hrr_trimp_alpha_grid"],
                     fatigue_coef_grid=fitting["hrr_trimp_kappa_grid"],
+                    secondary_fatigue_coef_grid=secondary_grid,
                     fatigue_models=(fatigue_model,),
                     hrr_reference=float(physiology["hrr_reference"]),
                     hrr_min_factor=float(physiology["hrr_min_factor"]),
@@ -1205,6 +1262,8 @@ def _run_paper_stage_models_for_objective(task: tuple[object, ...]) -> dict[str,
                     load_factor_col="rediReadinessFactor",
                     use_hrr_effort=True,
                     acute_trimp_col=state_spec["acute_trimp_col"],
+                    secondary_acute_trimp_col=secondary_col or None,
+                    secondary_fatigue_model=secondary_model or None,
                     observed_activity_times_sec=observed,
                     objective=_model_objective(objective),
                 )
@@ -1217,6 +1276,8 @@ def _run_paper_stage_models_for_objective(task: tuple[object, ...]) -> dict[str,
                 loo["fitObjective"] = objective
                 loo["fatigueState"] = state_spec["fatigue_state"]
                 loo["acuteTrimpCol"] = state_spec["acute_trimp_col"]
+                loo["secondaryAcuteTrimpCol"] = secondary_col
+                loo["secondaryFatigueModel"] = secondary_model
                 loo_frames.append(loo)
                 loo_row = _stage3_metadata(
                     _metrics_row(cohort_name, f"{variant_stage} LOO", loo["actualTimeSec"], loo["predictedTimeSec"]),
@@ -1229,6 +1290,11 @@ def _run_paper_stage_models_for_objective(task: tuple[object, ...]) -> dict[str,
                     fatigue_coef=float(loo["fatigueCoef"].median())
                     if "fatigueCoef" in loo
                     else float(best.get("fatigueCoef", np.nan)),
+                    secondary_acute_trimp_col=secondary_col,
+                    secondary_fatigue_model=secondary_model,
+                    secondary_fatigue_coef=float(loo["secondaryFatigueCoef"].median())
+                    if "secondaryFatigueCoef" in loo
+                    else float(best.get("secondaryFatigueCoef", 0.0)),
                 )
                 stage3_fatigue_rows.append(loo_row)
                 local_stage3_rows.append(loo_row)
@@ -1238,6 +1304,8 @@ def _run_paper_stage_models_for_objective(task: tuple[object, ...]) -> dict[str,
                     **best,
                     "fatigueState": state_spec["fatigue_state"],
                     "acuteTrimpCol": state_spec["acute_trimp_col"],
+                    "secondaryAcuteTrimpCol": secondary_col,
+                    "secondaryFatigueModel": secondary_model,
                 },
                 "prediction": prediction,
                 "predicted_activity": predicted_activity,
@@ -1407,6 +1475,8 @@ def run_stage3_ablation(
         ids = cohort_df["activityId"].astype(str).tolist()
         observed = cohort_df.set_index("activityId").loc[ids, "actualTimeSec"].astype(float)
         acute_col = str(best.get("acuteTrimpCol", "decayedTrimpBefore"))
+        secondary_col = str(best.get("secondaryAcuteTrimpCol", ""))
+        secondary_model = str(best.get("secondaryFatigueModel", ""))
 
         def predict_variant(
             label: str,
@@ -1429,6 +1499,9 @@ def run_stage3_ablation(
                 load_factor_col=load_factor_col,
                 use_hrr_effort=use_hrr_effort,
                 acute_trimp_col=acute_col,
+                secondary_fatigue_coef=float(best.get("secondaryFatigueCoef", 0.0)),
+                secondary_acute_trimp_col=secondary_col or None,
+                secondary_fatigue_model=secondary_model or None,
             )
             predicted = (
                 pd.DataFrame(
@@ -1442,6 +1515,9 @@ def run_stage3_ablation(
             row["fatigueState"] = best.get("fatigueState", "")
             row["acuteTrimpCol"] = acute_col
             row["fatigueModel"] = best.get("fatigueModel", "")
+            row["secondaryAcuteTrimpCol"] = secondary_col
+            row["secondaryFatigueModel"] = secondary_model
+            row["secondaryFatigueCoef"] = best.get("secondaryFatigueCoef", 0.0)
             return row
 
         full = predict_variant("full", cohort_segments)
@@ -1627,6 +1703,9 @@ def _stage3_segment_predictions(
             load_factor_col="rediReadinessFactor",
             use_hrr_effort=True,
             acute_trimp_col=str(best.get("acuteTrimpCol", "decayedTrimpBefore")),
+            secondary_fatigue_coef=float(best.get("secondaryFatigueCoef", 0.0)),
+            secondary_acute_trimp_col=str(best.get("secondaryAcuteTrimpCol", "")) or None,
+            secondary_fatigue_model=str(best.get("secondaryFatigueModel", "")) or None,
         )
         cohort_segments["cohort"] = cohort_name
         cohort_segments["fitObjective"] = objective
@@ -1637,6 +1716,9 @@ def _stage3_segment_predictions(
         cohort_segments["stage3FatigueState"] = best.get("fatigueState", "")
         cohort_segments["stage3AcuteTrimpCol"] = best.get("acuteTrimpCol", "")
         cohort_segments["stage3FatigueModel"] = best.get("fatigueModel", "")
+        cohort_segments["stage3SecondaryAcuteTrimpCol"] = best.get("secondaryAcuteTrimpCol", "")
+        cohort_segments["stage3SecondaryFatigueModel"] = best.get("secondaryFatigueModel", "")
+        cohort_segments["stage3SecondaryFatigueCoef"] = best.get("secondaryFatigueCoef", 0.0)
         frames.append(cohort_segments)
     return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
 
@@ -2090,8 +2172,8 @@ def _model_response_figure(result: PipelineResult) -> go.Figure:
     gap_y = [tpm.gap_factor(float(grade)) for grade in grade_x]
     fig.add_trace(go.Scatter(x=grade_x, y=gap_y, mode="lines", name="f_GAP(grade)"), row=2, col=2)
     fig.add_hline(y=1.0, line_dash="dot", line_color="#64748b", row=2, col=2)
-    fig.add_vline(x=-0.45, line_dash="dot", line_color="#64748b", row=2, col=2)
-    fig.add_vline(x=0.45, line_dash="dot", line_color="#64748b", row=2, col=2)
+    fig.add_vline(x=-tpm.MINETTI_GRADE_CLAMP, line_dash="dot", line_color="#64748b", row=2, col=2)
+    fig.add_vline(x=tpm.MINETTI_GRADE_CLAMP, line_dash="dot", line_color="#64748b", row=2, col=2)
 
     fig.update_xaxes(title_text="HR reserve ratio", row=1, col=1)
     fig.update_xaxes(title_text="raw TRIMP load or progress", row=1, col=2)
@@ -2179,6 +2261,11 @@ def _model_formulas_html() -> str:
                 "notes": "Same load choices as linear fatigue, but with a curved decay.",
             },
             {
+                "component": "Combined fatigue",
+                "formula": "f_fatigue(D,M) = clip(exp(-kappa * D) * exp(-gamma * M), min_fatigue_factor, 1)",
+                "notes": "D is decayed TRIMP; M is cumulative TRIMP or progress, with fitted gamma.",
+            },
+            {
                 "component": "No acute fatigue",
                 "formula": "kappa = 0, therefore f_fatigue(U) = 1",
                 "notes": "This disables acute in-race fatigue modeling. It is not the linear alternative.",
@@ -2196,7 +2283,8 @@ def _model_formulas_html() -> str:
                 "formula": "f_GAP(grade) = MinettiCost(grade) / MinettiCost(0)",
                 "notes": (
                     "Integrated segment GAP is preferred when available; mean grade is the fallback. "
-                    "The plotted grade range is -100% to +100%, while Minetti cost is clamped to +/-45%."
+                    f"The plotted grade range is -100% to +100%, while Minetti cost is clamped to "
+                    f"+/-{tpm.MINETTI_GRADE_CLAMP:.0%}."
                 ),
             },
             {
@@ -2264,6 +2352,9 @@ def _optimized_parameter_table(result: PipelineResult) -> pd.DataFrame:
         "fatigueModel",
         "fatigueState",
         "acuteTrimpCol",
+        "secondaryFatigueCoef",
+        "secondaryFatigueModel",
+        "secondaryAcuteTrimpCol",
         "raceMaeMin",
         "segmentMaeMin",
         "hrrReference",
@@ -2291,6 +2382,9 @@ def _top_parameter_search_table(search: pd.DataFrame, max_rows: int = 40) -> pd.
         "fatigueModel",
         "fatigueState",
         "acuteTrimpCol",
+        "secondaryFatigueCoef",
+        "secondaryFatigueModel",
+        "secondaryAcuteTrimpCol",
         "scoreMin",
         "raceMaeMin",
         "segmentMaeMin",
@@ -2401,13 +2495,15 @@ def _parameter_search_html(result: PipelineResult) -> str:
 <section>
 <h2>Optimized physiological parameters</h2>
 <p>The fitted table exposes the selected model parameters for each cohort and fit objective. Stage 3 alpha is the
-base VMA fraction, while kappa is stored as fatigueCoef and controls the acute fatigue multiplier.</p>
+base VMA fraction, kappa is stored as fatigueCoef, and combined variants store the extra muscular coefficient
+as secondaryFatigueCoef.</p>
 {_html_table(optimized, "optimized-parameters")}
 </section>
 <section>
 <h2>Selected alpha-kappa coordinates</h2>
-<p>Each marker is the final Stage 3 parameter choice after searching alpha, kappa, fatigue state, and fatigue shape.
-The same physical config bounds, HRR reference, and fatigue floor are shown in the optimized-parameter table.</p>
+<p>Each marker is the final Stage 3 parameter choice after searching alpha, kappa, optional secondary kappa,
+fatigue state, and fatigue shape. The same physical config bounds, HRR reference, and fatigue floor are shown
+in the optimized-parameter table.</p>
 <div class='chart'>{_plot_html(_parameter_selection_figure(params))}</div>
 </section>
 <section>
@@ -2418,8 +2514,8 @@ within each cohort/objective context, then averages the resulting MAE in minutes
 </section>
 <section>
 <h2>Top alpha-kappa search cells</h2>
-<p>This table keeps the best individual Stage 3 grid cells for audit, including the fatigue state, fatigue shape,
-HRR bounds, fatigue floor, and decay lambda used during the search.</p>
+<p>This table keeps the best individual Stage 3 grid cells for audit, including primary and secondary fatigue
+settings, HRR bounds, fatigue floor, and decay lambda used during the search.</p>
 {_html_table(top_search, "top-alpha-kappa-search")}
 </section>
 """
@@ -2873,20 +2969,23 @@ def write_outputs(result: PipelineResult, output_dir: Path) -> dict[str, Path]:
                     "stage": "Stage 3",
                     "description": (
                         "Add fixed linear HRR speed ratio and select raw decayed TRIMP, "
-                        "raw cumulative TRIMP, or progress fatigue"
+                        "raw cumulative TRIMP, progress fatigue, or decayed-plus-muscular fatigue"
                     ),
                     "equation": (
                         r"t = d 3600 f_GAP / (VMA alpha f_alt f_REDI E(HRR) F(U)), "
-                        r"U in {D_raw, C_raw, progress}"
+                        r"U in {D_raw, C_raw, progress}; combined uses F(D_raw,M)"
                     ),
                 },
                 {
                     "stage": "Stage 3 fatigue",
                     "description": (
                         "Linear/exponential fatigue use the selected raw load directly; "
-                        "no acute fatigue is kappa=0"
+                        "combined fatigue adds a fitted muscular coefficient gamma; no acute fatigue is kappa=0"
                     ),
-                    "equation": r"F_linear(U)=clip(1-kappa U), F_exp(U)=clip(exp(-kappa U)), F_none(U)=1",
+                    "equation": (
+                        r"F_linear(U)=clip(1-kappa U), F_exp(U)=clip(exp(-kappa U)), "
+                        r"F_combined(D,M)=clip(exp(-kappa D) exp(-gamma M)), F_none(U)=1"
+                    ),
                 },
             ]
         )

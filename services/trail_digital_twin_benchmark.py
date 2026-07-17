@@ -18,10 +18,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.io as pio
 from plotly.offline import get_plotlyjs
+from plotly.subplots import make_subplots
 
 from services.trail_digital_twin_pipeline import (
     TERRAIN_FAMILY_LABELS,
@@ -76,6 +78,7 @@ CONFIG_HIGHLIGHTS: tuple[tuple[str, str], ...] = (
     ("fitting.enabled_objectives", "enabledObjectives"),
     ("fitting.hrr_trimp_alpha_grid", "hrrTrimpAlphaGrid"),
     ("fitting.hrr_trimp_kappa_grid", "hrrTrimpKappaGrid"),
+    ("fitting.hrr_trimp_secondary_kappa_grid", "hrrTrimpSecondaryKappaGrid"),
     ("fitting.fatigue_models", "fatigueModels"),
     ("fitting.stage3_fatigue_states", "stage3FatigueStates"),
 )
@@ -85,7 +88,10 @@ BENCHMARK_TABLE_FILES: dict[str, str] = {
     "benchmark_stage_metrics": "benchmark_stage_metrics.csv",
     "benchmark_stage3_fatigue": "benchmark_stage3_fatigue.csv",
     "benchmark_fitted_parameters": "benchmark_fitted_parameters.csv",
+    "benchmark_hrr_trimp_grid_search": "benchmark_hrr_trimp_grid_search.csv",
     "benchmark_segment_type_metrics": "benchmark_segment_type_metrics.csv",
+    "benchmark_activity_error_strata": "benchmark_activity_error_strata.csv",
+    "benchmark_bootstrap_uncertainty": "benchmark_bootstrap_uncertainty.csv",
     "benchmark_leaderboard": "benchmark_leaderboard.csv",
     "benchmark_manifest": "benchmark_manifest.csv",
     "benchmark_plan": "benchmark_plan.csv",
@@ -358,6 +364,229 @@ def _with_run_columns(df: pd.DataFrame, run: BenchmarkRun) -> pd.DataFrame:
     return enriched
 
 
+def _stage3_loo_predictions(tables: Mapping[str, pd.DataFrame]) -> pd.DataFrame:
+    predictions = tables.get("activity_loo_predictions", pd.DataFrame())
+    if predictions.empty:
+        return pd.DataFrame()
+    required = {"cohort", "stage", "actualTimeSec", "predictedTimeSec"}
+    if not required.issubset(predictions.columns):
+        return pd.DataFrame()
+    data = predictions[predictions["stage"].astype(str).eq("Stage 3 HRR speed ratio LOO")].copy()
+    if data.empty:
+        return pd.DataFrame()
+    if "fitObjective" not in data.columns:
+        data["fitObjective"] = "activity"
+    data["activityId"] = data.get("activityId", data.index.astype(str)).astype(str)
+    data["actualTimeSec"] = pd.to_numeric(data["actualTimeSec"], errors="coerce")
+    data["predictedTimeSec"] = pd.to_numeric(data["predictedTimeSec"], errors="coerce")
+    data = data.dropna(subset=["actualTimeSec", "predictedTimeSec"])
+    data = data[data["actualTimeSec"].gt(0)]
+    if data.empty:
+        return pd.DataFrame()
+    data["errorSec"] = data["predictedTimeSec"] - data["actualTimeSec"]
+    data["absErrorSec"] = data["errorSec"].abs()
+    return data
+
+
+def _metrics_from_prediction_frame(frame: pd.DataFrame) -> dict[str, object]:
+    if frame.empty:
+        return {
+            "activityCount": 0,
+            "actualMin": math.nan,
+            "predictedMin": math.nan,
+            "r2": math.nan,
+            "maeMin": math.nan,
+            "mapePct": math.nan,
+            "biasMin": math.nan,
+        }
+    actual = pd.to_numeric(frame["actualTimeSec"], errors="coerce").to_numpy(dtype=float)
+    predicted = pd.to_numeric(frame["predictedTimeSec"], errors="coerce").to_numpy(dtype=float)
+    mask = np.isfinite(actual) & np.isfinite(predicted) & (actual > 0)
+    actual = actual[mask]
+    predicted = predicted[mask]
+    if actual.size == 0:
+        return {
+            "activityCount": 0,
+            "actualMin": math.nan,
+            "predictedMin": math.nan,
+            "r2": math.nan,
+            "maeMin": math.nan,
+            "mapePct": math.nan,
+            "biasMin": math.nan,
+        }
+    residual = predicted - actual
+    total = np.sum((actual - np.mean(actual)) ** 2)
+    r2 = 1.0 - float(np.sum(residual**2) / total) if total > 0 else math.nan
+    return {
+        "activityCount": int(actual.size),
+        "actualMin": float(actual.sum() / 60.0),
+        "predictedMin": float(predicted.sum() / 60.0),
+        "r2": r2,
+        "maeMin": float(np.mean(np.abs(residual)) / 60.0),
+        "mapePct": float(np.mean(np.abs(residual) / actual) * 100.0),
+        "biasMin": float(np.mean(residual) / 60.0),
+    }
+
+
+def _rank_tertile(values: pd.Series) -> pd.Series:
+    numeric = pd.to_numeric(values, errors="coerce")
+    labels = pd.Series("unknown", index=values.index, dtype=object)
+    valid = numeric.dropna()
+    if valid.empty:
+        return labels
+    ranks = valid.rank(method="first", pct=True)
+    labels.loc[ranks.index[ranks.le(1.0 / 3.0)]] = "low"
+    labels.loc[ranks.index[ranks.gt(1.0 / 3.0) & ranks.le(2.0 / 3.0)]] = "mid"
+    labels.loc[ranks.index[ranks.gt(2.0 / 3.0)]] = "high"
+    return labels
+
+
+def _activity_segment_context(segments: pd.DataFrame) -> pd.DataFrame:
+    required = {"cohort", "fitObjective", "activityId", "actualTimeSec"}
+    if segments.empty or not required.issubset(segments.columns):
+        return pd.DataFrame()
+    data = segments.copy()
+    data["activityId"] = data["activityId"].astype(str)
+    data["actualTimeSec"] = pd.to_numeric(data["actualTimeSec"], errors="coerce").fillna(0.0)
+    if "segmentTrimp" in data.columns:
+        data["segmentTrimp"] = pd.to_numeric(data["segmentTrimp"], errors="coerce").fillna(0.0)
+    else:
+        data["segmentTrimp"] = 0.0
+    if "meanHrReserve" in data.columns:
+        data["meanHrReserve"] = pd.to_numeric(data["meanHrReserve"], errors="coerce")
+    else:
+        data["meanHrReserve"] = np.nan
+    data["terrainFamily"] = data.get("terrainFamily", "unknown")
+    data["terrainFamily"] = data["terrainFamily"].fillna("unknown").astype(str)
+
+    rows: list[dict[str, object]] = []
+    for (cohort, objective, activity_id), group in data.groupby(
+        ["cohort", "fitObjective", "activityId"],
+        sort=False,
+    ):
+        total_sec = float(group["actualTimeSec"].sum())
+        hrr = pd.to_numeric(group["meanHrReserve"], errors="coerce")
+        hrr70_sec = float(group.loc[hrr.ge(0.70), "actualTimeSec"].sum())
+        hrr80_sec = float(group.loc[hrr.ge(0.80), "actualTimeSec"].sum())
+        terrain_time = group.groupby("terrainFamily")["actualTimeSec"].sum().sort_values(
+            ascending=False,
+            kind="mergesort",
+        )
+        dominant_terrain = str(terrain_time.index[0]) if not terrain_time.empty else "unknown"
+        rows.append(
+            {
+                "cohort": cohort,
+                "fitObjective": objective,
+                "activityId": activity_id,
+                "inRaceTrimp": float(group["segmentTrimp"].sum()),
+                "hrr70TimeShare": hrr70_sec / total_sec if total_sec > 0 else math.nan,
+                "hrr80TimeShare": hrr80_sec / total_sec if total_sec > 0 else math.nan,
+                "dominantTerrainFamily": dominant_terrain,
+                "dominantTerrainLabel": _terrain_label(dominant_terrain),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def _append_strata_metrics(
+    rows: list[dict[str, object]],
+    data: pd.DataFrame,
+    *,
+    strata_type: str,
+    strata_col: str,
+) -> None:
+    if data.empty or strata_col not in data.columns:
+        return
+    for (cohort, objective, strata_value), group in data.groupby(
+        ["cohort", "fitObjective", strata_col],
+        sort=True,
+        dropna=False,
+    ):
+        rows.append(
+            {
+                "cohort": cohort,
+                "fitObjective": objective,
+                "strataType": strata_type,
+                "strataValue": str(strata_value),
+                **_metrics_from_prediction_frame(group),
+            }
+        )
+
+
+def activity_error_strata_tables(tables: Mapping[str, pd.DataFrame]) -> pd.DataFrame:
+    """Return compact Stage 3 LOO error strata for benchmark diagnostics."""
+    data = _stage3_loo_predictions(tables)
+    if data.empty:
+        return pd.DataFrame()
+    data = data[data["fitObjective"].astype(str).eq("activity")].copy()
+    if data.empty:
+        return pd.DataFrame()
+    context = _activity_segment_context(tables.get("segment_predictions", pd.DataFrame()))
+    if not context.empty:
+        data = data.merge(
+            context,
+            on=["cohort", "fitObjective", "activityId"],
+            how="left",
+        )
+    data["durationTertile"] = _rank_tertile(data["actualTimeSec"])
+    data["inRaceTrimpTertile"] = _rank_tertile(data.get("inRaceTrimp", pd.Series(index=data.index)))
+    data["hrr70ShareTertile"] = _rank_tertile(data.get("hrr70TimeShare", pd.Series(index=data.index)))
+    if "dominantTerrainLabel" not in data.columns:
+        data["dominantTerrainLabel"] = "unknown"
+    data["dominantTerrainLabel"] = data["dominantTerrainLabel"].fillna("unknown").astype(str)
+
+    rows: list[dict[str, object]] = []
+    _append_strata_metrics(rows, data, strata_type="duration_tertile", strata_col="durationTertile")
+    _append_strata_metrics(rows, data, strata_type="in_race_trimp_tertile", strata_col="inRaceTrimpTertile")
+    _append_strata_metrics(rows, data, strata_type="hrr70_share_tertile", strata_col="hrr70ShareTertile")
+    _append_strata_metrics(rows, data, strata_type="dominant_terrain", strata_col="dominantTerrainLabel")
+    return pd.DataFrame(rows)
+
+
+def bootstrap_uncertainty_table(
+    tables: Mapping[str, pd.DataFrame],
+    *,
+    iterations: int = 500,
+    seed: int = 20260623,
+) -> pd.DataFrame:
+    """Return deterministic bootstrap CIs for Stage 3 LOO MAE and bias."""
+    data = _stage3_loo_predictions(tables)
+    if data.empty:
+        return pd.DataFrame()
+    rows: list[dict[str, object]] = []
+    for group_index, ((cohort, objective), group) in enumerate(
+        data.groupby(["cohort", "fitObjective"], sort=True)
+    ):
+        errors = pd.to_numeric(group["errorSec"], errors="coerce").dropna().to_numpy(dtype=float)
+        if errors.size == 0:
+            continue
+        rng = np.random.default_rng(seed + group_index)
+        sample_size = errors.size
+        mae_samples = np.empty(iterations, dtype=float)
+        bias_samples = np.empty(iterations, dtype=float)
+        for index in range(iterations):
+            sample = errors[rng.integers(0, sample_size, size=sample_size)]
+            mae_samples[index] = np.mean(np.abs(sample)) / 60.0
+            bias_samples[index] = np.mean(sample) / 60.0
+        rows.append(
+            {
+                "cohort": cohort,
+                "fitObjective": objective,
+                "activityCount": int(sample_size),
+                "bootstrapIterations": int(iterations),
+                "maeMin": float(np.mean(np.abs(errors)) / 60.0),
+                "maeMinP05": float(np.quantile(mae_samples, 0.05)),
+                "maeMinP50": float(np.quantile(mae_samples, 0.50)),
+                "maeMinP95": float(np.quantile(mae_samples, 0.95)),
+                "biasMin": float(np.mean(errors) / 60.0),
+                "biasMinP05": float(np.quantile(bias_samples, 0.05)),
+                "biasMinP50": float(np.quantile(bias_samples, 0.50)),
+                "biasMinP95": float(np.quantile(bias_samples, 0.95)),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
 def select_primary_stage_metrics(stage_metrics: pd.DataFrame, selection: Mapping[str, Any]) -> pd.DataFrame:
     """Select the stage rows used for benchmark ranking."""
     if stage_metrics.empty or "stage" not in stage_metrics.columns:
@@ -418,8 +647,20 @@ def summarize_benchmark_result(
             result.tables.get("table_fitted_parameters", pd.DataFrame()),
             run,
         ),
+        "benchmark_hrr_trimp_grid_search": _with_run_columns(
+            result.tables.get("table_hrr_trimp_grid_search", pd.DataFrame()),
+            run,
+        ),
         "benchmark_segment_type_metrics": _with_run_columns(
             result.tables.get("table_segment_type_metrics", pd.DataFrame()),
+            run,
+        ),
+        "benchmark_activity_error_strata": _with_run_columns(
+            activity_error_strata_tables(result.tables),
+            run,
+        ),
+        "benchmark_bootstrap_uncertainty": _with_run_columns(
+            bootstrap_uncertainty_table(result.tables),
             run,
         ),
     }
@@ -510,7 +751,10 @@ def combine_benchmark_tables(
         "benchmark_stage_metrics",
         "benchmark_stage3_fatigue",
         "benchmark_fitted_parameters",
+        "benchmark_hrr_trimp_grid_search",
         "benchmark_segment_type_metrics",
+        "benchmark_activity_error_strata",
+        "benchmark_bootstrap_uncertainty",
     ]
     tables = {}
     for name in names:
@@ -736,6 +980,344 @@ def _segment_type_figure(segment_metrics: pd.DataFrame, leaderboard: pd.DataFram
     return fig
 
 
+def _numeric_column(data: pd.DataFrame, column: str) -> pd.Series:
+    if column not in data.columns:
+        return pd.Series(np.nan, index=data.index)
+    return pd.to_numeric(data[column], errors="coerce")
+
+
+def _successful_runs(runs: pd.DataFrame) -> pd.DataFrame:
+    if runs.empty:
+        return pd.DataFrame()
+    data = runs.copy()
+    if "status" in data.columns:
+        data = data[data["status"].astype(str).eq("success")]
+    if "meanStage3MaeMin" in data.columns:
+        data["meanStage3MaeMin"] = pd.to_numeric(data["meanStage3MaeMin"], errors="coerce")
+        data = data[data["meanStage3MaeMin"].notna()]
+    return data
+
+
+def _h1_high_reference_figure(runs: pd.DataFrame) -> go.Figure:
+    fig = make_subplots(
+        rows=1,
+        cols=2,
+        subplot_titles=("HRR reference x max factor", "Fatigue-floor response"),
+    )
+    data = _successful_runs(runs)
+    required = {"hrrReference", "hrrMaxFactor", "minFatigueFactor", "meanStage3MaeMin"}
+    if data.empty or not required.issubset(data.columns):
+        return fig
+    if "experimentGroup" in data.columns:
+        high = data[data["experimentGroup"].astype(str).eq("h1_high_reference_confirmation")].copy()
+    else:
+        high = pd.DataFrame()
+    if high.empty:
+        high = data[_numeric_column(data, "hrrReference").ge(0.80)].copy()
+    if high.empty:
+        return fig
+    for column in ["hrrReference", "hrrMaxFactor", "minFatigueFactor", "meanStage3MaeMin"]:
+        high[column] = pd.to_numeric(high[column], errors="coerce")
+    high = high.dropna(subset=["hrrReference", "hrrMaxFactor", "meanStage3MaeMin"])
+    if high.empty:
+        return fig
+    pivot = high.pivot_table(
+        index="hrrReference",
+        columns="hrrMaxFactor",
+        values="meanStage3MaeMin",
+        aggfunc="mean",
+    ).sort_index()
+    fig.add_trace(
+        go.Heatmap(
+            z=pivot.to_numpy(),
+            x=pivot.columns.astype(str),
+            y=pivot.index.astype(str),
+            colorbar={"title": "MAE min"},
+            hovertemplate="HRR ref=%{y}<br>Max factor=%{x}<br>MAE=%{z:.2f} min<extra></extra>",
+        ),
+        row=1,
+        col=1,
+    )
+    floor = (
+        high.dropna(subset=["minFatigueFactor"])
+        .groupby("minFatigueFactor", as_index=False)
+        .agg(meanStage3MaeMin=("meanStage3MaeMin", "mean"), runCount=("runId", "nunique"))
+        .sort_values("minFatigueFactor")
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=floor["minFatigueFactor"],
+            y=floor["meanStage3MaeMin"],
+            mode="lines+markers",
+            name="Mean MAE",
+            customdata=floor[["runCount"]],
+            hovertemplate="Floor=%{x:.2f}<br>MAE=%{y:.2f} min<br>Runs=%{customdata[0]}<extra></extra>",
+        ),
+        row=1,
+        col=2,
+    )
+    fig.update_layout(
+        title="H1: high-reference family validation",
+        margin={"l": 55, "r": 30, "t": 80, "b": 80},
+    )
+    fig.update_xaxes(title_text="HRR max factor", row=1, col=1)
+    fig.update_yaxes(title_text="HRR reference", row=1, col=1)
+    fig.update_xaxes(title_text="Minimum fatigue factor", row=1, col=2)
+    fig.update_yaxes(title_text="Mean Stage 3 LOO MAE (min)", row=1, col=2)
+    return fig
+
+
+def _stage3_grid_rows(grid_search: pd.DataFrame) -> pd.DataFrame:
+    required = {"stage", "alpha", "fatigueCoef"}
+    if grid_search.empty or not required.issubset(grid_search.columns):
+        return pd.DataFrame()
+    data = grid_search[grid_search["stage"].astype(str).str.contains("Stage 3 HRR speed ratio", regex=False)].copy()
+    if data.empty:
+        return pd.DataFrame()
+    data["alpha"] = pd.to_numeric(data["alpha"], errors="coerce")
+    data["fatigueCoef"] = pd.to_numeric(data["fatigueCoef"], errors="coerce")
+    if "raceMaeMin" not in data.columns and "raceMaeSec" in data.columns:
+        data["raceMaeMin"] = pd.to_numeric(data["raceMaeSec"], errors="coerce") / 60.0
+    if "raceMaeMin" not in data.columns:
+        return pd.DataFrame()
+    data["raceMaeMin"] = pd.to_numeric(data["raceMaeMin"], errors="coerce")
+    return data.dropna(subset=["alpha", "fatigueCoef", "raceMaeMin"])
+
+
+def _h2_alpha_kappa_figure(grid_search: pd.DataFrame, fitted: pd.DataFrame) -> go.Figure:
+    fig = make_subplots(
+        rows=1,
+        cols=3,
+        subplot_titles=("Alpha x fatigue coefficient", "Selected alpha", "Selected secondary coefficient"),
+    )
+    grid = _stage3_grid_rows(grid_search)
+    if not grid.empty:
+        pivot = grid.pivot_table(
+            index="fatigueCoef",
+            columns="alpha",
+            values="raceMaeMin",
+            aggfunc="mean",
+        ).sort_index()
+        fig.add_trace(
+            go.Heatmap(
+                z=pivot.to_numpy(),
+                x=pivot.columns.astype(str),
+                y=pivot.index.astype(str),
+                colorbar={"title": "MAE min"},
+                hovertemplate="alpha=%{x}<br>coef=%{y}<br>Race MAE=%{z:.2f} min<extra></extra>",
+            ),
+            row=1,
+            col=1,
+        )
+    selected = fitted.copy() if not fitted.empty else pd.DataFrame()
+    if not selected.empty and {"stage", "alpha"}.issubset(selected.columns):
+        selected = selected[selected["stage"].astype(str).eq("Stage 3 HRR speed ratio")].copy()
+        selected["alpha"] = pd.to_numeric(selected["alpha"], errors="coerce")
+        alpha_counts = selected.dropna(subset=["alpha"])["alpha"].value_counts().sort_index()
+        fig.add_trace(
+            go.Bar(x=alpha_counts.index.astype(str), y=alpha_counts.values, name="alpha"),
+            row=1,
+            col=2,
+        )
+        if "secondaryFatigueCoef" in selected.columns:
+            selected["secondaryFatigueCoef"] = pd.to_numeric(
+                selected["secondaryFatigueCoef"],
+                errors="coerce",
+            ).fillna(0.0)
+            sec_counts = selected["secondaryFatigueCoef"].value_counts().sort_index()
+            fig.add_trace(
+                go.Bar(x=sec_counts.index.astype(str), y=sec_counts.values, name="secondary"),
+                row=1,
+                col=3,
+            )
+    fig.update_layout(
+        title="H2: alpha, fatigue, and muscular-fatigue selection",
+        showlegend=False,
+        margin={"l": 55, "r": 30, "t": 80, "b": 90},
+    )
+    fig.update_xaxes(title_text="alpha", row=1, col=1)
+    fig.update_yaxes(title_text="fatigue coefficient", row=1, col=1)
+    fig.update_xaxes(title_text="alpha", row=1, col=2)
+    fig.update_yaxes(title_text="selected rows", row=1, col=2)
+    fig.update_xaxes(title_text="secondary coef", row=1, col=3)
+    fig.update_yaxes(title_text="selected rows", row=1, col=3)
+    return fig
+
+
+def _selected_stage_metrics_for_html(stage_metrics: pd.DataFrame) -> pd.DataFrame:
+    if stage_metrics.empty or "stage" not in stage_metrics.columns:
+        return pd.DataFrame()
+    data = stage_metrics[stage_metrics["stage"].astype(str).eq("Stage 3 HRR speed ratio LOO")].copy()
+    if data.empty:
+        data = stage_metrics[stage_metrics["stage"].astype(str).eq("Stage 3 HRR speed ratio")].copy()
+    if data.empty:
+        return data
+    data["maeMin"] = pd.to_numeric(data.get("maeMin"), errors="coerce")
+    return data.dropna(subset=["maeMin"])
+
+
+def _h3_hard_trail_figure(stage_metrics: pd.DataFrame) -> go.Figure:
+    fig = make_subplots(
+        rows=1,
+        cols=2,
+        subplot_titles=("Hard-trail leaderboard", "Low-reference wide-clip surface"),
+    )
+    data = _selected_stage_metrics_for_html(stage_metrics)
+    if data.empty:
+        return fig
+    if "fitObjective" in data.columns:
+        data = data[data["fitObjective"].astype(str).eq("activity")]
+    hard = data[data["cohort"].astype(str).eq("hardTrailRun")].copy()
+    if hard.empty:
+        return fig
+    for column in ["experimentGroup", "hrrReference", "hrrMaxFactor"]:
+        if column not in hard.columns:
+            hard[column] = ""
+    hard = hard.sort_values(["maeMin", "runId"]).head(15)
+    fig.add_trace(
+        go.Bar(
+            x=hard["runId"],
+            y=hard["maeMin"],
+            name="hardTrailRun",
+            customdata=hard[["experimentGroup", "hrrReference", "hrrMaxFactor"]],
+            hovertemplate=(
+                "Run=%{x}<br>Group=%{customdata[0]}<br>MAE=%{y:.2f} min<br>"
+                "HRR ref=%{customdata[1]}<br>Max=%{customdata[2]}<extra></extra>"
+            ),
+        ),
+        row=1,
+        col=1,
+    )
+    h3_groups = {"h3_hard_trail_low_reference", "h3_hard_trail_refined"}
+    if "experimentGroup" in data.columns:
+        low = data[data["experimentGroup"].astype(str).isin(h3_groups)].copy()
+    else:
+        low = pd.DataFrame()
+    if not low.empty:
+        low = low[low["cohort"].astype(str).eq("hardTrailRun")]
+    if not low.empty and {"hrrReference", "hrrMaxFactor"}.issubset(low.columns):
+        low["hrrReference"] = pd.to_numeric(low["hrrReference"], errors="coerce")
+        low["hrrMaxFactor"] = pd.to_numeric(low["hrrMaxFactor"], errors="coerce")
+        low = low.dropna(subset=["hrrReference", "hrrMaxFactor", "maeMin"])
+        pivot = low.pivot_table(
+            index="hrrReference",
+            columns="hrrMaxFactor",
+            values="maeMin",
+            aggfunc="mean",
+        ).sort_index()
+        fig.add_trace(
+            go.Heatmap(
+                z=pivot.to_numpy(),
+                x=pivot.columns.astype(str),
+                y=pivot.index.astype(str),
+                colorbar={"title": "MAE min"},
+                hovertemplate="HRR ref=%{y}<br>Max factor=%{x}<br>MAE=%{z:.2f} min<extra></extra>",
+            ),
+            row=1,
+            col=2,
+        )
+    fig.update_layout(
+        title="H3: hard-trail low-reference validation",
+        margin={"l": 55, "r": 30, "t": 80, "b": 150},
+    )
+    fig.update_yaxes(title_text="Hard-trail Stage 3 LOO MAE (min)", row=1, col=1)
+    fig.update_xaxes(title_text="Run", row=1, col=1)
+    fig.update_xaxes(title_text="HRR max factor", row=1, col=2)
+    fig.update_yaxes(title_text="HRR reference", row=1, col=2)
+    return fig
+
+
+def _h4_strata_figure(strata: pd.DataFrame, leaderboard: pd.DataFrame) -> go.Figure:
+    fig = make_subplots(
+        rows=2,
+        cols=2,
+        subplot_titles=("Duration", "In-race TRIMP", "HRR >= 0.70 share", "Dominant terrain"),
+    )
+    required = {"runId", "cohort", "strataType", "strataValue", "maeMin"}
+    if strata.empty or not required.issubset(strata.columns):
+        return fig
+    best_run_id = str(leaderboard.iloc[0]["runId"]) if not leaderboard.empty else ""
+    data = strata[strata["runId"].astype(str).eq(best_run_id)].copy() if best_run_id else strata.copy()
+    if data.empty:
+        data = strata.copy()
+    data["maeMin"] = pd.to_numeric(data["maeMin"], errors="coerce")
+    panels = [
+        ("duration_tertile", 1, 1),
+        ("in_race_trimp_tertile", 1, 2),
+        ("hrr70_share_tertile", 2, 1),
+        ("dominant_terrain", 2, 2),
+    ]
+    for strata_type, row, col in panels:
+        panel = data[data["strataType"].astype(str).eq(strata_type)].copy()
+        if panel.empty:
+            continue
+        for cohort, frame in panel.groupby("cohort", sort=True):
+            frame = frame.sort_values("strataValue")
+            fig.add_trace(
+                go.Bar(
+                    x=frame["strataValue"],
+                    y=frame["maeMin"],
+                    name=str(cohort),
+                    legendgroup=str(cohort),
+                    showlegend=(row == 1 and col == 1),
+                    hovertemplate=(
+                        "Cohort=%{fullData.name}<br>Strata=%{x}<br>MAE=%{y:.2f} min<extra></extra>"
+                    ),
+                ),
+                row=row,
+                col=col,
+            )
+    fig.update_layout(
+        title="H4: stress and terrain-stratified error",
+        barmode="group",
+        margin={"l": 55, "r": 30, "t": 85, "b": 90},
+    )
+    fig.update_yaxes(title_text="MAE (min)")
+    return fig
+
+
+def _h5_bootstrap_figure(uncertainty: pd.DataFrame, leaderboard: pd.DataFrame) -> go.Figure:
+    fig = go.Figure()
+    required = {"runId", "cohort", "fitObjective", "maeMin", "maeMinP05", "maeMinP95"}
+    if uncertainty.empty or not required.issubset(uncertainty.columns):
+        return fig
+    top_runs = leaderboard.head(5)["runId"].astype(str).tolist() if not leaderboard.empty else []
+    data = uncertainty.copy()
+    if top_runs:
+        data = data[data["runId"].astype(str).isin(top_runs)]
+    if "fitObjective" in data.columns:
+        data = data[data["fitObjective"].astype(str).eq("activity")]
+    if data.empty:
+        return fig
+    for column in ["maeMin", "maeMinP05", "maeMinP95"]:
+        data[column] = pd.to_numeric(data[column], errors="coerce")
+    data = data.dropna(subset=["maeMin", "maeMinP05", "maeMinP95"]).sort_values(
+        ["maeMin", "runId", "cohort"]
+    )
+    labels = data["runId"].astype(str).str.slice(0, 28) + " / " + data["cohort"].astype(str)
+    fig.add_trace(
+        go.Scatter(
+            x=data["maeMin"],
+            y=labels,
+            mode="markers",
+            error_x={
+                "type": "data",
+                "array": data["maeMinP95"] - data["maeMin"],
+                "arrayminus": data["maeMin"] - data["maeMinP05"],
+            },
+            marker={"size": 9, "color": "#2563eb"},
+            hovertemplate="Run/cohort=%{y}<br>MAE=%{x:.2f} min<extra></extra>",
+        )
+    )
+    fig.update_layout(
+        title="H5: bootstrap uncertainty for top runs",
+        xaxis_title="Stage 3 LOO MAE with 90% bootstrap interval (min)",
+        yaxis_title="Run / cohort",
+        margin={"l": 260, "r": 40, "t": 70, "b": 60},
+    )
+    return fig
+
+
 def _has_values(values: object) -> bool:
     try:
         return len(values) > 0  # type: ignore[arg-type]
@@ -949,6 +1531,38 @@ def render_benchmark_html(tables: Mapping[str, pd.DataFrame], metadata: Mapping[
         )
     metadata_json = json.dumps(metadata, indent=2, default=str)
     sections = [
+        ("H1 high-reference validation", _plot_html(_h1_high_reference_figure(runs))),
+        (
+            "H2 alpha-kappa and muscular fatigue",
+            _plot_html(
+                _h2_alpha_kappa_figure(
+                    tables.get("benchmark_hrr_trimp_grid_search", pd.DataFrame()),
+                    tables.get("benchmark_fitted_parameters", pd.DataFrame()),
+                )
+            ),
+        ),
+        (
+            "H3 hard-trail low-reference validation",
+            _plot_html(_h3_hard_trail_figure(tables.get("benchmark_stage_metrics", pd.DataFrame()))),
+        ),
+        (
+            "H4 stress and terrain strata",
+            _plot_html(
+                _h4_strata_figure(
+                    tables.get("benchmark_activity_error_strata", pd.DataFrame()),
+                    leaderboard,
+                )
+            ),
+        ),
+        (
+            "H5 bootstrap uncertainty",
+            _plot_html(
+                _h5_bootstrap_figure(
+                    tables.get("benchmark_bootstrap_uncertainty", pd.DataFrame()),
+                    leaderboard,
+                )
+            ),
+        ),
         ("Leaderboard", _plot_html(_leaderboard_figure(leaderboard))),
         ("Group distributions", _plot_html(_group_distribution_figure(runs))),
         *_sweep_parameter_sections(tables, metadata),
@@ -962,7 +1576,7 @@ def render_benchmark_html(tables: Mapping[str, pd.DataFrame], metadata: Mapping[
             _plot_html(_segment_type_figure(tables.get("benchmark_segment_type_metrics", pd.DataFrame()), leaderboard)),
         ),
         (
-            "Fatigue variants",
+            "H2 fatigue variants",
             _plot_html(_fatigue_variant_figure(tables.get("benchmark_stage3_fatigue", pd.DataFrame()))),
         ),
     ]
@@ -1020,6 +1634,21 @@ pre {{ overflow:auto; background:#111827; color:#e5e7eb; padding:14px; border-ra
 <p>Per-run Stage 3 segment errors grouped by terrain family. Positive bias means predicted time is slower
 than observed time.</p>
 {_html_table(tables.get("benchmark_segment_type_metrics", pd.DataFrame()), "segment-type-metrics")}
+</section>
+<section>
+<h2>Activity error strata</h2>
+<p>Compact Stage 3 LOO error cuts by duration, in-race TRIMP, HRR-frequency, and dominant terrain.</p>
+{_html_table(tables.get("benchmark_activity_error_strata", pd.DataFrame()), "activity-error-strata")}
+</section>
+<section>
+<h2>Bootstrap uncertainty</h2>
+<p>Deterministic activity-level bootstrap intervals for Stage 3 LOO MAE and bias.</p>
+{_html_table(tables.get("benchmark_bootstrap_uncertainty", pd.DataFrame()), "bootstrap-uncertainty")}
+</section>
+<section>
+<h2>HRR/TRIMP grid search sample</h2>
+<p>Sample of aggregated Stage 1-3 alpha, fatigue, and secondary-fatigue search cells.</p>
+{_html_table(tables.get("benchmark_hrr_trimp_grid_search", pd.DataFrame()), "hrr-trimp-grid")}
 </section>
 <section>
 <h2>Run manifest</h2>

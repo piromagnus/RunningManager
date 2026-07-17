@@ -15,6 +15,9 @@ data/timeseries
 data/laps
 data/hr_zones
 
+# Large per-experiment grid-search dumps (recomputable from benchmark reruns)
+data/exp_perf_predictions/**/benchmark_hrr_trimp_grid_search.csv
+
 .python-version
 .venv/
 uv.lock

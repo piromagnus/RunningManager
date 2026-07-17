@@ -1,0 +1,146 @@
+execution:
+  output_dir: data/exp_perf_predictions/trail_digital_twin_hypothesis_screen
+  per_run_csv: false
+  per_run_html: false
+  disable_inner_robustness: true
+  disable_inner_segment_grid: true
+  write_html: true
+  fail_fast: false
+  jobs: 24
+  common_overrides:
+    fitting.enabled_objectives:
+      - activity
+    fitting.validation_modes:
+      - in_sample
+      - loo
+    fitting.hrr_trimp_alpha_grid:
+      - 0.85
+      - 0.90
+      - 0.95
+      - 1.00
+      - 1.05
+    fitting.hrr_trimp_kappa_grid:
+      - 0.20
+      - 0.30
+      - 0.40
+      - 0.60
+      - 0.80
+    fitting.hrr_trimp_secondary_kappa_grid:
+      - 0.00
+      - 0.10
+      - 0.20
+    fitting.fatigue_models:
+      - linear
+      - exponential
+    fitting.stage3_fatigue_states:
+      - fatigue_state: decayed
+        acute_trimp_col: decayedTrimpBefore
+        label: decayed TRIMP
+      - fatigue_state: cumulative
+        acute_trimp_col: cumTrimpBefore
+        label: cumulative TRIMP
+      - fatigue_state: decayed_progress
+        acute_trimp_col: decayedTrimpBefore
+        label: decayed exp + progress
+        fatigue_models:
+          - exponential
+        secondary_acute_trimp_col: progress
+        secondary_fatigue_model: exponential
+      - fatigue_state: decayed_cumulative
+        acute_trimp_col: decayedTrimpBefore
+        label: decayed exp + cumulative TRIMP
+        fatigue_models:
+          - exponential
+        secondary_acute_trimp_col: cumTrimpBefore
+        secondary_fatigue_model: exponential
+    readiness.ctl_weight: 0.05
+    readiness.tsb_weight: 0.10
+    readiness.ctl_factor_min: 0.90
+    readiness.ctl_factor_max: 1.10
+    physiology.hrr_reference: 0.85
+    physiology.hrr_min_factor: 0.30
+    physiology.hrr_max_factor: 1.20
+    physiology.decay_lambda: 0.25
+    physiology.min_fatigue_factor: 0.60
+
+selection:
+  primary_stage: Stage 3 HRR speed ratio LOO
+  fallback_stage: Stage 3 HRR speed ratio
+  aggregate_objectives:
+    - activity
+  aggregate_cohorts:
+    - hardTrailRun
+    - hardRunOrTrailRun
+    - top10HardTrailByHRR
+    - selectedDateRaces
+
+groups:
+  - id: h0_anchor_profiles
+    mode: variants
+    description: Anchor reruns for the latest current, boundary-wide, and boundary-refined profiles.
+    runs:
+      - name: latest_current_floor060_hrr085_clip030_120_decay025
+        overrides:
+          physiology.hrr_reference: 0.85
+          physiology.hrr_min_factor: 0.30
+          physiology.hrr_max_factor: 1.20
+          physiology.decay_lambda: 0.25
+          physiology.min_fatigue_factor: 0.60
+      - name: boundary_wide_floor050_hrr085_clip030_100_decay025
+        overrides:
+          physiology.hrr_reference: 0.85
+          physiology.hrr_min_factor: 0.30
+          physiology.hrr_max_factor: 1.00
+          physiology.decay_lambda: 0.25
+          physiology.min_fatigue_factor: 0.50
+      - name: boundary_refined_floor050_hrr085_clip030_120_decay025
+        overrides:
+          physiology.hrr_reference: 0.85
+          physiology.hrr_min_factor: 0.30
+          physiology.hrr_max_factor: 1.20
+          physiology.decay_lambda: 0.25
+          physiology.min_fatigue_factor: 0.50
+
+  - id: h1_high_reference_confirmation
+    mode: grid
+    description: H1 high-reference confirmation around the current global family.
+    overrides:
+      physiology.hrr_reference:
+        - 0.82
+        - 0.85
+        - 0.88
+      physiology.hrr_max_factor:
+        - 1.00
+        - 1.10
+        - 1.20
+      physiology.decay_lambda:
+        - 0.20
+        - 0.25
+        - 0.30
+      physiology.min_fatigue_factor:
+        - 0.50
+        - 0.60
+        - 0.70
+
+  - id: h3_hard_trail_low_reference
+    mode: grid
+    description: H3 hard-trail low-reference wide-clip challenge family.
+    overrides:
+      physiology.hrr_reference:
+        - 0.55
+        - 0.60
+        - 0.65
+      physiology.hrr_min_factor:
+        - 0.30
+        - 0.40
+        - 0.50
+      physiology.hrr_max_factor:
+        - 1.40
+        - 1.60
+        - 1.80
+      physiology.decay_lambda:
+        - 0.10
+        - 0.15
+        - 0.20
+      physiology.min_fatigue_factor:
+        - 0.50

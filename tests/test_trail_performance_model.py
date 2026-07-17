@@ -14,8 +14,10 @@ from services import trail_performance_model as model
 
 
 def test_minetti_cost_is_clamped_and_gap_flat_is_one() -> None:
-    assert model.minetti_running_cost(0.8) == pytest.approx(model.minetti_running_cost(0.45))
-    assert model.minetti_running_cost(-0.8) == pytest.approx(model.minetti_running_cost(-0.45))
+    assert model.minetti_running_cost(0.8) == pytest.approx(model.minetti_running_cost(0.75))
+    assert model.minetti_running_cost(-0.8) == pytest.approx(model.minetti_running_cost(-0.75))
+    assert model.minetti_running_cost(0.6) > model.minetti_running_cost(0.45)
+    assert model.gap_factor(-0.75) == pytest.approx(0.1)
     assert model.gap_factor(0.0) == pytest.approx(1.0)
     assert model.gap_factor(0.2) > 1.0
 
@@ -144,6 +146,22 @@ def test_segment_timeseries_integrates_gap_for_mixed_climb_descent() -> None:
     assert segment["terrainFamily"] == "mixed_climb_descent"
 
 
+def test_segment_timeseries_filters_precomputed_grade_outlier() -> None:
+    df = pd.DataFrame(
+        {
+            "cumulated_distance": np.arange(1, 6, dtype=float) / 10.0,
+            "cumulated_duration_seconds": np.arange(1, 6, dtype=float) * 60.0,
+            "grade_ma_10": [0.10, 0.10, 2.00, 0.10, 0.10],
+        }
+    )
+
+    segment = model.segment_timeseries(df).iloc[0]
+
+    assert segment["avgGrade"] == pytest.approx(0.10)
+    assert segment["absGradeMean"] == pytest.approx(0.10)
+    assert segment["gapFactorIntegrated"] == pytest.approx(model.gap_factor(0.10))
+
+
 def test_prediction_prefers_integrated_gap_over_average_grade() -> None:
     segments = pd.DataFrame(
         {
@@ -185,6 +203,26 @@ def test_prepare_raw_timeseries_for_segments_builds_segment_inputs() -> None:
     )
     assert prepared["cumulated_distance"].is_monotonic_increasing
     assert prepared["cumulated_duration_seconds"].iloc[-1] == pytest.approx(4.0)
+
+
+def test_prepare_raw_timeseries_interpolates_extreme_grade_outlier() -> None:
+    raw = pd.DataFrame(
+        {
+            "timestamp": pd.date_range("2026-01-01", periods=5, freq="2s", tz="UTC"),
+            "lat": [45.0, 45.0001, 45.0002, 45.0003, 45.0004],
+            "lon": [5.0] * 5,
+            "elevationM": [100.0, 101.0, 200.0, 103.0, 104.0],
+        }
+    )
+
+    prepared = model.prepare_raw_timeseries_for_segments(
+        raw,
+        elevation_window=1,
+        grade_window=1,
+    )
+
+    assert not prepared.empty
+    assert prepared["grade_ma_10"].abs().max() < 0.2
 
 
 def test_hard_trailrun_filter_includes_known_races_and_excludes_short_spike() -> None:
@@ -449,6 +487,40 @@ def test_hrr_trimp_prediction_can_use_linear_progress_fatigue() -> None:
     assert predicted.iloc[1] > predicted.iloc[0]
 
 
+def test_hrr_trimp_prediction_can_combine_short_and_muscular_fatigue() -> None:
+    segments = pd.DataFrame(
+        {
+            "distanceKm": [1.0, 1.0],
+            "avgGrade": [0.0, 0.0],
+            "meanAltitudeM": [0.0, 0.0],
+            "meanHrReserve": [0.70, 0.70],
+            "decayedTrimpBefore": [0.0, 1.0],
+            "cumTrimpBefore": [0.0, 2.0],
+        }
+    )
+
+    short_only = model.predict_hrr_trimp_segment_times(
+        segments,
+        v_anchor_kmh=12.0,
+        alpha=1.0,
+        fatigue_coef=0.2,
+        fatigue_model="exponential",
+    )
+    combined = model.predict_hrr_trimp_segment_times(
+        segments,
+        v_anchor_kmh=12.0,
+        alpha=1.0,
+        fatigue_coef=0.2,
+        fatigue_model="exponential",
+        secondary_fatigue_coef=0.3,
+        secondary_acute_trimp_col="cumTrimpBefore",
+        secondary_fatigue_model="exponential",
+    )
+
+    assert combined.iloc[0] == pytest.approx(short_only.iloc[0])
+    assert combined.iloc[1] > short_only.iloc[1]
+
+
 def test_hrr_trimp_prediction_can_disable_hrr_effort() -> None:
     segments = pd.DataFrame(
         {
@@ -493,19 +565,94 @@ def test_hrr_duration_envelope_reports_max_time_by_range() -> None:
     assert math.isnan(model.max_duration_for_hrr(0.90, envelope))
 
 
+def test_hrr_duration_power_law_fits_decreasing_sustainable_hrr() -> None:
+    activities = pd.DataFrame(
+        {
+            "category": ["RUN"] * 5,
+            "timeSec": [600.0, 1800.0, 3600.0, 7200.0, 14_400.0],
+            "hrReserveRatio": [0.92, 0.86, 0.80, 0.72, 0.64],
+        }
+    )
+
+    params, windows = model.estimate_hrr_duration_power_law(
+        activities,
+        duration_windows_min=[5, 10, 30, 60, 120, 240],
+        min_activity_count=1,
+    )
+
+    assert params["fitWindowCount"] == 6
+    assert float(params["exponent"]) < 0.0
+    assert windows["targetHrr"].dropna().is_monotonic_decreasing
+    assert model.hrr_for_duration_power_law(600.0, params) > model.hrr_for_duration_power_law(
+        14_400.0,
+        params,
+    )
+    assert "fitWeight" in windows.columns
+
+
+def test_hrr_duration_power_law_performance_weights_best_frontier_more() -> None:
+    activities = pd.DataFrame(
+        {
+            "category": ["RUN"] * 5,
+            "timeSec": [600.0, 1800.0, 3600.0, 7200.0, 14_400.0],
+            "hrReserveRatio": [0.95, 0.80, 0.72, 0.64, 0.58],
+        }
+    )
+
+    _, uniform = model.estimate_hrr_duration_power_law(
+        activities,
+        duration_windows_min=[10, 30, 60, 120, 240],
+        min_activity_count=1,
+        fit_weight_mode="uniform",
+    )
+    params, weighted = model.estimate_hrr_duration_power_law(
+        activities,
+        duration_windows_min=[10, 30, 60, 120, 240],
+        min_activity_count=1,
+        fit_weight_mode="performance",
+        fit_weight_power=6.0,
+    )
+
+    uniform_first_error = abs(uniform["residualHrr"].iloc[0])
+    weighted_first_error = abs(weighted["residualHrr"].iloc[0])
+    assert weighted_first_error < uniform_first_error
+    assert weighted["fitWeight"].iloc[0] > weighted["fitWeight"].iloc[-1]
+    assert params["fitWeightMode"] == "performance"
+
+
+def test_hrr_duration_power_law_inverse_shortens_high_hrr() -> None:
+    params = {
+        "coefficient": 0.80,
+        "exponent": -0.10,
+        "minWindowSec": 300.0,
+        "maxWindowSec": 86_400.0,
+        "hrrMin": 0.30,
+        "hrrMax": 0.98,
+    }
+
+    assert model.max_duration_for_hrr_power_law(
+        0.90,
+        params,
+    ) < model.max_duration_for_hrr_power_law(0.70, params)
+
+
 def test_route_segments_from_points_removes_pseudo_observed_time() -> None:
     points = pd.DataFrame(
         {
             "lat": np.linspace(45.0, 45.05, 150),
             "lon": np.linspace(5.0, 5.05, 150),
             "elevationM": np.linspace(100.0, 200.0, 150),
+            "timestamp": pd.date_range("2026-01-01", periods=150, freq="1s", tz="UTC"),
         }
     )
 
     segments = model.route_segments_from_points(points, segment_km=0.5)
+    raw_distance_km = model.prepare_raw_timeseries_for_segments(
+        points.drop(columns=["timestamp"])
+    )["distance"].sum()
 
     assert not segments.empty
-    assert segments["distanceKm"].sum() > 5.0
+    assert segments["distanceKm"].sum() == pytest.approx(raw_distance_km)
     assert segments["actualTimeSec"].isna().all()
     assert {"avgGrade", "meanAltitudeM", "progress"}.issubset(segments.columns)
 
@@ -756,7 +903,9 @@ def test_hrr_trimp_grid_search_recovers_synthetic_parameters_and_loo() -> None:
     assert best["fatigueCoef"] == pytest.approx(0.30)
     assert best["raceMaeSec"] == pytest.approx(0.0)
     assert {"raceR2", "segmentR2", "fatigueModel"}.issubset(grid.columns)
-    assert prediction["predictedTimeSec"].equals(segments["actualTimeSec"])
+    assert prediction["predictedTimeSec"].to_numpy() == pytest.approx(
+        segments["actualTimeSec"].to_numpy()
+    )
     assert len(loo) == 3
     assert {"alpha", "fatigueCoef", "predictedTimeSec", "errorSec"}.issubset(loo.columns)
 
@@ -771,6 +920,48 @@ def test_hrr_trimp_grid_search_recovers_synthetic_parameters_and_loo() -> None:
         observed_activity_times_sec=observed,
     )
     assert observed_best["raceMaeSec"] == pytest.approx(60.0)
+
+
+def test_hrr_trimp_grid_search_recovers_secondary_fatigue_coef() -> None:
+    segments = pd.DataFrame(
+        {
+            "activityId": ["a", "a", "b", "b"],
+            "distanceKm": [1.0, 1.0, 1.0, 1.0],
+            "avgGrade": [0.0, 0.0, 0.0, 0.0],
+            "meanAltitudeM": [0.0, 0.0, 0.0, 0.0],
+            "meanHrReserve": [0.70, 0.70, 0.70, 0.70],
+            "decayedTrimpBefore": [0.0, 1.0, 0.0, 1.0],
+            "cumTrimpBefore": [0.0, 1.0, 0.0, 2.0],
+        }
+    )
+    segments["actualTimeSec"] = model.predict_hrr_trimp_segment_times(
+        segments,
+        v_anchor_kmh=12.0,
+        alpha=0.80,
+        fatigue_coef=0.20,
+        fatigue_model="exponential",
+        secondary_fatigue_coef=0.30,
+        secondary_acute_trimp_col="cumTrimpBefore",
+        secondary_fatigue_model="exponential",
+    )
+
+    best, grid, prediction = model.hrr_trimp_grid_search_model(
+        segments,
+        v_anchor_kmh=12.0,
+        alpha_grid=[0.80],
+        fatigue_coef_grid=[0.20],
+        secondary_fatigue_coef_grid=[0.0, 0.30],
+        fatigue_models=("exponential",),
+        secondary_acute_trimp_col="cumTrimpBefore",
+        secondary_fatigue_model="exponential",
+    )
+
+    assert best["secondaryFatigueCoef"] == pytest.approx(0.30)
+    assert best["raceMaeSec"] == pytest.approx(0.0)
+    assert {"secondaryFatigueCoef", "secondaryAcuteTrimpCol"}.issubset(grid.columns)
+    assert prediction["predictedTimeSec"].to_numpy() == pytest.approx(
+        segments["actualTimeSec"].to_numpy()
+    )
 
 
 def test_anonymized_export_column_guard_flags_direct_identifiers() -> None:

@@ -16,6 +16,8 @@ import pandas as pd
 from utils.redi import compute_redi
 
 MINETTI_RUNNING_FLAT_COST = 3.6
+MINETTI_GRADE_CLAMP = 0.75
+GRADE_OUTLIER_ABS_THRESHOLD = 1.0
 EARTH_RADIUS_M = 6_371_000.0
 SEGMENT_GRADE_SHARE_THRESHOLD = 0.03
 MIXED_CLIMB_DESCENT_MIN_SHARE = 0.25
@@ -56,9 +58,10 @@ def _to_float(value: object, default: float = np.nan) -> float:
 
 
 def minetti_running_cost(grade: float) -> float:
-    """Minetti running energy-cost polynomial clamped to the paper range."""
-    i = max(-0.45, min(0.45, _to_float(grade, 0.0)))
-    return 155.4 * i**5 - 30.4 * i**4 - 43.3 * i**3 + 46.3 * i**2 + 19.5 * i + 3.6
+    """Minetti running energy-cost polynomial clamped to the benchmark grade range."""
+    i = max(-MINETTI_GRADE_CLAMP, min(MINETTI_GRADE_CLAMP, _to_float(grade, 0.0)))
+    cost = 155.4 * i**5 - 30.4 * i**4 - 43.3 * i**3 + 46.3 * i**2 + 19.5 * i + 3.6
+    return max(0.1 * MINETTI_RUNNING_FLAT_COST, cost)
 
 
 def gap_factor(grade: float) -> float:
@@ -276,7 +279,15 @@ def prepare_raw_timeseries_for_segments(
 
     with np.errstate(divide="ignore", invalid="ignore"):
         grade = elevation_difference.to_numpy(dtype=float) / (step_distance_km * 1000.0)
-    grade = np.clip(grade, -0.45, 0.45)
+    grade[~np.isfinite(grade)] = np.nan
+    grade[np.abs(grade) > GRADE_OUTLIER_ABS_THRESHOLD] = np.nan
+    grade = (
+        pd.Series(grade)
+        .interpolate(method="linear", limit_direction="both")
+        .fillna(0.0)
+        .to_numpy(dtype=float)
+    )
+    grade = np.clip(grade, -MINETTI_GRADE_CLAMP, MINETTI_GRADE_CLAMP)
     grade[~np.isfinite(grade)] = 0.0
     grade_smooth = (
         pd.Series(grade)
@@ -377,12 +388,15 @@ def segment_timeseries(
         grade_weights = pd.to_numeric(seg_df["delta_km"], errors="coerce").fillna(0.0)
         if grade_col:
             local_grade = pd.to_numeric(seg_df[grade_col], errors="coerce")
+            local_grade = local_grade.mask(local_grade.abs() > GRADE_OUTLIER_ABS_THRESHOLD)
+            local_grade = local_grade.interpolate(method="linear", limit_direction="both")
             avg_grade = _weighted_mean(local_grade, grade_weights)
         else:
             local_grade = pd.Series(np.nan, index=seg_df.index)
             avg_grade = np.nan
         fallback_grade = avg_grade if pd.notna(avg_grade) else net_grade
         local_grade = local_grade.fillna(fallback_grade if pd.notna(fallback_grade) else 0.0)
+        local_grade = local_grade.clip(-MINETTI_GRADE_CLAMP, MINETTI_GRADE_CLAMP)
         gap_integrated = _weighted_mean(local_grade.map(gap_factor), grade_weights)
         gap_avg_grade = gap_factor(fallback_grade if pd.notna(fallback_grade) else 0.0)
         abs_grade_mean = _weighted_mean(local_grade.abs(), grade_weights)
@@ -485,7 +499,8 @@ def route_segments_from_points(
     The input is a planned route, not an observed activity. Any pseudo duration generated
     during preprocessing is therefore removed from the returned segment table.
     """
-    prepared = prepare_raw_timeseries_for_segments(route_df)
+    route_points = route_df.drop(columns=["timestamp"], errors="ignore")
+    prepared = prepare_raw_timeseries_for_segments(route_points)
     segments = segment_timeseries(
         prepared,
         segment_km=segment_km,
@@ -668,6 +683,276 @@ def max_duration_for_hrr(
     if not mask.any():
         return np.nan
     return float(duration[mask].iloc[0])
+
+
+def estimate_hrr_duration_power_law(
+    activities_df: pd.DataFrame,
+    duration_windows_min: Sequence[float],
+    hrr_col: str = "hrReserveRatio",
+    avg_hr_col: str = "avgHr",
+    duration_col: Optional[str] = None,
+    category_col: str = "category",
+    categories: Optional[Sequence[str]] = ("RUN", "TRAIL_RUN"),
+    hr_rest: Optional[float] = None,
+    hr_max: Optional[float] = None,
+    hrr_min: float = 0.30,
+    hrr_max: float = 0.98,
+    min_duration_sec: float = 300.0,
+    target_stat: str = "max",
+    target_quantile: float = 0.90,
+    min_activity_count: int = 2,
+    fit_weight_mode: str = "performance",
+    fit_weight_power: float = 4.0,
+) -> tuple[Mapping[str, object], pd.DataFrame]:
+    """Fit a monotone power law for sustainable average HRR over duration.
+
+    The fitted frontier is based on representative duration windows. For a window
+    ``T``, the target HRR is computed from activities lasting at least ``T``;
+    targets are made non-increasing before fitting ``HRR = a * hours**b``.
+    """
+    columns = [
+        "durationMin",
+        "durationHours",
+        "activityCount",
+        "maxObservedHrr",
+        "quantileObservedHrr",
+        "targetHrrRaw",
+        "targetHrr",
+        "fittedHrr",
+        "residualHrr",
+        "fitWeight",
+        "usedForFit",
+        "isExtrapolated",
+    ]
+    empty_windows = pd.DataFrame(columns=columns)
+    target_mode = str(target_stat).strip().lower()
+    if target_mode not in {"max", "quantile"}:
+        raise ValueError("target_stat must be 'max' or 'quantile'")
+    quantile = float(target_quantile)
+    if not 0.0 < quantile <= 1.0:
+        raise ValueError("target_quantile must be in (0, 1]")
+    if not duration_windows_min:
+        raise ValueError("duration_windows_min must not be empty")
+    windows = sorted({float(value) for value in duration_windows_min if float(value) > 0.0})
+    if not windows:
+        raise ValueError("duration_windows_min must contain positive values")
+    if hrr_max <= hrr_min:
+        raise ValueError("hrr_max must be greater than hrr_min")
+    weight_mode = str(fit_weight_mode).strip().lower()
+    if weight_mode not in {"uniform", "performance"}:
+        raise ValueError("fit_weight_mode must be 'uniform' or 'performance'")
+    weight_power = max(0.0, float(fit_weight_power))
+
+    base_params: dict[str, object] = {
+        "model": "hrr_duration_power_law",
+        "formula": "HRR(T_hours) = coefficient * T_hours ** exponent",
+        "coefficient": np.nan,
+        "exponent": np.nan,
+        "r2Log": np.nan,
+        "weightedR2Log": np.nan,
+        "maeHrr": np.nan,
+        "weightedMaeHrr": np.nan,
+        "targetStatistic": target_mode,
+        "targetQuantile": quantile if target_mode == "quantile" else np.nan,
+        "minActivityCount": int(min_activity_count),
+        "fitWeightMode": weight_mode,
+        "fitWeightPower": weight_power,
+        "fitWindowCount": 0,
+        "hrrMin": float(hrr_min),
+        "hrrMax": float(hrr_max),
+        "minWindowSec": float(min(windows) * 60.0),
+        "maxWindowSec": float(max(windows) * 60.0),
+        "observedMinDurationSec": np.nan,
+        "observedMaxDurationSec": np.nan,
+    }
+    if activities_df.empty:
+        return base_params, empty_windows
+
+    working = activities_df.copy()
+    if duration_col is None:
+        duration_col = "timeSec" if "timeSec" in working.columns else "movingSec"
+    if duration_col not in working.columns:
+        return base_params, empty_windows
+
+    if hrr_col not in working.columns:
+        if avg_hr_col not in working.columns or hr_rest is None or hr_max is None:
+            return base_params, empty_windows
+        working = add_hr_reserve(
+            working,
+            avg_hr_col=avg_hr_col,
+            hr_rest=float(hr_rest),
+            hr_max=float(hr_max),
+        )
+
+    if categories is not None and category_col in working.columns:
+        allowed = {str(value).upper() for value in categories}
+        category = working[category_col].astype(str).str.upper()
+        working = working[category.isin(allowed)].copy()
+
+    working["_hrr"] = pd.to_numeric(working[hrr_col], errors="coerce")
+    working["_duration"] = pd.to_numeric(working[duration_col], errors="coerce")
+    working = working[
+        working["_hrr"].notna()
+        & working["_duration"].notna()
+        & working["_hrr"].between(float(hrr_min), float(hrr_max), inclusive="both")
+        & (working["_duration"] >= float(min_duration_sec))
+    ].copy()
+    if working.empty:
+        return base_params, empty_windows
+
+    rows: list[dict[str, object]] = []
+    for duration_min in windows:
+        duration_sec = duration_min * 60.0
+        subset = working[working["_duration"] >= duration_sec]
+        count = int(len(subset))
+        hrr_values = subset["_hrr"]
+        max_hrr = float(hrr_values.max()) if count else np.nan
+        quantile_hrr = float(hrr_values.quantile(quantile)) if count else np.nan
+        target_raw = max_hrr if target_mode == "max" else quantile_hrr
+        rows.append(
+            {
+                "durationMin": float(duration_min),
+                "durationHours": float(duration_min / 60.0),
+                "activityCount": count,
+                "maxObservedHrr": max_hrr,
+                "quantileObservedHrr": quantile_hrr,
+                "targetHrrRaw": target_raw,
+            }
+        )
+
+    windows_df = pd.DataFrame(rows)
+    finite_target = pd.to_numeric(windows_df["targetHrrRaw"], errors="coerce")
+    monotone_targets: list[float] = []
+    running_min = np.inf
+    for value in finite_target:
+        if math.isfinite(float(value)):
+            running_min = min(running_min, float(value))
+            monotone_targets.append(running_min)
+        else:
+            monotone_targets.append(np.nan)
+    windows_df["targetHrr"] = monotone_targets
+
+    enough_count = pd.to_numeric(windows_df["activityCount"], errors="coerce").fillna(0)
+    fit_mask = (
+        windows_df["targetHrr"].notna()
+        & windows_df["durationHours"].gt(0)
+        & (enough_count >= max(1, int(min_activity_count)))
+    )
+    if int(fit_mask.sum()) < 2:
+        fit_mask = windows_df["targetHrr"].notna() & windows_df["durationHours"].gt(0)
+    target_for_weights = pd.to_numeric(windows_df["targetHrr"], errors="coerce")
+    fit_weights = pd.Series(np.nan, index=windows_df.index, dtype=float)
+    if fit_mask.any():
+        if weight_mode == "performance":
+            max_target = float(target_for_weights[fit_mask].max())
+            if math.isfinite(max_target) and max_target > 0.0:
+                raw_weights = np.power(
+                    np.clip(target_for_weights / max_target, 1e-9, None),
+                    weight_power,
+                )
+            else:
+                raw_weights = pd.Series(1.0, index=windows_df.index)
+        else:
+            raw_weights = pd.Series(1.0, index=windows_df.index)
+        fit_weights.loc[target_for_weights.notna()] = raw_weights[target_for_weights.notna()]
+    windows_df["fitWeight"] = fit_weights
+    fit_df = windows_df[fit_mask].copy()
+
+    coefficient = np.nan
+    exponent = np.nan
+    r2_log = np.nan
+    weighted_r2_log = np.nan
+    mae_hrr = np.nan
+    weighted_mae_hrr = np.nan
+    if len(fit_df) >= 2:
+        x = np.log(fit_df["durationHours"].to_numpy(dtype=float))
+        y = np.log(fit_df["targetHrr"].to_numpy(dtype=float))
+        weights = fit_df["fitWeight"].to_numpy(dtype=float)
+        weights = np.where(np.isfinite(weights) & (weights > 0.0), weights, 1.0)
+        exponent, log_coefficient = np.polyfit(x, y, deg=1, w=np.sqrt(weights))
+        exponent = min(0.0, float(exponent))
+        coefficient = float(math.exp(log_coefficient))
+        fitted = coefficient * np.power(fit_df["durationHours"].to_numpy(dtype=float), exponent)
+        fitted = np.clip(fitted, float(hrr_min), float(hrr_max))
+        residual = fit_df["targetHrr"].to_numpy(dtype=float) - fitted
+        mae_hrr = float(np.mean(np.abs(residual)))
+        weighted_mae_hrr = float(np.average(np.abs(residual), weights=weights))
+        total = float(np.sum((y - y.mean()) ** 2))
+        predicted_y = np.log(np.clip(fitted, 1e-9, None))
+        r2_log = float(1.0 - np.sum((y - predicted_y) ** 2) / total) if total > 0 else np.nan
+        weighted_mean = float(np.average(y, weights=weights))
+        weighted_total = float(np.sum(weights * (y - weighted_mean) ** 2))
+        weighted_residual = float(np.sum(weights * (y - predicted_y) ** 2))
+        weighted_r2_log = (
+            float(1.0 - weighted_residual / weighted_total) if weighted_total > 0 else np.nan
+        )
+
+    if math.isfinite(coefficient) and math.isfinite(exponent):
+        duration_hours = windows_df["durationHours"].to_numpy(dtype=float)
+        fitted_all = coefficient * np.power(duration_hours, exponent)
+        windows_df["fittedHrr"] = np.clip(fitted_all, float(hrr_min), float(hrr_max))
+        windows_df["residualHrr"] = windows_df["targetHrr"] - windows_df["fittedHrr"]
+    else:
+        windows_df["fittedHrr"] = np.nan
+        windows_df["residualHrr"] = np.nan
+    windows_df["usedForFit"] = fit_mask
+    observed_max = float(working["_duration"].max())
+    windows_df["isExtrapolated"] = windows_df["durationMin"].mul(60.0).gt(observed_max)
+
+    params = dict(base_params)
+    params.update(
+        {
+            "coefficient": coefficient,
+            "exponent": exponent,
+            "r2Log": r2_log,
+            "weightedR2Log": weighted_r2_log,
+            "maeHrr": mae_hrr,
+            "weightedMaeHrr": weighted_mae_hrr,
+            "fitWindowCount": int(fit_mask.sum()),
+            "observedMinDurationSec": float(working["_duration"].min()),
+            "observedMaxDurationSec": observed_max,
+        }
+    )
+    return params, windows_df.reindex(columns=columns)
+
+
+def hrr_for_duration_power_law(duration_sec: float, params: Mapping[str, object]) -> float:
+    """Evaluate fitted sustainable HRR for ``duration_sec``."""
+    coefficient = _to_float(params.get("coefficient"), np.nan)
+    exponent = _to_float(params.get("exponent"), np.nan)
+    if not math.isfinite(coefficient) or not math.isfinite(exponent):
+        return np.nan
+    duration_hours = max(_to_float(duration_sec, np.nan) / 3600.0, 1e-9)
+    hrr = coefficient * duration_hours**exponent
+    hrr_min = _to_float(params.get("hrrMin"), 0.0)
+    hrr_max = _to_float(params.get("hrrMax"), 1.2)
+    return float(np.clip(hrr, hrr_min, hrr_max))
+
+
+def max_duration_for_hrr_power_law(
+    hrr: float,
+    params: Mapping[str, object],
+    clip_to_window: bool = True,
+) -> float:
+    """Invert a fitted HRR-duration power law into max sustainable duration."""
+    coefficient = _to_float(params.get("coefficient"), np.nan)
+    exponent = _to_float(params.get("exponent"), np.nan)
+    reserve = _to_float(hrr, np.nan)
+    if not all(math.isfinite(value) for value in (coefficient, exponent, reserve)):
+        return np.nan
+    min_window = _to_float(params.get("minWindowSec"), np.nan)
+    max_window = _to_float(params.get("maxWindowSec"), np.nan)
+    if abs(exponent) < 1e-12:
+        duration_sec = max_window if reserve <= coefficient and math.isfinite(max_window) else min_window
+    else:
+        duration_hours = (max(reserve, 1e-9) / coefficient) ** (1.0 / exponent)
+        duration_sec = float(duration_hours * 3600.0)
+    if clip_to_window:
+        if math.isfinite(min_window):
+            duration_sec = max(duration_sec, min_window)
+        if math.isfinite(max_window):
+            duration_sec = min(duration_sec, max_window)
+    return float(duration_sec)
 
 
 def top_hrr_hard_trailrun_ids(
@@ -944,8 +1229,7 @@ def predict_many(
     return pd.Series(rows, dtype=float)
 
 
-def regression_metrics(actual: Sequence[float], predicted: Sequence[float]) -> dict[str, float]:
-    """Compute R2, MAE, MAPE, and bias in seconds."""
+def _regression_metrics_arrays(actual: Sequence[float], predicted: Sequence[float]) -> dict[str, float]:
     y = np.asarray(actual, dtype=float)
     y_hat = np.asarray(predicted, dtype=float)
     valid = np.isfinite(y) & np.isfinite(y_hat) & (y > 0)
@@ -962,6 +1246,11 @@ def regression_metrics(actual: Sequence[float], predicted: Sequence[float]) -> d
         "mapePct": float(np.mean(np.abs((y_hat - y) / y)) * 100.0),
         "biasSec": float(np.mean(y_hat - y)),
     }
+
+
+def regression_metrics(actual: Sequence[float], predicted: Sequence[float]) -> dict[str, float]:
+    """Compute R2, MAE, MAPE, and bias in seconds."""
+    return _regression_metrics_arrays(actual, predicted)
 
 
 def _grid_activity_terms(
@@ -1286,6 +1575,9 @@ def _trimp_fatigue_values(
     trimp_scale: float,
     min_factor: float,
     acute_trimp_col: str,
+    secondary_fatigue_coef: float = 0.0,
+    secondary_acute_trimp_col: Optional[str] = None,
+    secondary_fatigue_model: Optional[str] = None,
 ) -> np.ndarray:
     _ = trimp_scale  # Deprecated compatibility argument; fatigue now uses raw load.
     acute = pd.to_numeric(
@@ -1293,12 +1585,26 @@ def _trimp_fatigue_values(
         errors="coerce",
     ).fillna(0.0)
     load = acute.to_numpy(dtype=float)
-    return _trimp_fatigue_from_load(
+    primary = _trimp_fatigue_from_load(
         load,
         fatigue_coef=fatigue_coef,
         fatigue_model=fatigue_model,
         min_factor=min_factor,
     )
+    if not secondary_acute_trimp_col:
+        return primary
+    secondary = pd.to_numeric(
+        segments_df.get(secondary_acute_trimp_col, pd.Series(0.0, index=segments_df.index)),
+        errors="coerce",
+    ).fillna(0.0)
+    secondary_load = secondary.to_numpy(dtype=float)
+    secondary_fatigue = _trimp_fatigue_from_load(
+        secondary_load,
+        fatigue_coef=secondary_fatigue_coef,
+        fatigue_model=secondary_fatigue_model or fatigue_model,
+        min_factor=min_factor,
+    )
+    return np.clip(primary * secondary_fatigue, float(min_factor), 1.0)
 
 
 def _trimp_fatigue_from_load(
@@ -1328,6 +1634,9 @@ def predict_hrr_trimp_segment_times(
     min_fatigue_factor: float = 0.50,
     hrr_col: str = "meanHrReserve",
     acute_trimp_col: str = "decayedTrimpBefore",
+    secondary_fatigue_coef: float = 0.0,
+    secondary_acute_trimp_col: Optional[str] = None,
+    secondary_fatigue_model: Optional[str] = None,
     load_factor_col: Optional[str] = None,
     use_hrr_effort: bool = True,
 ) -> pd.Series:
@@ -1335,8 +1644,10 @@ def predict_hrr_trimp_segment_times(
 
     HRR is a fixed linear effort multiplier, while the configured fatigue column is used
     directly as the acute load. Typical fatigue columns are decayed in-activity TRIMP,
-    cumulative in-activity TRIMP, or normalized route progress. ``trimp_scale`` is kept
-    only for compatibility with older scripts and is ignored.
+    cumulative in-activity TRIMP, or normalized route progress. A secondary fatigue
+    column can be multiplied in with its own coefficient for short-term plus muscular
+    fatigue variants. ``trimp_scale`` is kept only for compatibility with older scripts
+    and is ignored.
     """
     if segments_df.empty:
         return pd.Series(dtype=float)
@@ -1365,6 +1676,9 @@ def predict_hrr_trimp_segment_times(
         trimp_scale=trimp_scale,
         min_factor=min_fatigue_factor,
         acute_trimp_col=acute_trimp_col,
+        secondary_fatigue_coef=secondary_fatigue_coef,
+        secondary_acute_trimp_col=secondary_acute_trimp_col,
+        secondary_fatigue_model=secondary_fatigue_model,
     )
     if load_factor_col:
         load_factor = pd.to_numeric(
@@ -1411,6 +1725,95 @@ def _cumulative_trimp_fatigue_state(
             min_factor=min_factor,
         )[0]
     )
+
+
+def _hrr_trimp_grid_terms(
+    segments_df: pd.DataFrame,
+    v_anchor_kmh: float,
+    prediction_kwargs: Mapping[str, object],
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    distance = pd.to_numeric(segments_df["distanceKm"], errors="coerce").fillna(0.0).to_numpy(dtype=float)
+    altitude = pd.to_numeric(
+        segments_df.get("meanAltitudeM", pd.Series(0.0, index=segments_df.index)),
+        errors="coerce",
+    ).fillna(0.0)
+    altitude_values = altitude.map(altitude_factor).to_numpy(dtype=float)
+    gap = _gap_factors_for_segments(segments_df).to_numpy(dtype=float)
+    if bool(prediction_kwargs.get("use_hrr_effort", True)):
+        hrr_effort = _hrr_effort_values(
+            segments_df,
+            hrr_reference=float(prediction_kwargs.get("hrr_reference", 0.70)),
+            min_factor=float(prediction_kwargs.get("hrr_min_factor", 0.55)),
+            max_factor=float(prediction_kwargs.get("hrr_max_factor", 1.30)),
+            hrr_col=str(prediction_kwargs.get("hrr_col", "meanHrReserve")),
+        )
+    else:
+        hrr_effort = np.ones(len(segments_df), dtype=float)
+    load_factor_col = prediction_kwargs.get("load_factor_col")
+    if load_factor_col:
+        load_factor = pd.to_numeric(
+            segments_df.get(str(load_factor_col), pd.Series(1.0, index=segments_df.index)),
+            errors="coerce",
+        ).fillna(1.0)
+        load_values = np.clip(load_factor.to_numpy(dtype=float), 0.1, 10.0)
+    else:
+        load_values = np.ones(len(segments_df), dtype=float)
+    denominator = (
+        max(float(v_anchor_kmh), 1e-9)
+        * altitude_values
+        * load_values
+        * hrr_effort
+        / np.clip(gap, 1e-9, None)
+    )
+    base_time_terms = distance * 3600.0 / np.clip(denominator, 1e-9, None)
+    acute_col = str(prediction_kwargs.get("acute_trimp_col", "decayedTrimpBefore"))
+    primary_load = pd.to_numeric(
+        segments_df.get(acute_col, pd.Series(0.0, index=segments_df.index)),
+        errors="coerce",
+    ).fillna(0.0)
+    secondary_col = prediction_kwargs.get("secondary_acute_trimp_col")
+    secondary_load = pd.to_numeric(
+        segments_df.get(str(secondary_col), pd.Series(0.0, index=segments_df.index)),
+        errors="coerce",
+    ).fillna(0.0)
+    return (
+        base_time_terms,
+        primary_load.to_numpy(dtype=float),
+        secondary_load.to_numpy(dtype=float),
+    )
+
+
+def _hrr_trimp_prediction_from_terms(
+    base_time_terms: np.ndarray,
+    primary_load: np.ndarray,
+    secondary_load: np.ndarray,
+    *,
+    alpha: float,
+    fatigue_coef: float,
+    fatigue_model: str,
+    min_fatigue_factor: float,
+    secondary_fatigue_coef: float,
+    secondary_fatigue_model: str,
+    has_secondary_fatigue: bool,
+) -> np.ndarray:
+    primary = _trimp_fatigue_from_load(
+        primary_load,
+        fatigue_coef=fatigue_coef,
+        fatigue_model=fatigue_model,
+        min_factor=min_fatigue_factor,
+    )
+    if has_secondary_fatigue:
+        secondary = _trimp_fatigue_from_load(
+            secondary_load,
+            fatigue_coef=secondary_fatigue_coef,
+            fatigue_model=secondary_fatigue_model or fatigue_model,
+            min_factor=min_fatigue_factor,
+        )
+        fatigue = np.clip(primary * secondary, float(min_fatigue_factor), 1.0)
+    else:
+        fatigue = primary
+    speed_factor = np.clip(float(alpha) * fatigue, 1e-9, None)
+    return base_time_terms / speed_factor
 
 
 def simulate_constant_hrr_route(
@@ -1617,13 +2020,17 @@ def sweep_constant_hrr_route(
     fatigue_coef: float = 0.0,
     fatigue_model: str = "linear",
     hrr_reference: float = 0.70,
+    hrr_min_factor: float = 0.55,
+    hrr_max_factor: float = 1.30,
     trimp_scale: float = 10.0,
     decay_lambda: float = 0.30,
+    min_fatigue_factor: float = 0.50,
     load_factor: float = 1.0,
     envelope_df: Optional[pd.DataFrame] = None,
     hr_rest: Optional[float] = None,
     hr_max: Optional[float] = None,
     fatigue_input_col: str = "cumTrimpBefore",
+    use_hrr_effort: bool = True,
 ) -> pd.DataFrame:
     """Sweep constant-HRR race estimates and mark historically feasible choices."""
     route_distance = float(
@@ -1643,10 +2050,14 @@ def sweep_constant_hrr_route(
             fatigue_coef=fatigue_coef,
             fatigue_model=fatigue_model,
             hrr_reference=hrr_reference,
+            hrr_min_factor=hrr_min_factor,
+            hrr_max_factor=hrr_max_factor,
             trimp_scale=trimp_scale,
             decay_lambda=decay_lambda,
+            min_fatigue_factor=min_fatigue_factor,
             load_factor=load_factor,
             fatigue_input_col=fatigue_input_col,
+            use_hrr_effort=use_hrr_effort,
         )
         total_time = float(pd.to_numeric(prediction.get("predictedTimeSec"), errors="coerce").sum())
         max_duration = max_duration_for_hrr(hrr, envelope_df) if has_envelope else np.nan
@@ -1701,6 +2112,7 @@ def hrr_trimp_grid_search_model(
     v_anchor_kmh: float,
     alpha_grid: Iterable[float],
     fatigue_coef_grid: Iterable[float],
+    secondary_fatigue_coef_grid: Optional[Iterable[float]] = None,
     fatigue_models: Sequence[str] = ("linear", "exponential"),
     activity_col: str = "activityId",
     objective: str = "race",
@@ -1713,84 +2125,109 @@ def hrr_trimp_grid_search_model(
         return {}, empty, empty
 
     actual_segment = pd.to_numeric(segments_df["actualTimeSec"], errors="coerce")
+    actual_segment_values = actual_segment.to_numpy(dtype=float)
+    activity_codes: Optional[np.ndarray] = None
+    race_actual_values = np.array([], dtype=float)
+    if activity_col in segments_df.columns:
+        activity_labels, activity_uniques = pd.factorize(segments_df[activity_col].astype(str), sort=False)
+        activity_codes = activity_labels.astype(int)
+        race_actual_values = np.bincount(
+            activity_codes,
+            weights=np.nan_to_num(actual_segment_values, nan=0.0),
+            minlength=len(activity_uniques),
+        ).astype(float)
+        if observed_activity_times_sec is not None:
+            race_actual_values = np.asarray(
+                [
+                    _to_float(observed_activity_times_sec.get(str(activity_id)), np.nan)
+                    for activity_id in activity_uniques.astype(str)
+                ],
+                dtype=float,
+            )
     rows: list[dict[str, object]] = []
     best: Optional[dict[str, object]] = None
-    best_prediction = pd.Series(dtype=float)
+    best_prediction_values = np.array([], dtype=float)
+    secondary_col = prediction_kwargs.get("secondary_acute_trimp_col")
+    secondary_model = str(prediction_kwargs.get("secondary_fatigue_model") or "")
+    has_secondary_fatigue = bool(secondary_col)
+    min_fatigue_factor = float(prediction_kwargs.get("min_fatigue_factor", 0.50))
+    base_time_terms, primary_load, secondary_load = _hrr_trimp_grid_terms(
+        segments_df,
+        v_anchor_kmh=v_anchor_kmh,
+        prediction_kwargs=prediction_kwargs,
+    )
+    secondary_values = (
+        [float(value) for value in secondary_fatigue_coef_grid]
+        if secondary_col and secondary_fatigue_coef_grid is not None
+        else [0.0]
+    )
     for fatigue_model in fatigue_models:
         for alpha in [float(value) for value in alpha_grid]:
             for fatigue_coef in [float(value) for value in fatigue_coef_grid]:
-                predicted = predict_hrr_trimp_segment_times(
-                    segments_df,
-                    v_anchor_kmh=v_anchor_kmh,
-                    alpha=alpha,
-                    fatigue_coef=fatigue_coef,
-                    fatigue_model=str(fatigue_model),
-                    **prediction_kwargs,
-                )
-                segment_metrics = regression_metrics(actual_segment, predicted)
-                race_metrics = {
-                    "r2": np.nan,
-                    "maeSec": np.nan,
-                    "mapePct": np.nan,
-                    "biasSec": np.nan,
-                }
-                if activity_col in segments_df.columns:
-                    race_frame = pd.DataFrame(
-                        {
-                            activity_col: segments_df[activity_col].astype(str),
-                            "actual": actual_segment,
-                            "predicted": predicted,
-                        }
+                for secondary_fatigue_coef in secondary_values:
+                    predicted_values = _hrr_trimp_prediction_from_terms(
+                        base_time_terms,
+                        primary_load,
+                        secondary_load,
+                        alpha=alpha,
+                        fatigue_coef=fatigue_coef,
+                        fatigue_model=str(fatigue_model),
+                        min_fatigue_factor=min_fatigue_factor,
+                        secondary_fatigue_coef=secondary_fatigue_coef,
+                        secondary_fatigue_model=secondary_model,
+                        has_secondary_fatigue=has_secondary_fatigue,
                     )
-                    race_actual = race_frame.groupby(activity_col)["actual"].sum()
-                    race_predicted = race_frame.groupby(activity_col)["predicted"].sum()
-                    if observed_activity_times_sec is not None:
-                        race_actual = pd.Series(
-                            {
-                                activity_id: _to_float(
-                                    observed_activity_times_sec.get(str(activity_id)),
-                                    np.nan,
-                                )
-                                for activity_id in race_predicted.index.astype(str)
-                            },
-                            dtype=float,
-                        )
-                        race_actual = race_actual.reindex(race_predicted.index.astype(str))
-                    race_metrics = regression_metrics(race_actual, race_predicted)
-                row = {
-                    "alpha": alpha,
-                    "fatigueCoef": fatigue_coef,
-                    "fatigueModel": str(fatigue_model),
-                    "segmentR2": segment_metrics["r2"],
-                    "segmentMaeSec": segment_metrics["maeSec"],
-                    "segmentMapePct": segment_metrics["mapePct"],
-                    "segmentBiasSec": segment_metrics["biasSec"],
-                    "raceR2": race_metrics["r2"],
-                    "raceMaeSec": race_metrics["maeSec"],
-                    "raceMapePct": race_metrics["mapePct"],
-                    "raceBiasSec": race_metrics["biasSec"],
-                }
-                rows.append(row)
-                if best is None:
-                    best = row
-                    best_prediction = predicted
-                    continue
-                if objective == "segment":
-                    best_r2 = -np.inf if pd.isna(best["segmentR2"]) else best["segmentR2"]
-                    row_r2 = -np.inf if pd.isna(row["segmentR2"]) else row["segmentR2"]
-                    best_score = (best_r2, -best["segmentMaeSec"])
-                    row_score = (row_r2, -row["segmentMaeSec"])
-                else:
-                    best_r2 = -np.inf if pd.isna(best["raceR2"]) else best["raceR2"]
-                    row_r2 = -np.inf if pd.isna(row["raceR2"]) else row["raceR2"]
-                    best_score = (best_r2, -best["raceMaeSec"])
-                    row_score = (row_r2, -row["raceMaeSec"])
-                if row_score > best_score:
-                    best = row
-                    best_prediction = predicted
+                    segment_metrics = _regression_metrics_arrays(actual_segment_values, predicted_values)
+                    race_metrics = {
+                        "r2": np.nan,
+                        "maeSec": np.nan,
+                        "mapePct": np.nan,
+                        "biasSec": np.nan,
+                    }
+                    if activity_codes is not None:
+                        race_predicted_values = np.bincount(
+                            activity_codes,
+                            weights=np.nan_to_num(predicted_values, nan=0.0),
+                            minlength=len(race_actual_values),
+                        ).astype(float)
+                        race_metrics = _regression_metrics_arrays(race_actual_values, race_predicted_values)
+                    row = {
+                        "alpha": alpha,
+                        "fatigueCoef": fatigue_coef,
+                        "fatigueModel": str(fatigue_model),
+                        "secondaryFatigueCoef": secondary_fatigue_coef,
+                        "secondaryFatigueModel": secondary_model,
+                        "secondaryAcuteTrimpCol": str(secondary_col or ""),
+                        "segmentR2": segment_metrics["r2"],
+                        "segmentMaeSec": segment_metrics["maeSec"],
+                        "segmentMapePct": segment_metrics["mapePct"],
+                        "segmentBiasSec": segment_metrics["biasSec"],
+                        "raceR2": race_metrics["r2"],
+                        "raceMaeSec": race_metrics["maeSec"],
+                        "raceMapePct": race_metrics["mapePct"],
+                        "raceBiasSec": race_metrics["biasSec"],
+                    }
+                    rows.append(row)
+                    if best is None:
+                        best = row
+                        best_prediction_values = predicted_values
+                        continue
+                    if objective == "segment":
+                        best_r2 = -np.inf if pd.isna(best["segmentR2"]) else best["segmentR2"]
+                        row_r2 = -np.inf if pd.isna(row["segmentR2"]) else row["segmentR2"]
+                        best_score = (best_r2, -best["segmentMaeSec"])
+                        row_score = (row_r2, -row["segmentMaeSec"])
+                    else:
+                        best_r2 = -np.inf if pd.isna(best["raceR2"]) else best["raceR2"]
+                        row_r2 = -np.inf if pd.isna(row["raceR2"]) else row["raceR2"]
+                        best_score = (best_r2, -best["raceMaeSec"])
+                        row_score = (row_r2, -row["raceMaeSec"])
+                    if row_score > best_score:
+                        best = row
+                        best_prediction_values = predicted_values
 
     prediction_df = segments_df.copy()
-    prediction_df["predictedTimeSec"] = best_prediction.to_numpy(dtype=float)
+    prediction_df["predictedTimeSec"] = best_prediction_values.astype(float)
     prediction_df["errorSec"] = prediction_df["predictedTimeSec"] - actual_segment
     assert best is not None
     return best, pd.DataFrame(rows), prediction_df
@@ -1801,6 +2238,7 @@ def leave_one_out_hrr_trimp_grid_search(
     v_anchor_kmh: float,
     alpha_grid: Iterable[float],
     fatigue_coef_grid: Iterable[float],
+    secondary_fatigue_coef_grid: Optional[Iterable[float]] = None,
     fatigue_models: Sequence[str] = ("linear", "exponential"),
     activity_col: str = "activityId",
     observed_activity_times_sec: Optional[Mapping[str, float]] = None,
@@ -1824,6 +2262,7 @@ def leave_one_out_hrr_trimp_grid_search(
             v_anchor_kmh=v_anchor_kmh,
             alpha_grid=alpha_grid,
             fatigue_coef_grid=fatigue_coef_grid,
+            secondary_fatigue_coef_grid=secondary_fatigue_coef_grid,
             fatigue_models=fatigue_models,
             activity_col=activity_col,
             objective=objective,
@@ -1836,6 +2275,7 @@ def leave_one_out_hrr_trimp_grid_search(
             alpha=float(best["alpha"]),
             fatigue_coef=float(best["fatigueCoef"]),
             fatigue_model=str(best["fatigueModel"]),
+            secondary_fatigue_coef=float(best.get("secondaryFatigueCoef", 0.0)),
             **prediction_kwargs,
         )
         actual = _to_float(
@@ -1851,6 +2291,9 @@ def leave_one_out_hrr_trimp_grid_search(
                 "alpha": best["alpha"],
                 "fatigueCoef": best["fatigueCoef"],
                 "fatigueModel": best["fatigueModel"],
+                "secondaryFatigueCoef": best.get("secondaryFatigueCoef", 0.0),
+                "secondaryFatigueModel": best.get("secondaryFatigueModel", ""),
+                "secondaryAcuteTrimpCol": best.get("secondaryAcuteTrimpCol", ""),
                 "actualTimeSec": float(actual),
                 "predictedTimeSec": float(predicted),
                 "errorSec": float(predicted - actual),
