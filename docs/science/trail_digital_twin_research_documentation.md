@@ -117,7 +117,9 @@ $$
 C(i)=155.4i^5-30.4i^4-43.3i^3+46.3i^2+19.5i+3.6
 $$
 
-with grade \(i\) clamped to \([-0.45,0.45]\). The grade adjustment is:
+with grade \(i\) clamped to \([-0.75,0.75]\) in the current benchmark code. Raw GPS
+grade samples with absolute grade above 100 percent are treated as elevation spikes
+and linearly interpolated before this clamp. The grade adjustment is:
 
 $$
 f_{GAP}(i)=\frac{C(i)}{C(0)}
