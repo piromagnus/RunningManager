@@ -80,6 +80,76 @@ def gap_factor(grade: float) -> float:
     return minetti_running_cost(grade) / MINETTI_RUNNING_FLAT_COST
 
 
+DEFAULT_GAP_STEEP_THRESHOLD = 0.15
+DEFAULT_GAP_SOFT_START = 0.04
+DEFAULT_GAP_CLIMB_SCALE = 1.0
+DEFAULT_GAP_DESCENT_SCALE = 1.0
+
+
+def trail_gap_multiplier(
+    grade: float,
+    *,
+    steep_threshold: float = DEFAULT_GAP_STEEP_THRESHOLD,
+    soft_start: float = DEFAULT_GAP_SOFT_START,
+    climb_scale: float = DEFAULT_GAP_CLIMB_SCALE,
+    descent_scale: float = DEFAULT_GAP_DESCENT_SCALE,
+) -> float:
+    """Asymmetric trail correction on top of Minetti running GAP.
+
+    Scales ramp from 1.0 at ``±soft_start`` to the full climb/descent scale at
+    ``±steep_threshold``, then stay constant beyond that. Defaults keep Minetti
+    unchanged (scales = 1.0).
+    """
+    g = _to_float(grade, 0.0)
+    thresh = abs(float(steep_threshold))
+    soft = max(0.0, min(abs(float(soft_start)), thresh - 1e-6))
+    climb = max(0.1, float(climb_scale))
+    descent = max(0.1, float(descent_scale))
+    if g >= soft:
+        if climb == 1.0:
+            return 1.0
+        span = max(thresh - soft, 1e-9)
+        t = min(1.0, max(0.0, (g - soft) / span))
+        return 1.0 + t * (climb - 1.0)
+    if g <= -soft:
+        if descent == 1.0:
+            return 1.0
+        span = max(thresh - soft, 1e-9)
+        t = min(1.0, max(0.0, (-g - soft) / span))
+        return 1.0 + t * (descent - 1.0)
+    return 1.0
+
+
+def apply_trail_gap_multipliers(
+    gap: np.ndarray | pd.Series,
+    grades: np.ndarray | pd.Series,
+    *,
+    steep_threshold: float = DEFAULT_GAP_STEEP_THRESHOLD,
+    soft_start: float = DEFAULT_GAP_SOFT_START,
+    climb_scale: float = DEFAULT_GAP_CLIMB_SCALE,
+    descent_scale: float = DEFAULT_GAP_DESCENT_SCALE,
+) -> np.ndarray:
+    """Element-wise trail GAP scaling for segment arrays."""
+    gap_arr = np.asarray(gap, dtype=float)
+    grade_arr = np.asarray(pd.to_numeric(pd.Series(grades), errors="coerce").fillna(0.0), dtype=float)
+    if gap_arr.shape != grade_arr.shape:
+        raise ValueError("gap and grades must have the same shape")
+    multipliers = np.array(
+        [
+            trail_gap_multiplier(
+                float(g),
+                steep_threshold=steep_threshold,
+                soft_start=soft_start,
+                climb_scale=climb_scale,
+                descent_scale=descent_scale,
+            )
+            for g in grade_arr
+        ],
+        dtype=float,
+    )
+    return np.clip(gap_arr * multipliers, 0.1, None)
+
+
 def altitude_factor(altitude_m: float) -> float:
     """Altitude-VO2max correction from the Sensors trail digital-twin paper."""
     altitude = max(0.0, _to_float(altitude_m, 0.0))
@@ -182,17 +252,37 @@ def _weighted_std(values: pd.Series, weights: pd.Series) -> float:
     return math.sqrt(max(0.0, variance))
 
 
-def _gap_factors_for_segments(segments_df: pd.DataFrame) -> pd.Series:
-    fallback = (
-        pd.to_numeric(segments_df.get("avgGrade", pd.Series(0.0, index=segments_df.index)), errors="coerce")
-        .fillna(0.0)
-        .map(gap_factor)
-    )
+def _gap_factors_for_segments(
+    segments_df: pd.DataFrame,
+    *,
+    steep_threshold: float = DEFAULT_GAP_STEEP_THRESHOLD,
+    soft_start: float = DEFAULT_GAP_SOFT_START,
+    climb_scale: float = DEFAULT_GAP_CLIMB_SCALE,
+    descent_scale: float = DEFAULT_GAP_DESCENT_SCALE,
+) -> pd.Series:
+    grades = pd.to_numeric(
+        segments_df.get("avgGrade", pd.Series(0.0, index=segments_df.index)),
+        errors="coerce",
+    ).fillna(0.0)
+    fallback = grades.map(gap_factor)
     for col in ("gapFactorIntegrated", "gapFactor"):
         if col in segments_df.columns:
             gap_values = pd.to_numeric(segments_df[col], errors="coerce")
-            return gap_values.where(gap_values > 0.0).fillna(fallback).clip(lower=0.1)
-    return fallback.clip(lower=0.1)
+            base = gap_values.where(gap_values > 0.0).fillna(fallback).clip(lower=0.1)
+            break
+    else:
+        base = fallback.clip(lower=0.1)
+    if climb_scale == 1.0 and descent_scale == 1.0:
+        return base
+    scaled = apply_trail_gap_multipliers(
+        base.to_numpy(dtype=float),
+        grades.to_numpy(dtype=float),
+        steep_threshold=steep_threshold,
+        soft_start=soft_start,
+        climb_scale=climb_scale,
+        descent_scale=descent_scale,
+    )
+    return pd.Series(scaled, index=segments_df.index)
 
 
 def gps_technicality_index(latitudes: Sequence[float], longitudes: Sequence[float]) -> float:
@@ -1850,6 +1940,10 @@ def predict_hrr_trimp_segment_times(
     secondary_fatigue_model: Optional[str] = None,
     load_factor_col: Optional[str] = None,
     use_hrr_effort: bool = True,
+    gap_steep_threshold: float = DEFAULT_GAP_STEEP_THRESHOLD,
+    gap_soft_start: float = DEFAULT_GAP_SOFT_START,
+    gap_climb_scale: float = DEFAULT_GAP_CLIMB_SCALE,
+    gap_descent_scale: float = DEFAULT_GAP_DESCENT_SCALE,
 ) -> pd.Series:
     """Predict segment times with a constrained HRR and acute-load speed equation.
 
@@ -1859,6 +1953,9 @@ def predict_hrr_trimp_segment_times(
     column can be multiplied in with its own coefficient for short-term plus muscular
     fatigue variants. ``trimp_scale`` is kept only for compatibility with older scripts
     and is ignored.
+
+    ``gap_climb_scale`` / ``gap_descent_scale`` apply an asymmetric trail correction on
+    Minetti GAP for steep grades (``|avgGrade| >= gap_steep_threshold``).
     """
     if segments_df.empty:
         return pd.Series(dtype=float)
@@ -1868,7 +1965,13 @@ def predict_hrr_trimp_segment_times(
         segments_df.get("meanAltitudeM", pd.Series(0.0, index=segments_df.index)),
         errors="coerce",
     ).fillna(0.0)
-    gap = _gap_factors_for_segments(segments_df).to_numpy(dtype=float)
+    gap = _gap_factors_for_segments(
+        segments_df,
+        steep_threshold=gap_steep_threshold,
+        soft_start=gap_soft_start,
+        climb_scale=gap_climb_scale,
+        descent_scale=gap_descent_scale,
+    ).to_numpy(dtype=float)
     altitude_values = altitude.map(altitude_factor).to_numpy(dtype=float)
     if use_hrr_effort:
         hrr_effort = _hrr_effort_values(
@@ -1949,7 +2052,13 @@ def _hrr_trimp_grid_terms(
         errors="coerce",
     ).fillna(0.0)
     altitude_values = altitude.map(altitude_factor).to_numpy(dtype=float)
-    gap = _gap_factors_for_segments(segments_df).to_numpy(dtype=float)
+    gap = _gap_factors_for_segments(
+        segments_df,
+        steep_threshold=float(prediction_kwargs.get("gap_steep_threshold", DEFAULT_GAP_STEEP_THRESHOLD)),
+        soft_start=float(prediction_kwargs.get("gap_soft_start", DEFAULT_GAP_SOFT_START)),
+        climb_scale=float(prediction_kwargs.get("gap_climb_scale", DEFAULT_GAP_CLIMB_SCALE)),
+        descent_scale=float(prediction_kwargs.get("gap_descent_scale", DEFAULT_GAP_DESCENT_SCALE)),
+    ).to_numpy(dtype=float)
     if bool(prediction_kwargs.get("use_hrr_effort", True)):
         hrr_effort = _hrr_effort_values(
             segments_df,

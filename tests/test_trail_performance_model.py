@@ -22,6 +22,30 @@ def test_minetti_cost_is_clamped_and_gap_flat_is_one() -> None:
     assert model.gap_factor(0.2) > 1.0
 
 
+def test_trail_gap_multiplier_is_asymmetric_on_steep_grades() -> None:
+    assert model.trail_gap_multiplier(0.20, climb_scale=0.85, descent_scale=1.60) == pytest.approx(0.85)
+    assert model.trail_gap_multiplier(-0.20, climb_scale=0.85, descent_scale=1.60) == pytest.approx(1.60)
+    assert model.trail_gap_multiplier(0.0, climb_scale=0.85, descent_scale=1.60) == pytest.approx(1.0)
+    # Soft ramp: midway between soft_start=0.04 and steep=0.15
+    mid = model.trail_gap_multiplier(
+        0.095,
+        steep_threshold=0.15,
+        soft_start=0.04,
+        climb_scale=0.85,
+        descent_scale=1.60,
+    )
+    assert mid == pytest.approx(0.925, abs=1e-3)
+    scaled = model.apply_trail_gap_multipliers(
+        np.array([2.0, 0.6, 1.0]),
+        np.array([0.20, -0.20, 0.0]),
+        climb_scale=0.85,
+        descent_scale=1.60,
+    )
+    assert scaled[0] == pytest.approx(1.7)
+    assert scaled[1] == pytest.approx(0.96)
+    assert scaled[2] == pytest.approx(1.0)
+
+
 def test_altitude_factor_decreases_with_altitude() -> None:
     sea_level = model.altitude_factor(0.0)
     mid_altitude = model.altitude_factor(1_000.0)

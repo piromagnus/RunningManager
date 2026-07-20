@@ -45,6 +45,11 @@ physiology:
   hrr_max_factor: 1.2
   decay_lambda: 0.2
   min_fatigue_factor: 0.50
+  # Trail asymmetric GAP (soft-ramp from soft_start to steep_threshold).
+  gap_steep_threshold: 0.15
+  gap_soft_start: 0.04
+  gap_climb_scale: 0.85
+  gap_descent_scale: 1.60
 
 readiness:
   ctl_weight: 0.05
