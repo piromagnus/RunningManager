@@ -71,7 +71,8 @@ def test_config_merges_defaults_and_normalises_stage3_states() -> None:
     assert config["execution"]["jobs"] == 1
     assert config["fitting"]["enabled_objectives"] == ["activity", "segment"]
     assert config["segment_exclusion"]["enabled"] is False
-    assert config["segment_exclusion"]["min_mean_speed_kmh"] == pytest.approx(1.0)
+    assert config["segment_exclusion"]["min_mean_speed_kmh"] == pytest.approx(3.0)
+    assert config["segment_exclusion"]["max_stationary_time_share"] == pytest.approx(0.40)
     assert pipeline._fit_mask_col(config) is None
     enabled = pipeline._deep_merge(config, {"segment_exclusion": {"enabled": True}})
     assert pipeline._fit_mask_col(enabled) == "isFitEligible"

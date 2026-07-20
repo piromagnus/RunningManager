@@ -1033,6 +1033,24 @@ def test_segment_timeseries_records_stationary_share_for_idle_block() -> None:
     assert segments.iloc[0]["meanSpeedKmh"] < 2.0
 
 
+def test_segment_timeseries_keeps_zero_distance_dwell_time() -> None:
+    # 0.5 km move, then 10 minutes stopped at the same distance, then finish the km.
+    df = pd.DataFrame(
+        {
+            "cumulated_distance": [0.1, 0.3, 0.5, 0.5, 0.5, 0.5, 0.75, 1.0],
+            "cumulated_duration_seconds": [60.0, 120.0, 180.0, 330.0, 480.0, 780.0, 900.0, 1020.0],
+            "grade_ma_10": [0.0] * 8,
+            "hr": [150.0] * 8,
+        }
+    )
+    segments = model.segment_timeseries(df, segment_km=1.0)
+    assert len(segments) == 1
+    assert segments.iloc[0]["distanceKm"] == pytest.approx(1.0)
+    assert segments.iloc[0]["actualTimeSec"] == pytest.approx(1020.0)
+    assert segments.iloc[0]["stationaryTimeSec"] >= 600.0
+    assert segments.iloc[0]["stationaryTimeShare"] > 0.5
+
+
 def test_apply_segment_exclusion_flags_low_speed_and_high_stationary_share() -> None:
     segments = pd.DataFrame(
         {

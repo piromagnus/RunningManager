@@ -161,8 +161,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
     },
     "segment_exclusion": {
         "enabled": False,
-        "min_mean_speed_kmh": 1.0,
-        "max_stationary_time_share": 0.80,
+        "min_mean_speed_kmh": 3.0,
+        "max_stationary_time_share": 0.40,
         "stationary_speed_kmh": 1.0,
         "exclude_from_fit": True,
         "report_full_race_eval": True,

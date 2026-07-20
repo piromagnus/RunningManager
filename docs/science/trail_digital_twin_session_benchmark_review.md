@@ -50,7 +50,7 @@ errors, highlighting the most useful elements for continued modeling.
 
 ## Session-Level LOO Review
 
-Source LOO table: `trail_digital_twin_boundary_best_profile` (Stage 3 HRR speed ratio LOO, activity objective).
+Source LOO table: `trail_digital_twin_segment_exclusion` (Stage 3 HRR speed ratio LOO, activity objective).
 Note: archived session LOO may use an earlier physiology profile than the
 hypothesis winner; use it for residual triage, then re-run with the winner
 config when timeseries are available.
@@ -59,27 +59,27 @@ config when timeseries are available.
 
 | cohort | n | MAE min | median |abs| | MAPE % | bias min | worst |abs| |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| hardRunOrTrailRun | 103 | 11.35 | 4.87 | 8.79 | 1.39 | 123.75 |
-| hardTrailRun | 45 | 20.64 | 16.41 | 13.61 | 8.53 | 103.54 |
-| selectedDateRaces | 18 | 7.88 | 3.76 | 5.45 | -4.73 | 52.86 |
-| top10HardTrailByHRR | 10 | 4.51 | 2.84 | 5.89 | -0.04 | 8.66 |
+| hardRunOrTrailRun | 103 | 10.76 | 5.43 | 9.06 | 2.31 | 96.84 |
+| hardTrailRun | 45 | 16.98 | 9.05 | 10.00 | 0.88 | 103.22 |
+| selectedDateRaces | 18 | 10.94 | 7.42 | 6.18 | 3.53 | 62.16 |
+| top10HardTrailByHRR | 10 | 4.81 | 4.51 | 6.84 | -0.84 | 9.48 |
 
 ### Largest absolute session residuals
 
 | activity | name | cohort | actual min | pred min | error min | error % | α | κ |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| 15018253166 | Revanche aux 7 laux | hardRunOrTrailRun | 516.38 | 392.64 | -123.75 | -23.96 | 1.00 | 0.60 |
-| 15018253166 | Revanche aux 7 laux | hardTrailRun | 516.38 | 412.84 | -103.54 | -20.05 | 1.00 | 0.80 |
-| 15179557231 | La croix et les lacs | hardRunOrTrailRun | 559.05 | 479.66 | -79.39 | -14.20 | 1.00 | 0.60 |
-| 15114097922 | Petite sortie reco de l’EB pour finir le week-en | hardRunOrTrailRun | 563.65 | 499.57 | -64.08 | -11.37 | 1.00 | 0.60 |
-| 17481444994 | Trail du Grésivaudan 2026 : Le Grand V | hardTrailRun | 212.98 | 271.29 | 58.31 | 27.38 | 1.00 | 0.80 |
-| 14953411411 | Moyen duc 2025 | selectedDateRaces | 551.45 | 498.59 | -52.86 | -9.58 | 1.00 | 0.40 |
-| 17481444994 | Trail du Grésivaudan 2026 : Le Grand V | hardRunOrTrailRun | 212.98 | 264.14 | 51.16 | 24.02 | 1.00 | 0.60 |
-| 16043688740 | GTV J1 : Saint-Nizier - Abri de Carette | hardRunOrTrailRun | 470.17 | 421.60 | -48.57 | -10.33 | 1.00 | 0.60 |
-| 15250276952 | Trail locunolois 2025 : mission accomplie | hardTrailRun | 132.98 | 178.95 | 45.96 | 34.56 | 1.00 | 0.80 |
-| 15114097922 | Petite sortie reco de l’EB pour finir le week-en | hardTrailRun | 563.65 | 518.44 | -45.21 | -8.02 | 1.00 | 0.80 |
-| 15563904138 | Echappee Belle 2025 : Parcours des crêtes | hardTrailRun | 704.27 | 749.08 | 44.81 | 6.36 | 1.00 | 0.80 |
-| 15563904138 | Echappee Belle 2025 : Parcours des crêtes | hardRunOrTrailRun | 704.27 | 743.78 | 39.52 | 5.61 | 1.00 | 0.60 |
+| 15018253166 | Revanche aux 7 laux | hardTrailRun | 516.38 | 413.17 | -103.22 | -19.99 | 0.85 | 0.20 |
+| 15018253166 | Revanche aux 7 laux | hardRunOrTrailRun | 516.38 | 419.54 | -96.84 | -18.75 | 0.85 | 0.30 |
+| 15179557231 | La croix et les lacs | hardRunOrTrailRun | 559.05 | 494.21 | -64.84 | -11.60 | 0.85 | 0.30 |
+| 14953411411 | Moyen duc 2025 | selectedDateRaces | 551.45 | 489.29 | -62.16 | -11.27 | 0.90 | 0.30 |
+| 16043688740 | GTV J1 : Saint-Nizier - Abri de Carette | hardRunOrTrailRun | 470.17 | 410.78 | -59.38 | -12.63 | 0.85 | 0.30 |
+| 15114097922 | Petite sortie reco de l’EB pour finir le week-en | hardRunOrTrailRun | 563.65 | 509.41 | -54.24 | -9.62 | 0.85 | 0.30 |
+| 15114097922 | Petite sortie reco de l’EB pour finir le week-en | hardTrailRun | 563.65 | 515.05 | -48.60 | -8.62 | 0.85 | 0.20 |
+| 17481444994 | Trail du Grésivaudan 2026 : Le Grand V | hardTrailRun | 212.98 | 260.79 | 47.80 | 22.44 | 0.85 | 0.20 |
+| 15179557231 | La croix et les lacs | hardTrailRun | 559.05 | 516.59 | -42.46 | -7.60 | 0.85 | 0.20 |
+| 17481444994 | Trail du Grésivaudan 2026 : Le Grand V | hardRunOrTrailRun | 212.98 | 252.98 | 40.00 | 18.78 | 0.85 | 0.30 |
+| 16043688740 | GTV J1 : Saint-Nizier - Abri de Carette | hardTrailRun | 470.17 | 430.63 | -39.54 | -8.41 | 0.85 | 0.20 |
+| 16043688538 | GTV J2 : Abri de Carette - Die 1/2 | hardTrailRun | 307.37 | 346.68 | 39.32 | 12.79 | 0.85 | 0.20 |
 
 ### Hard-trail error strata (hypothesis winner)
 
@@ -109,6 +109,30 @@ config when timeseries are available.
 | Descent | 192 | 1.41 | -1.00 | 16.33 |
 | Flat | 218 | 1.17 | 0.54 | 17.74 |
 
+## Segment Exclusion Experiment (executed)
+
+Source: `data/exp_perf_predictions/trail_digital_twin_segment_exclusion/`
+
+Zero-distance GPS dwell is now kept inside 1 km segments (`stationaryTimeShare`).
+Hyperparameters are fit on cleaned segments; LOO still scores the **full race**.
+
+| run | full-race mean Stage3 MAE min | fit-eligible session MAE min | excluded segs | excluded time |
+| --- | ---: | ---: | ---: | ---: |
+| baseline_no_exclusion | 10.87 | 14.97 | 0 | 0 |
+| exclude speed&lt;3 / share&gt;0.40 | 12.32 | 10.50 | 64 | 1625 min |
+| exclude speed&lt;4 / share&gt;0.30 | 12.15 | 10.22 | 156 | 3076 min |
+
+Findings:
+- Fit-eligible MAE improves under exclusion (~10.2–10.5 min vs ~15 min baseline
+  fit-eligible diagnostic), confirming idle/aid segments were contaminating the fit.
+- Full-race aggregate MAE gets worse (+1.3 to +1.5 min): remaining residual is
+  informative non-model time (stops / device-open), not a signal to ignore.
+- `hardTrailRun` full-race MAE slightly improves (16.98 → 16.53); `selectedDateRaces`
+  and `top10HardTrailByHRR` degrade on full-race scoring when stops are common.
+
+Default exclusion knobs after this sweep: `min_mean_speed_kmh=3.0`,
+`max_stationary_time_share=0.40` (disabled by default in production config).
+
 ## Interpretation Guide
 
 - **Positive error** (pred > actual): model too slow / athlete faster than twin.
@@ -119,15 +143,14 @@ config when timeseries are available.
 
 ## Next Experiments
 
-1. Run `configs/trail_digital_twin_benchmark_segment_exclusion.yaml` when
-   `data/timeseries` is available.
-2. Compare baseline vs exclusion using full-race Stage 3 LOO MAE and per-session
-   `excludedTimeSec` from `segment_qc` / LOO columns.
-3. Re-generate this report after the exclusion sweep with
-   `--session-source trail_digital_twin_segment_exclusion`.
+1. Keep exclusion as a diagnostic fit mode; do not replace full-race evaluation.
+2. Inspect high `excludedTimeSec` sessions in
+   `trail_digital_twin_segment_exclusion/runs/*/activity_loo_predictions.csv`.
+3. Optionally cohort-specific thresholds (hard trails vs road races).
 
 ## Regenerator
 
 ```bash
-uv run python scripts/synthesize_trail_digital_twin_sessions.py
+uv run python scripts/synthesize_trail_digital_twin_sessions.py \
+  --session-source trail_digital_twin_segment_exclusion
 ```

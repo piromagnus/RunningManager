@@ -25,8 +25,8 @@ EARTH_RADIUS_M = 6_371_000.0
 SEGMENT_GRADE_SHARE_THRESHOLD = 0.03
 MIXED_CLIMB_DESCENT_MIN_SHARE = 0.25
 DEFAULT_STATIONARY_SPEED_KMH = 1.0
-DEFAULT_MIN_MEAN_SPEED_KMH = 1.0
-DEFAULT_MAX_STATIONARY_TIME_SHARE = 0.80
+DEFAULT_MIN_MEAN_SPEED_KMH = 3.0
+DEFAULT_MAX_STATIONARY_TIME_SHARE = 0.40
 DEFAULT_FORBIDDEN_ANONYMIZED_COLUMNS = frozenset(
     {
         "activityid",
@@ -368,37 +368,38 @@ def segment_timeseries(
         df[elevation_col] = pd.to_numeric(df[elevation_col], errors="coerce")
         df["elevation_difference"] = df[elevation_col].diff().fillna(0.0)
 
-    df = df[df["delta_km"] > 0].copy()
-    if df.empty:
+    # Keep zero-distance rows so device-open / aid-station dwell time is attributed to
+    # the current distance segment instead of being dropped before aggregation.
+    if df["delta_km"].gt(0).sum() == 0:
         return pd.DataFrame()
 
     total_distance = float(df["cumulated_distance"].max())
-    df["segmentIndex"] = np.floor(
-        ((df["prev_distance"] + df["cumulated_distance"]) / 2.0) / segment_km
-    ).astype(int)
+    df["segmentIndex"] = np.floor(df["prev_distance"] / max(float(segment_km), 1e-9)).astype(int)
 
     rows: list[dict[str, object]] = []
     for seg_idx, seg_df in df.groupby("segmentIndex", sort=True):
-        distance_km = float(seg_df["delta_km"].sum())
+        moving_df = seg_df[seg_df["delta_km"] > 0]
+        distance_km = float(moving_df["delta_km"].sum()) if not moving_df.empty else 0.0
         if distance_km < min_distance_km:
             continue
         time_sec = float(seg_df["delta_time_sec"].sum())
-        elev_diff = pd.to_numeric(seg_df["elevation_difference"], errors="coerce").fillna(0.0)
+        elev_source = moving_df if not moving_df.empty else seg_df
+        elev_diff = pd.to_numeric(elev_source["elevation_difference"], errors="coerce").fillna(0.0)
         gain_m = float(elev_diff.clip(lower=0.0).sum())
         loss_m = float((-elev_diff.clip(upper=0.0)).sum())
         start_km = float(seg_df["prev_distance"].min())
         end_km = float(seg_df["cumulated_distance"].max())
         progress = (start_km + end_km) / max(2.0 * total_distance, 1e-9)
-        grade_col = "grade_ma_10" if "grade_ma_10" in seg_df.columns else None
+        grade_col = "grade_ma_10" if "grade_ma_10" in elev_source.columns else None
         net_grade = (gain_m - loss_m) / (distance_km * 1000.0) if distance_km > 0 else np.nan
-        grade_weights = pd.to_numeric(seg_df["delta_km"], errors="coerce").fillna(0.0)
+        grade_weights = pd.to_numeric(elev_source["delta_km"], errors="coerce").fillna(0.0)
         if grade_col:
-            local_grade = pd.to_numeric(seg_df[grade_col], errors="coerce")
+            local_grade = pd.to_numeric(elev_source[grade_col], errors="coerce")
             local_grade = local_grade.mask(local_grade.abs() > GRADE_OUTLIER_ABS_THRESHOLD)
             local_grade = local_grade.interpolate(method="linear", limit_direction="both")
             avg_grade = _weighted_mean(local_grade, grade_weights)
         else:
-            local_grade = pd.Series(np.nan, index=seg_df.index)
+            local_grade = pd.Series(np.nan, index=elev_source.index)
             avg_grade = np.nan
         fallback_grade = avg_grade if pd.notna(avg_grade) else net_grade
         local_grade = local_grade.fillna(fallback_grade if pd.notna(fallback_grade) else 0.0)
@@ -429,7 +430,7 @@ def segment_timeseries(
         )
 
         mean_altitude = (
-            _weighted_mean(seg_df[elevation_col], seg_df["delta_km"]) if elevation_col else np.nan
+            _weighted_mean(elev_source[elevation_col], elev_source["delta_km"]) if elevation_col else np.nan
         )
         mean_hr = _weighted_mean(seg_df["hr"], seg_df["delta_time_sec"]) if "hr" in seg_df else np.nan
         if pd.isna(mean_hr) and "hr_smooth" in seg_df:
@@ -457,13 +458,13 @@ def segment_timeseries(
         delta_km = pd.to_numeric(seg_df["delta_km"], errors="coerce").fillna(0.0)
         with np.errstate(divide="ignore", invalid="ignore"):
             instant_speed = np.where(delta_time > 0.0, delta_km / delta_time * 3600.0, 0.0)
-        stationary_mask = instant_speed < DEFAULT_STATIONARY_SPEED_KMH
+        stationary_mask = (delta_km <= 0.0) | (instant_speed < DEFAULT_STATIONARY_SPEED_KMH)
         stationary_time_sec = float(delta_time.to_numpy(dtype=float)[stationary_mask].sum())
         stationary_time_share = stationary_time_sec / time_sec if time_sec > 0 else 0.0
 
         technicality = 0.0
-        if "lat" in seg_df.columns and "lon" in seg_df.columns:
-            technicality = gps_technicality_index(seg_df["lat"], seg_df["lon"])
+        if "lat" in elev_source.columns and "lon" in elev_source.columns:
+            technicality = gps_technicality_index(elev_source["lat"], elev_source["lon"])
 
         rows.append(
             {

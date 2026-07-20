@@ -202,8 +202,8 @@ robustness:
 
 segment_exclusion:
   enabled: false
-  min_mean_speed_kmh: 1.0
-  max_stationary_time_share: 0.80
+  min_mean_speed_kmh: 3.0
+  max_stationary_time_share: 0.40
   stationary_speed_kmh: 1.0
   exclude_from_fit: true
   report_full_race_eval: true
