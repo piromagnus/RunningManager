@@ -134,9 +134,10 @@ Key metrics:
 - `write_outputs(result, output_dir)`: Write CSV assets, manifest, and self-contained HTML report
 - `table_hrr_trimp_grid_search`: Exported Stage 1-3 HRR/TRIMP alpha-kappa grid-search cells with physiology bounds and MAE metrics
 - `table_segment_type_metrics`: Stage 3 segment-level MAE, bias, MAPE, R2, and counts by terrain family
-- `segment_exclusion` config: optional altitude–time flat immobile fit mask (`isFitEligible`); keys `min_mean_speed_eq_kmh`, `max_stationary_time_share`, `max_abs_altitude_rate_mph`; full-race LOO evaluation retained
+- `segment_exclusion` config: optional altitude–time flat immobile fit mask (`isFitEligible`); keys include `use_moving_time_for_fit` to strip dwell from Stage 3 fit; full-race LOO retained
 - Default config path: `configs/trail_digital_twin_extensions.yaml`
 - Segment-exclusion A/B: `configs/trail_digital_twin_benchmark_segment_exclusion.yaml`
+- Moving-time fit A/B: `configs/trail_digital_twin_benchmark_moving_time_fit.yaml`
 
 ### Trail Digital Twin Benchmark
 - `load_benchmark_config(path)`: Read and validate grouped benchmark sweep YAML
