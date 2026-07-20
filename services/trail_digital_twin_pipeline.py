@@ -168,6 +168,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "max_stationary_time_share": 0.40,
         "stationary_speed_kmh": 1.0,
         "max_abs_altitude_rate_mph": 120.0,
+        # Strip stationary dwell from the Stage 3 fit target (keep full race eval).
+        "use_moving_time_for_fit": False,
         "exclude_from_fit": True,
         "report_full_race_eval": True,
     },
@@ -388,6 +390,14 @@ def _fit_mask_col(config: Mapping[str, Any]) -> str | None:
     if bool(exclusion.get("enabled", False)) and bool(exclusion.get("exclude_from_fit", True)):
         return "isFitEligible"
     return None
+
+
+def _fit_actual_time_col(config: Mapping[str, Any]) -> str:
+    """Segment clock used for Stage 3 fit metrics (full race eval unchanged)."""
+    exclusion = config.get("segment_exclusion", {}) or {}
+    if bool(exclusion.get("use_moving_time_for_fit", False)):
+        return "actualMovingTimeSec"
+    return "actualTimeSec"
 
 
 def _rename_load_features(df: pd.DataFrame, prefix: str) -> pd.DataFrame:
@@ -1113,6 +1123,7 @@ def _run_paper_stage_models_for_objective(task: tuple[object, ...]) -> dict[str,
     physiology = config["physiology"]
     run_loo = "loo" in set(fitting.get("validation_modes", ["in_sample", "loo"]))
     fit_mask_col = _fit_mask_col(config)
+    fit_actual_time_col = _fit_actual_time_col(config)
     rows: list[dict[str, object]] = []
     params: list[dict[str, object]] = []
     predictions: list[pd.DataFrame] = []
@@ -1193,6 +1204,7 @@ def _run_paper_stage_models_for_objective(task: tuple[object, ...]) -> dict[str,
             objective=_model_objective(objective),
             observed_activity_times_sec=observed,
             fit_mask_col=fit_mask_col,
+            actual_time_col=fit_actual_time_col,
         )
         grid_search_frames.append(
             _hrr_trimp_grid_frame(
@@ -1231,6 +1243,7 @@ def _run_paper_stage_models_for_objective(task: tuple[object, ...]) -> dict[str,
                 observed_activity_times_sec=observed,
                 objective=_model_objective(objective),
                 fit_mask_col=fit_mask_col,
+            actual_time_col=fit_actual_time_col,
             )
             if run_loo
             else pd.DataFrame()
@@ -1278,6 +1291,7 @@ def _run_paper_stage_models_for_objective(task: tuple[object, ...]) -> dict[str,
                 objective=_model_objective(objective),
                 observed_activity_times_sec=observed,
                 fit_mask_col=fit_mask_col,
+            actual_time_col=fit_actual_time_col,
             )
             grid_frame = _hrr_trimp_grid_frame(
                 grid,
@@ -1331,6 +1345,7 @@ def _run_paper_stage_models_for_objective(task: tuple[object, ...]) -> dict[str,
                     observed_activity_times_sec=observed,
                     objective=_model_objective(objective),
                     fit_mask_col=fit_mask_col,
+            actual_time_col=fit_actual_time_col,
                 )
                 if run_loo
                 else pd.DataFrame()
@@ -1654,6 +1669,7 @@ def run_robustness_checks(
     fitting = config["fitting"]
     physiology = config["physiology"]
     fit_mask_col = _fit_mask_col(config)
+    fit_actual_time_col = _fit_actual_time_col(config)
     objective = "activity"
     for decay_lambda in config["robustness"]["decay_lambdas"]:
         decayed_segments = tpm.add_in_activity_trimp_features(all_segments_df, decay_lambda=decay_lambda)
@@ -1678,6 +1694,7 @@ def run_robustness_checks(
                     objective=_model_objective(objective),
                     observed_activity_times_sec=observed,
                     fit_mask_col=fit_mask_col,
+            actual_time_col=fit_actual_time_col,
                 )
                 rows.append(
                     {
@@ -1724,6 +1741,7 @@ def run_robustness_checks(
                 objective=_model_objective(objective),
                 observed_activity_times_sec=observed_elapsed,
                 fit_mask_col=fit_mask_col,
+            actual_time_col=fit_actual_time_col,
             )
             rows.append(
                 {
@@ -1778,9 +1796,13 @@ def _stage3_segment_predictions(
         cohort_segments["cohort"] = cohort_name
         cohort_segments["fitObjective"] = objective
         cohort_segments["stage3PredictedTimeSec"] = predicted
-        cohort_segments["stage3ResidualSec"] = predicted - pd.to_numeric(
-            cohort_segments["actualTimeSec"], errors="coerce"
-        )
+        actual_full = pd.to_numeric(cohort_segments["actualTimeSec"], errors="coerce")
+        cohort_segments["stage3ResidualSec"] = predicted - actual_full
+        if "actualMovingTimeSec" in cohort_segments.columns:
+            actual_moving = pd.to_numeric(cohort_segments["actualMovingTimeSec"], errors="coerce")
+            cohort_segments["stage3ResidualMovingSec"] = predicted - actual_moving
+        else:
+            cohort_segments["stage3ResidualMovingSec"] = cohort_segments["stage3ResidualSec"]
         cohort_segments["stage3FatigueState"] = best.get("fatigueState", "")
         cohort_segments["stage3AcuteTrimpCol"] = best.get("acuteTrimpCol", "")
         cohort_segments["stage3FatigueModel"] = best.get("fatigueModel", "")
@@ -2011,6 +2033,10 @@ def _segment_type_metrics(segments: pd.DataFrame) -> pd.DataFrame:
 
     data["terrainFamily"] = data["terrainFamily"].fillna("unknown").astype(str)
     data["residualSec"] = data["predictedTimeSec"] - data["actualTimeSec"]
+    has_moving = "actualMovingTimeSec" in data.columns
+    if has_moving:
+        data["actualMovingTimeSec"] = pd.to_numeric(data["actualMovingTimeSec"], errors="coerce")
+        data["residualMovingSec"] = data["predictedTimeSec"] - data["actualMovingTimeSec"]
     if "distanceKm" in data.columns:
         data["distanceKm"] = pd.to_numeric(data["distanceKm"], errors="coerce").fillna(0.0)
     else:
@@ -2023,25 +2049,49 @@ def _segment_type_metrics(segments: pd.DataFrame) -> pd.DataFrame:
     ):
         metrics = tpm.regression_metrics(group["actualTimeSec"], group["predictedTimeSec"])
         residual = group["residualSec"].to_numpy(dtype=float)
-        rows.append(
-            {
-                "cohort": cohort,
-                "fitObjective": objective,
-                "terrainFamily": terrain,
-                "terrainLabel": _terrain_label(terrain),
-                "segmentCount": int(len(group)),
-                "activityCount": int(group["activityId"].astype(str).nunique()),
-                "distanceKm": float(group["distanceKm"].sum()),
-                "actualMin": float(group["actualTimeSec"].sum() / 60.0),
-                "predictedMin": float(group["predictedTimeSec"].sum() / 60.0),
-                "r2": metrics["r2"],
-                "maeMin": metrics["maeSec"] / 60.0,
-                "rmseMin": float(np.sqrt(np.mean(residual**2)) / 60.0),
-                "mapePct": metrics["mapePct"],
-                "biasMin": metrics["biasSec"] / 60.0,
-                "residualStdMin": float(np.std(residual, ddof=0) / 60.0),
-            }
-        )
+        row = {
+            "cohort": cohort,
+            "fitObjective": objective,
+            "terrainFamily": terrain,
+            "terrainLabel": _terrain_label(terrain),
+            "segmentCount": int(len(group)),
+            "activityCount": int(group["activityId"].astype(str).nunique()),
+            "distanceKm": float(group["distanceKm"].sum()),
+            "actualMin": float(group["actualTimeSec"].sum() / 60.0),
+            "predictedMin": float(group["predictedTimeSec"].sum() / 60.0),
+            "r2": metrics["r2"],
+            "maeMin": metrics["maeSec"] / 60.0,
+            "rmseMin": float(np.sqrt(np.mean(residual**2)) / 60.0),
+            "mapePct": metrics["mapePct"],
+            "biasMin": metrics["biasSec"] / 60.0,
+            "residualStdMin": float(np.std(residual, ddof=0) / 60.0),
+        }
+        if has_moving:
+            moving_group = group[group["actualMovingTimeSec"].gt(1.0)]
+            if not moving_group.empty:
+                moving_metrics = tpm.regression_metrics(
+                    moving_group["actualMovingTimeSec"],
+                    moving_group["predictedTimeSec"],
+                )
+                moving_residual = moving_group["residualMovingSec"].to_numpy(dtype=float)
+                row.update(
+                    {
+                        "maeMinMoving": moving_metrics["maeSec"] / 60.0,
+                        "mapePctMoving": moving_metrics["mapePct"],
+                        "biasMinMoving": moving_metrics["biasSec"] / 60.0,
+                        "rmseMinMoving": float(np.sqrt(np.mean(moving_residual**2)) / 60.0),
+                    }
+                )
+            else:
+                row.update(
+                    {
+                        "maeMinMoving": np.nan,
+                        "mapePctMoving": np.nan,
+                        "biasMinMoving": np.nan,
+                        "rmseMinMoving": np.nan,
+                    }
+                )
+        rows.append(row)
 
     result = pd.DataFrame(rows)
     result["terrainOrder"] = result["terrainFamily"].map(TERRAIN_FAMILY_ORDER).fillna(99).astype(int)

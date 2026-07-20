@@ -104,7 +104,7 @@ Key metrics:
 
 ### Trail Performance Model
 - `prepare_raw_timeseries_for_segments(...)`: Fast raw GPS/HR/elevation preparation for notebook segment aggregation
-- `segment_timeseries(df)`: Aggregate processed activity streams into 1 km course segments; includes distance-weighted integrated GAP, mixed climb/descent diagnostics, and `stationaryTimeShare`
+- `segment_timeseries(df)`: Aggregate processed activity streams into 1 km course segments; includes distance-weighted integrated GAP, mixed climb/descent diagnostics, `stationaryTimeShare`, and `actualMovingTimeSec`
 - `apply_segment_exclusion(...)`: Flag immobile segments that are flat on the altitude–time profile (`absAltitudeRateMph`) via `isFitEligible` + `exclusionReason`; requires low altitude rate AND (low `meanSpeedEqKmh` OR high `stationaryTimeShare`) so climbing/descending time profiles stay in the fit set
 - `grid_search_model(...)`: Fit paper-style `alpha` and fatigue/pacing-decay parameter
 - `leave_one_out_grid_search(...)`: Race/activity-level LOO validation for notebook experiments

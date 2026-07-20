@@ -1182,3 +1182,48 @@ def test_hrr_trimp_grid_search_optimizes_on_fit_mask_and_scores_full_race() -> N
     assert {"excludedSegmentCount", "excludedTimeSec", "predictedFitEligibleSec"}.issubset(loo.columns)
     assert int(loo["excludedSegmentCount"].sum()) == 2
     assert float(grid["segmentMaeSec"].min()) <= float(grid["segmentMaeSecFull"].min()) + 1e-9
+
+
+def test_hrr_trimp_grid_search_fits_on_moving_time_and_scores_full_clock() -> None:
+    """Stationary dwell is stripped from the fit target; errorSec stays on full clock."""
+    segments = pd.DataFrame(
+        {
+            "activityId": ["a", "a", "b", "b"],
+            "distanceKm": [1.0, 1.0, 1.0, 1.0],
+            "avgGrade": [0.0, 0.0, 0.0, 0.0],
+            "meanAltitudeM": [0.0, 0.0, 0.0, 0.0],
+            "meanHrReserve": [0.70, 0.72, 0.70, 0.74],
+            "decayedTrimpBefore": [0.0, 4.0, 0.0, 5.0],
+            "stationaryTimeSec": [0.0, 600.0, 0.0, 900.0],
+        }
+    )
+    moving = model.predict_hrr_trimp_segment_times(
+        segments,
+        v_anchor_kmh=12.0,
+        alpha=0.80,
+        fatigue_coef=0.30,
+        fatigue_model="linear",
+        trimp_scale=10.0,
+    )
+    segments["actualMovingTimeSec"] = moving
+    segments["actualTimeSec"] = moving + segments["stationaryTimeSec"]
+
+    best, grid, prediction = model.hrr_trimp_grid_search_model(
+        segments,
+        v_anchor_kmh=12.0,
+        alpha_grid=[0.70, 0.80, 0.90],
+        fatigue_coef_grid=[0.0, 0.30],
+        fatigue_models=("linear",),
+        trimp_scale=10.0,
+        actual_time_col="actualMovingTimeSec",
+        observed_activity_times_sec={
+            "a": float(segments.loc[segments["activityId"].eq("a"), "actualTimeSec"].sum()),
+            "b": float(segments.loc[segments["activityId"].eq("b"), "actualTimeSec"].sum()),
+        },
+    )
+    assert best["alpha"] == pytest.approx(0.80)
+    assert best["fatigueCoef"] == pytest.approx(0.30)
+    assert best["actualTimeCol"] == "actualMovingTimeSec"
+    assert best["raceMaeSecFull"] > best["raceMaeSec"]
+    assert "fitErrorSec" in prediction.columns
+    assert prediction["fitErrorSec"].abs().max() < prediction["errorSec"].abs().max()

@@ -208,6 +208,9 @@ segment_exclusion:
   stationary_speed_kmh: 1.0
   # Flat on altitude-over-time (gross |Δelev| m/h), not altitude-over-km grade.
   max_abs_altitude_rate_mph: 120.0
+  # When true, Stage 3 fits on actualMovingTimeSec (stationary stripped);
+  # full-race LOO still scores observed activity moving time.
+  use_moving_time_for_fit: false
   exclude_from_fit: true
   report_full_race_eval: true
 

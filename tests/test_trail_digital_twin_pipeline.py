@@ -74,6 +74,10 @@ def test_config_merges_defaults_and_normalises_stage3_states() -> None:
     assert config["segment_exclusion"]["min_mean_speed_eq_kmh"] == pytest.approx(3.0)
     assert config["segment_exclusion"]["max_stationary_time_share"] == pytest.approx(0.40)
     assert config["segment_exclusion"]["max_abs_altitude_rate_mph"] == pytest.approx(120.0)
+    assert config["segment_exclusion"]["use_moving_time_for_fit"] is False
+    assert pipeline._fit_actual_time_col(config) == "actualTimeSec"
+    moving = pipeline._deep_merge(config, {"segment_exclusion": {"use_moving_time_for_fit": True}})
+    assert pipeline._fit_actual_time_col(moving) == "actualMovingTimeSec"
     assert pipeline._fit_mask_col(config) is None
     enabled = pipeline._deep_merge(config, {"segment_exclusion": {"enabled": True}})
     assert pipeline._fit_mask_col(enabled) == "isFitEligible"

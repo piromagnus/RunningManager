@@ -466,6 +466,8 @@ def segment_timeseries(
         stationary_mask = (delta_km <= 0.0) | (instant_speed < DEFAULT_STATIONARY_SPEED_KMH)
         stationary_time_sec = float(delta_time.to_numpy(dtype=float)[stationary_mask].sum())
         stationary_time_share = stationary_time_sec / time_sec if time_sec > 0 else 0.0
+        # Moving clock for Stage 3 fit: strip device-open / aid-station dwell.
+        actual_moving_time_sec = max(0.0, time_sec - stationary_time_sec)
 
         # Altitude-over-time flatness (full segment clock, including dwell).
         # Distinct from avgGrade / netGrade which are altitude-over-distance.
@@ -516,6 +518,7 @@ def segment_timeseries(
                 "meanSpeedEqKmh": mean_speed_eq,
                 "stationaryTimeShare": stationary_time_share,
                 "stationaryTimeSec": stationary_time_sec,
+                "actualMovingTimeSec": actual_moving_time_sec,
                 "absAltitudeRateMph": abs_altitude_rate_mph,
                 "netAltitudeRateMph": net_altitude_rate_mph,
                 "progress": progress,
@@ -2326,6 +2329,7 @@ def hrr_trimp_grid_search_model(
     objective: str = "race",
     observed_activity_times_sec: Optional[Mapping[str, float]] = None,
     fit_mask_col: Optional[str] = None,
+    actual_time_col: str = "actualTimeSec",
     **prediction_kwargs: object,
 ) -> tuple[dict[str, object], pd.DataFrame, pd.DataFrame]:
     """Grid-search the constrained HRR+TRIMP model with segment and race metrics.
@@ -2333,15 +2337,40 @@ def hrr_trimp_grid_search_model(
     When ``fit_mask_col`` is set, hyperparameters are selected using only fit-eligible
     segments. Predictions are still produced for every segment so full-race evaluation
     remains available after optimization.
+
+    ``actual_time_col`` selects the segment clock used for fit metrics (e.g.
+    ``actualMovingTimeSec`` to strip stationary dwell). Full-race metrics still use
+    ``observed_activity_times_sec`` when provided; per-segment ``errorSec`` remains
+    versus full ``actualTimeSec``.
     """
     if segments_df.empty:
         empty = pd.DataFrame()
         return {}, empty, empty
 
     fit_mask = _resolve_fit_mask(segments_df, fit_mask_col, context="hrr_trimp_grid_search_model")
-    actual_segment = pd.to_numeric(segments_df["actualTimeSec"], errors="coerce")
-    actual_segment_values = actual_segment.to_numpy(dtype=float)
+    if actual_time_col not in segments_df.columns:
+        logger.warning(
+            "hrr_trimp_grid_search_model: actual_time_col=%s missing; "
+            "falling back to actualTimeSec",
+            actual_time_col,
+        )
+        actual_time_col = "actualTimeSec"
+    fit_actual_segment = pd.to_numeric(segments_df[actual_time_col], errors="coerce")
+    full_actual_segment = pd.to_numeric(segments_df["actualTimeSec"], errors="coerce")
+    fit_actual_values = fit_actual_segment.to_numpy(dtype=float)
+    full_actual_values = full_actual_segment.to_numpy(dtype=float)
     fit_mask_values = fit_mask.to_numpy(dtype=bool)
+    # Drop zero-moving segments from the fit set when using moving time.
+    if actual_time_col != "actualTimeSec":
+        positive_moving = np.isfinite(fit_actual_values) & (fit_actual_values > 1.0)
+        if not bool(positive_moving[fit_mask_values].any()):
+            logger.warning(
+                "hrr_trimp_grid_search_model: no positive %s rows under fit mask; "
+                "keeping original mask",
+                actual_time_col,
+            )
+        else:
+            fit_mask_values = fit_mask_values & positive_moving
     activity_codes: Optional[np.ndarray] = None
     race_actual_values = np.array([], dtype=float)
     race_actual_fit_values = np.array([], dtype=float)
@@ -2350,12 +2379,12 @@ def hrr_trimp_grid_search_model(
         activity_codes = activity_labels.astype(int)
         race_actual_values = np.bincount(
             activity_codes,
-            weights=np.nan_to_num(actual_segment_values, nan=0.0),
+            weights=np.nan_to_num(full_actual_values, nan=0.0),
             minlength=len(activity_uniques),
         ).astype(float)
         race_actual_fit_values = np.bincount(
             activity_codes,
-            weights=np.nan_to_num(actual_segment_values * fit_mask_values, nan=0.0),
+            weights=np.nan_to_num(fit_actual_values * fit_mask_values, nan=0.0),
             minlength=len(activity_uniques),
         ).astype(float)
         if observed_activity_times_sec is not None:
@@ -2400,11 +2429,11 @@ def hrr_trimp_grid_search_model(
                         has_secondary_fatigue=has_secondary_fatigue,
                     )
                     segment_metrics = _regression_metrics_arrays(
-                        actual_segment_values[fit_mask_values],
+                        fit_actual_values[fit_mask_values],
                         predicted_values[fit_mask_values],
                     )
                     segment_metrics_full = _regression_metrics_arrays(
-                        actual_segment_values,
+                        full_actual_values,
                         predicted_values,
                     )
                     race_metrics = {
@@ -2430,10 +2459,10 @@ def hrr_trimp_grid_search_model(
                             weights=np.nan_to_num(predicted_values * fit_mask_values, nan=0.0),
                             minlength=len(race_actual_fit_values),
                         ).astype(float)
-                        # When exclusion is active, optimize on cleaned segment totals.
-                        # Otherwise keep legacy full-race / observed-time selection.
+                        # Prefer cleaned / moving-time totals for selection when active.
                         use_fit_only = bool(fit_mask_col) and (not bool(fit_mask_values.all()))
-                        if use_fit_only:
+                        use_moving_fit = actual_time_col != "actualTimeSec"
+                        if use_fit_only or use_moving_fit:
                             race_metrics = _regression_metrics_arrays(
                                 race_actual_fit_values,
                                 race_predicted_fit_values,
@@ -2454,6 +2483,7 @@ def hrr_trimp_grid_search_model(
                         "secondaryFatigueCoef": secondary_fatigue_coef,
                         "secondaryFatigueModel": secondary_model,
                         "secondaryAcuteTrimpCol": str(secondary_col or ""),
+                        "actualTimeCol": actual_time_col,
                         "segmentR2": segment_metrics["r2"],
                         "segmentMaeSec": segment_metrics["maeSec"],
                         "segmentMapePct": segment_metrics["mapePct"],
@@ -2494,7 +2524,9 @@ def hrr_trimp_grid_search_model(
 
     prediction_df = segments_df.copy()
     prediction_df["predictedTimeSec"] = best_prediction_values.astype(float)
-    prediction_df["errorSec"] = prediction_df["predictedTimeSec"] - actual_segment
+    prediction_df["errorSec"] = prediction_df["predictedTimeSec"] - full_actual_segment
+    prediction_df["fitActualTimeSec"] = fit_actual_segment
+    prediction_df["fitErrorSec"] = prediction_df["predictedTimeSec"] - fit_actual_segment
     prediction_df["isFitEligible"] = fit_mask_values
     assert best is not None
     return best, pd.DataFrame(rows), prediction_df
@@ -2511,13 +2543,14 @@ def leave_one_out_hrr_trimp_grid_search(
     observed_activity_times_sec: Optional[Mapping[str, float]] = None,
     objective: str = "race",
     fit_mask_col: Optional[str] = None,
+    actual_time_col: str = "actualTimeSec",
     **prediction_kwargs: object,
 ) -> pd.DataFrame:
     """Leave-one-activity-out validation for the constrained HRR+TRIMP model.
 
-    Hyperparameters are fit on cleaned segments of the training activities. Each fold
-    still scores the held-out activity on the full race (all segments), so residual
-    error on excluded stops remains informative.
+    Hyperparameters are fit on cleaned / moving-time segments of the training
+    activities. Each fold still scores the held-out activity on the full race
+    (all segments vs observed activity time).
     """
     if segments_df.empty or activity_col not in segments_df.columns:
         return pd.DataFrame()
@@ -2527,6 +2560,13 @@ def leave_one_out_hrr_trimp_grid_search(
     working[activity_col] = working[activity_col].astype(str)
     fit_mask = _resolve_fit_mask(working, fit_mask_col, context="leave_one_out_hrr_trimp_grid_search")
     working["_fitMask"] = fit_mask.to_numpy(dtype=bool)
+    if actual_time_col not in working.columns:
+        logger.warning(
+            "leave_one_out_hrr_trimp_grid_search: actual_time_col=%s missing; "
+            "falling back to actualTimeSec",
+            actual_time_col,
+        )
+        actual_time_col = "actualTimeSec"
     for held_out in working[activity_col].dropna().unique().tolist():
         train = working[working[activity_col].ne(held_out)]
         test = working[working[activity_col].eq(held_out)]
@@ -2543,6 +2583,7 @@ def leave_one_out_hrr_trimp_grid_search(
             objective=objective,
             observed_activity_times_sec=observed_activity_times_sec,
             fit_mask_col="_fitMask",
+            actual_time_col=actual_time_col,
             **prediction_kwargs,
         )
         predicted_segments = predict_hrr_trimp_segment_times(
@@ -2562,7 +2603,10 @@ def leave_one_out_hrr_trimp_grid_search(
             actual = pd.to_numeric(test["actualTimeSec"], errors="coerce").sum()
         predicted = float(predicted_segments.sum())
         test_mask = test["_fitMask"].to_numpy(dtype=bool)
-        actual_fit = float(pd.to_numeric(test["actualTimeSec"], errors="coerce").to_numpy()[test_mask].sum())
+        fit_actual_arr = pd.to_numeric(test[actual_time_col], errors="coerce").to_numpy(dtype=float)
+        if actual_time_col != "actualTimeSec":
+            test_mask = test_mask & np.isfinite(fit_actual_arr) & (fit_actual_arr > 1.0)
+        actual_fit = float(fit_actual_arr[test_mask].sum())
         predicted_fit = float(np.asarray(predicted_segments, dtype=float)[test_mask].sum())
         folds.append(
             {
@@ -2587,9 +2631,11 @@ def leave_one_out_hrr_trimp_grid_search(
                 "excludedTimeSec": float(
                     pd.to_numeric(test["actualTimeSec"], errors="coerce").to_numpy()[~test_mask].sum()
                 ),
+                "actualTimeCol": actual_time_col,
             }
         )
     return pd.DataFrame(folds)
+
 
 
 def grouped_segment_metrics(
