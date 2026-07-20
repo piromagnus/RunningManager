@@ -167,7 +167,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "min_mean_speed_eq_kmh": 3.0,
         "max_stationary_time_share": 0.40,
         "stationary_speed_kmh": 1.0,
-        "max_abs_grade": 0.05,
+        "max_abs_altitude_rate_mph": 120.0,
         "exclude_from_fit": True,
         "report_full_race_eval": True,
     },
@@ -368,12 +368,18 @@ def _segment_exclusion_kwargs(config: Mapping[str, Any]) -> dict[str, object]:
             "map it to min_mean_speed_eq_kmh"
         )
         min_speed_eq = exclusion.get("min_mean_speed_kmh")
+    if "max_abs_grade" in exclusion and "max_abs_altitude_rate_mph" not in exclusion:
+        logger.warning(
+            "segment_exclusion.max_abs_grade is deprecated; "
+            "use max_abs_altitude_rate_mph (altitude over time). "
+            "Falling back to default max_abs_altitude_rate_mph=120"
+        )
     return {
         "enabled": bool(exclusion.get("enabled", False)),
         "min_mean_speed_eq_kmh": float(min_speed_eq if min_speed_eq is not None else 3.0),
         "max_stationary_time_share": float(exclusion.get("max_stationary_time_share", 0.40)),
         "stationary_speed_kmh": float(exclusion.get("stationary_speed_kmh", 1.0)),
-        "max_abs_grade": float(exclusion.get("max_abs_grade", 0.05)),
+        "max_abs_altitude_rate_mph": float(exclusion.get("max_abs_altitude_rate_mph", 120.0)),
     }
 
 

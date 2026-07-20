@@ -27,8 +27,10 @@ MIXED_CLIMB_DESCENT_MIN_SHARE = 0.25
 DEFAULT_STATIONARY_SPEED_KMH = 1.0
 DEFAULT_MIN_MEAN_SPEED_EQ_KMH = 3.0
 DEFAULT_MAX_STATIONARY_TIME_SHARE = 0.40
-# Almost-flat gate: only exclude immobile segments on near-flat terrain
-# (avoids steep climbs/descents where raw or eq speed can be legitimately low).
+# Near-flat on the altitude–time profile: gross |Δelev| per clock hour.
+# (Not distance-grade: slow climbs stay non-flat even when |avgGrade| is modest.)
+DEFAULT_MAX_ABS_ALTITUDE_RATE_MPH = 120.0
+# Deprecated distance-grade gate (kept only for backward-compatible kwargs).
 DEFAULT_MAX_ABS_GRADE_FOR_EXCLUSION = 0.05
 DEFAULT_FORBIDDEN_ANONYMIZED_COLUMNS = frozenset(
     {
@@ -465,6 +467,18 @@ def segment_timeseries(
         stationary_time_sec = float(delta_time.to_numpy(dtype=float)[stationary_mask].sum())
         stationary_time_share = stationary_time_sec / time_sec if time_sec > 0 else 0.0
 
+        # Altitude-over-time flatness (full segment clock, including dwell).
+        # Distinct from avgGrade / netGrade which are altitude-over-distance.
+        full_elev_diff = pd.to_numeric(seg_df["elevation_difference"], errors="coerce").fillna(0.0)
+        full_gain_m = float(full_elev_diff.clip(lower=0.0).sum())
+        full_loss_m = float((-full_elev_diff.clip(upper=0.0)).sum())
+        abs_altitude_rate_mph = (
+            (full_gain_m + full_loss_m) / time_sec * 3600.0 if time_sec > 0 else np.nan
+        )
+        net_altitude_rate_mph = (
+            (full_gain_m - full_loss_m) / time_sec * 3600.0 if time_sec > 0 else np.nan
+        )
+
         technicality = 0.0
         if "lat" in elev_source.columns and "lon" in elev_source.columns:
             technicality = gps_technicality_index(elev_source["lat"], elev_source["lon"])
@@ -502,6 +516,8 @@ def segment_timeseries(
                 "meanSpeedEqKmh": mean_speed_eq,
                 "stationaryTimeShare": stationary_time_share,
                 "stationaryTimeSec": stationary_time_sec,
+                "absAltitudeRateMph": abs_altitude_rate_mph,
+                "netAltitudeRateMph": net_altitude_rate_mph,
                 "progress": progress,
             }
         )
@@ -516,19 +532,21 @@ def apply_segment_exclusion(
     min_mean_speed_eq_kmh: float = DEFAULT_MIN_MEAN_SPEED_EQ_KMH,
     max_stationary_time_share: float = DEFAULT_MAX_STATIONARY_TIME_SHARE,
     stationary_speed_kmh: float = DEFAULT_STATIONARY_SPEED_KMH,
-    max_abs_grade: float = DEFAULT_MAX_ABS_GRADE_FOR_EXCLUSION,
+    max_abs_altitude_rate_mph: float = DEFAULT_MAX_ABS_ALTITUDE_RATE_MPH,
+    max_abs_grade: Optional[float] = None,
     min_mean_speed_kmh: Optional[float] = None,
 ) -> pd.DataFrame:
-    """Flag immobile near-flat segments that should be excluded from fitting.
+    """Flag immobile segments that are flat on the altitude–time profile.
 
     A segment is excluded only when **all** of the following hold:
-    - terrain is flat / almost flat (``|avgGrade| <= max_abs_grade``)
+    - altitude-over-time is flat / almost flat
+      (``absAltitudeRateMph <= max_abs_altitude_rate_mph``, gross |Δelev|/hour)
     - AND there is immobility evidence: low grade-adjusted ``meanSpeedEqKmh``
       and/or high ``stationaryTimeShare`` (device-open / aid-station dwell)
 
-    Steep climbs and descents are never excluded by the speed gate alone, because
-    slow raw (or even eq) speed there can be legitimate. Excluded segments remain
-    in the frame for full-race evaluation.
+    Distance-based grade (``avgGrade``) is intentionally not used: a slow climb can
+    look mild per km while rising clearly on the altitude–time chart. Excluded
+    segments remain in the frame for full-race evaluation.
     """
     if segments_df.empty:
         return segments_df.copy()
@@ -540,6 +558,15 @@ def apply_segment_exclusion(
             "using it as min_mean_speed_eq_kmh (grade-adjusted)"
         )
         min_mean_speed_eq_kmh = float(min_mean_speed_kmh)
+
+    if max_abs_grade is not None:
+        logger.warning(
+            "apply_segment_exclusion: max_abs_grade is deprecated; "
+            "flatness uses absAltitudeRateMph (altitude over time), not avgGrade. "
+            "Ignoring max_abs_grade=%s; using max_abs_altitude_rate_mph=%s",
+            max_abs_grade,
+            max_abs_altitude_rate_mph,
+        )
 
     out = segments_df.copy()
     speed_eq = pd.to_numeric(out.get("meanSpeedEqKmh"), errors="coerce")
@@ -581,14 +608,32 @@ def apply_segment_exclusion(
         stationary_share = pd.Series(0.0, index=out.index)
         out["stationaryTimeShare"] = stationary_share
 
-    if "avgGrade" in out.columns:
-        avg_grade = pd.to_numeric(out["avgGrade"], errors="coerce").fillna(0.0)
+    if "absAltitudeRateMph" in out.columns:
+        altitude_rate = pd.to_numeric(out["absAltitudeRateMph"], errors="coerce")
+    elif {"elevGainM", "elevLossM", "actualTimeSec"}.issubset(out.columns):
+        logger.warning(
+            "apply_segment_exclusion: absAltitudeRateMph missing; "
+            "falling back to (elevGainM+elevLossM)/actualTimeSec"
+        )
+        gain = pd.to_numeric(out["elevGainM"], errors="coerce").fillna(0.0)
+        loss = pd.to_numeric(out["elevLossM"], errors="coerce").fillna(0.0)
+        time_sec = pd.to_numeric(out["actualTimeSec"], errors="coerce")
+        altitude_rate = pd.Series(
+            np.where(
+                (time_sec > 0) & np.isfinite(time_sec),
+                (gain + loss) / time_sec * 3600.0,
+                np.nan,
+            ),
+            index=out.index,
+        )
+        out["absAltitudeRateMph"] = altitude_rate
     else:
         logger.warning(
-            "apply_segment_exclusion: avgGrade missing; falling back to treating all "
-            "segments as flat for the near-flat gate"
+            "apply_segment_exclusion: altitude-rate columns missing; "
+            "falling back to treating all segments as flat on altitude–time"
         )
-        avg_grade = pd.Series(0.0, index=out.index)
+        altitude_rate = pd.Series(0.0, index=out.index)
+        out["absAltitudeRateMph"] = altitude_rate
 
     reasons: list[str] = []
     eligible: list[bool] = []
@@ -596,14 +641,16 @@ def apply_segment_exclusion(
         reason_parts: list[str] = []
         speed_val = speed_eq.loc[idx]
         share_val = stationary_share.loc[idx]
-        grade_val = float(avg_grade.loc[idx])
+        rate_val = altitude_rate.loc[idx]
         if enabled:
-            near_flat = abs(grade_val) <= float(max_abs_grade)
+            near_flat_time = pd.notna(rate_val) and float(rate_val) <= float(
+                max_abs_altitude_rate_mph
+            )
             low_speed = pd.notna(speed_val) and float(speed_val) < float(min_mean_speed_eq_kmh)
             high_share = pd.notna(share_val) and float(share_val) > float(max_stationary_time_share)
-            # Immobile on flat/almost-flat only.
-            if near_flat and (low_speed or high_share):
-                reason_parts.append("near_flat")
+            # Immobile only when altitude-over-time profile is flat / almost flat.
+            if near_flat_time and (low_speed or high_share):
+                reason_parts.append("near_flat_altitude_time")
                 if low_speed:
                     reason_parts.append("low_mean_speed_eq")
                 if high_share:
@@ -618,7 +665,7 @@ def apply_segment_exclusion(
         "min_mean_speed_eq_kmh": float(min_mean_speed_eq_kmh),
         "max_stationary_time_share": float(max_stationary_time_share),
         "stationary_speed_kmh": float(stationary_speed_kmh),
-        "max_abs_grade": float(max_abs_grade),
+        "max_abs_altitude_rate_mph": float(max_abs_altitude_rate_mph),
         "excluded_count": int((~pd.Series(out["isFitEligible"])).sum()) if enabled else 0,
     }
     return out

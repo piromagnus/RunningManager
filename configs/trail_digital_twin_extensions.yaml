@@ -202,12 +202,12 @@ robustness:
 
 segment_exclusion:
   enabled: false
-  # Grade-adjusted speed (Minetti/GAP); used only on near-flat terrain.
+  # Grade-adjusted speed (Minetti/GAP); used only with altitude–time flatness.
   min_mean_speed_eq_kmh: 3.0
   max_stationary_time_share: 0.40
   stationary_speed_kmh: 1.0
-  # Only exclude immobile segments on flat / almost-flat terrain (|avgGrade| <= this).
-  max_abs_grade: 0.05
+  # Flat on altitude-over-time (gross |Δelev| m/h), not altitude-over-km grade.
+  max_abs_altitude_rate_mph: 120.0
   exclude_from_fit: true
   report_full_race_eval: true
 

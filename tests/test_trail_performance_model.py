@@ -1059,8 +1059,8 @@ def test_apply_segment_exclusion_flags_low_speed_eq_and_high_stationary_share() 
             "meanSpeedKmh": [10.0, 1.5, 6.0, 2.0],
             "meanSpeedEqKmh": [10.0, 1.2, 6.0, 7.5],
             "stationaryTimeShare": [0.05, 0.20, 0.95, 0.10],
-            # Near-flat: immobile segments are eligible for exclusion.
-            "avgGrade": [0.01, 0.02, -0.01, 0.0],
+            # Flat on altitude-over-time (m of |Δelev| per clock hour).
+            "absAltitudeRateMph": [40.0, 30.0, 10.0, 20.0],
         }
     )
     annotated = model.apply_segment_exclusion(
@@ -1068,17 +1068,17 @@ def test_apply_segment_exclusion_flags_low_speed_eq_and_high_stationary_share() 
         enabled=True,
         min_mean_speed_eq_kmh=3.0,
         max_stationary_time_share=0.80,
-        max_abs_grade=0.05,
+        max_abs_altitude_rate_mph=120.0,
     )
     assert annotated["isFitEligible"].tolist() == [True, False, False, True]
-    assert "near_flat" in annotated.loc[1, "exclusionReason"]
+    assert "near_flat_altitude_time" in annotated.loc[1, "exclusionReason"]
     assert "low_mean_speed_eq" in annotated.loc[1, "exclusionReason"]
     assert "high_stationary_share" in annotated.loc[2, "exclusionReason"]
     assert annotated.loc[3, "exclusionReason"] == ""
 
 
-def test_apply_segment_exclusion_keeps_steep_climb_even_with_low_speed_eq() -> None:
-    """Steep climbs must stay in the fit set even when speedEq is low."""
+def test_apply_segment_exclusion_keeps_climbing_altitude_time_profile() -> None:
+    """Slow climbs must stay in the fit set when altitude rises over time."""
     segments = pd.DataFrame(
         {
             "distanceKm": [1.0, 1.0],
@@ -1086,7 +1086,9 @@ def test_apply_segment_exclusion_keeps_steep_climb_even_with_low_speed_eq() -> N
             "meanSpeedKmh": [2.0, 1.5],
             "meanSpeedEqKmh": [8.0, 1.2],
             "stationaryTimeShare": [0.05, 0.50],
-            "avgGrade": [0.25, 0.20],
+            # ~400–600 m/h vertical activity → rising altitude–time profile.
+            "absAltitudeRateMph": [400.0, 600.0],
+            "avgGrade": [0.02, 0.02],  # mild distance-grade must not matter
         }
     )
     annotated = model.apply_segment_exclusion(
@@ -1094,10 +1096,31 @@ def test_apply_segment_exclusion_keeps_steep_climb_even_with_low_speed_eq() -> N
         enabled=True,
         min_mean_speed_eq_kmh=3.0,
         max_stationary_time_share=0.40,
-        max_abs_grade=0.05,
+        max_abs_altitude_rate_mph=120.0,
     )
     assert annotated["isFitEligible"].tolist() == [True, True]
     assert (annotated["exclusionReason"] == "").all()
+
+
+def test_segment_timeseries_reports_altitude_rate_over_time() -> None:
+    """absAltitudeRateMph is gross |Δelev| / clock hour, not distance grade."""
+    # 1 km in 600 s with +50 m elev → 50 / 600 * 3600 = 300 m/h
+    n = 11
+    df = pd.DataFrame(
+        {
+            "cumulated_distance": np.linspace(0.0, 1.0, n),
+            "cumulated_duration_seconds": np.linspace(0.0, 600.0, n),
+            "elevationM_ma_5": np.linspace(0.0, 50.0, n),
+            "grade_ma_10": np.full(n, 0.05),
+            "speed_km_h": np.full(n, 6.0),
+            "lat": np.linspace(45.0, 45.01, n),
+            "lon": np.linspace(5.0, 5.01, n),
+        }
+    )
+    segments = model.segment_timeseries(df, segment_km=1.0)
+    assert not segments.empty
+    assert segments.iloc[0]["absAltitudeRateMph"] == pytest.approx(300.0, rel=0.05)
+    assert "netAltitudeRateMph" in segments.columns
 
 
 def test_hrr_trimp_grid_search_optimizes_on_fit_mask_and_scores_full_race() -> None:

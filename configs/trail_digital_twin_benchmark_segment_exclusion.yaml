@@ -76,28 +76,28 @@ groups:
 - id: segment_exclusion_ab
   mode: variants
   description: >
-    A/B: hypothesis winner physiology with and without near-flat immobile exclusion.
-    Exclude only when |avgGrade| <= max_abs_grade AND (low speedEq OR high stationary share).
-    Fit on cleaned segments; evaluate full race LOO.
+    A/B: hypothesis winner physiology with and without altitude–time flat immobile exclusion.
+    Exclude only when absAltitudeRateMph (altitude over time) is low AND (low speedEq OR high
+    stationary share). Fit on cleaned segments; evaluate full race LOO.
   runs:
   - name: baseline_no_exclusion
     overrides:
       segment_exclusion.enabled: false
-  - name: exclude_near_flat_speed_eq_3kmh_share_040
+  - name: exclude_alt_time_flat_speed_eq_3kmh_share_040
     overrides:
       segment_exclusion.enabled: true
       segment_exclusion.min_mean_speed_eq_kmh: 3.0
       segment_exclusion.max_stationary_time_share: 0.40
       segment_exclusion.stationary_speed_kmh: 1.0
-      segment_exclusion.max_abs_grade: 0.05
+      segment_exclusion.max_abs_altitude_rate_mph: 120.0
       segment_exclusion.exclude_from_fit: true
       segment_exclusion.report_full_race_eval: true
-  - name: exclude_near_flat_speed_eq_4kmh_share_030
+  - name: exclude_alt_time_flat_speed_eq_4kmh_share_030
     overrides:
       segment_exclusion.enabled: true
       segment_exclusion.min_mean_speed_eq_kmh: 4.0
       segment_exclusion.max_stationary_time_share: 0.30
       segment_exclusion.stationary_speed_kmh: 1.0
-      segment_exclusion.max_abs_grade: 0.05
+      segment_exclusion.max_abs_altitude_rate_mph: 120.0
       segment_exclusion.exclude_from_fit: true
       segment_exclusion.report_full_race_eval: true
