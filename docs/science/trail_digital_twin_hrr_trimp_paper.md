@@ -6,6 +6,8 @@
 
 **Fallback venue fit:** Frontiers in Sports and Active Living.
 
+**Newer focused draft (2026-07):** `trail_digital_twin_hr_performance_paper_draft.md` + `bibliography_hr_digital_twin.md` — one modeling family, LOO/prospective errors, missing elements, venues **excluding Sensors**.
+
 
 
 ## Point of vigilance
