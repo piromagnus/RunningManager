@@ -105,7 +105,7 @@ Key metrics:
 ### Trail Performance Model
 - `prepare_raw_timeseries_for_segments(...)`: Fast raw GPS/HR/elevation preparation for notebook segment aggregation
 - `segment_timeseries(df)`: Aggregate processed activity streams into 1 km course segments; includes distance-weighted integrated GAP, mixed climb/descent diagnostics, and `stationaryTimeShare`
-- `apply_segment_exclusion(...)`: Flag stationary / near-stop segments via `isFitEligible` + `exclusionReason`; low-speed gate uses `meanSpeedEqKmh` (not raw speed) so steep climbs are kept
+- `apply_segment_exclusion(...)`: Flag near-flat immobile segments via `isFitEligible` + `exclusionReason`; requires `|avgGrade| <= max_abs_grade` AND (low `meanSpeedEqKmh` OR high `stationaryTimeShare`) so steep climbs/descents stay in the fit set
 - `grid_search_model(...)`: Fit paper-style `alpha` and fatigue/pacing-decay parameter
 - `leave_one_out_grid_search(...)`: Race/activity-level LOO validation for notebook experiments
 - `top_hrr_hard_trailrun_ids(...)`: Build top hard TrailRun subset by average HR reserve
@@ -134,7 +134,7 @@ Key metrics:
 - `write_outputs(result, output_dir)`: Write CSV assets, manifest, and self-contained HTML report
 - `table_hrr_trimp_grid_search`: Exported Stage 1-3 HRR/TRIMP alpha-kappa grid-search cells with physiology bounds and MAE metrics
 - `table_segment_type_metrics`: Stage 3 segment-level MAE, bias, MAPE, R2, and counts by terrain family
-- `segment_exclusion` config: optional stationary-segment fit mask (`isFitEligible`); full-race LOO evaluation retained
+- `segment_exclusion` config: optional near-flat immobile fit mask (`isFitEligible`); keys `min_mean_speed_eq_kmh`, `max_stationary_time_share`, `max_abs_grade`; full-race LOO evaluation retained
 - Default config path: `configs/trail_digital_twin_extensions.yaml`
 - Segment-exclusion A/B: `configs/trail_digital_twin_benchmark_segment_exclusion.yaml`
 

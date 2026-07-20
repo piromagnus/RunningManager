@@ -1056,10 +1056,11 @@ def test_apply_segment_exclusion_flags_low_speed_eq_and_high_stationary_share() 
         {
             "distanceKm": [1.0, 1.0, 1.0, 1.0],
             "actualTimeSec": [360.0, 1800.0, 600.0, 1200.0],
-            # Raw speed is slow on the steep climb, but speedEq stays healthy.
             "meanSpeedKmh": [10.0, 1.5, 6.0, 2.0],
             "meanSpeedEqKmh": [10.0, 1.2, 6.0, 7.5],
             "stationaryTimeShare": [0.05, 0.20, 0.95, 0.10],
+            # Near-flat: immobile segments are eligible for exclusion.
+            "avgGrade": [0.01, 0.02, -0.01, 0.0],
         }
     )
     annotated = model.apply_segment_exclusion(
@@ -1067,22 +1068,25 @@ def test_apply_segment_exclusion_flags_low_speed_eq_and_high_stationary_share() 
         enabled=True,
         min_mean_speed_eq_kmh=3.0,
         max_stationary_time_share=0.80,
+        max_abs_grade=0.05,
     )
     assert annotated["isFitEligible"].tolist() == [True, False, False, True]
+    assert "near_flat" in annotated.loc[1, "exclusionReason"]
     assert "low_mean_speed_eq" in annotated.loc[1, "exclusionReason"]
     assert "high_stationary_share" in annotated.loc[2, "exclusionReason"]
     assert annotated.loc[3, "exclusionReason"] == ""
 
 
-def test_apply_segment_exclusion_keeps_steep_climb_with_healthy_speed_eq() -> None:
+def test_apply_segment_exclusion_keeps_steep_climb_even_with_low_speed_eq() -> None:
+    """Steep climbs must stay in the fit set even when speedEq is low."""
     segments = pd.DataFrame(
         {
-            "distanceKm": [1.0],
-            "actualTimeSec": [1800.0],
-            "meanSpeedKmh": [2.0],
-            "meanSpeedEqKmh": [8.0],
-            "stationaryTimeShare": [0.05],
-            "avgGrade": [0.25],
+            "distanceKm": [1.0, 1.0],
+            "actualTimeSec": [1800.0, 1800.0],
+            "meanSpeedKmh": [2.0, 1.5],
+            "meanSpeedEqKmh": [8.0, 1.2],
+            "stationaryTimeShare": [0.05, 0.50],
+            "avgGrade": [0.25, 0.20],
         }
     )
     annotated = model.apply_segment_exclusion(
@@ -1090,8 +1094,10 @@ def test_apply_segment_exclusion_keeps_steep_climb_with_healthy_speed_eq() -> No
         enabled=True,
         min_mean_speed_eq_kmh=3.0,
         max_stationary_time_share=0.40,
+        max_abs_grade=0.05,
     )
-    assert bool(annotated.iloc[0]["isFitEligible"]) is True
+    assert annotated["isFitEligible"].tolist() == [True, True]
+    assert (annotated["exclusionReason"] == "").all()
 
 
 def test_hrr_trimp_grid_search_optimizes_on_fit_mask_and_scores_full_race() -> None:

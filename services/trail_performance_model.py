@@ -27,6 +27,9 @@ MIXED_CLIMB_DESCENT_MIN_SHARE = 0.25
 DEFAULT_STATIONARY_SPEED_KMH = 1.0
 DEFAULT_MIN_MEAN_SPEED_EQ_KMH = 3.0
 DEFAULT_MAX_STATIONARY_TIME_SHARE = 0.40
+# Almost-flat gate: only exclude immobile segments on near-flat terrain
+# (avoids steep climbs/descents where raw or eq speed can be legitimately low).
+DEFAULT_MAX_ABS_GRADE_FOR_EXCLUSION = 0.05
 DEFAULT_FORBIDDEN_ANONYMIZED_COLUMNS = frozenset(
     {
         "activityid",
@@ -513,13 +516,19 @@ def apply_segment_exclusion(
     min_mean_speed_eq_kmh: float = DEFAULT_MIN_MEAN_SPEED_EQ_KMH,
     max_stationary_time_share: float = DEFAULT_MAX_STATIONARY_TIME_SHARE,
     stationary_speed_kmh: float = DEFAULT_STATIONARY_SPEED_KMH,
+    max_abs_grade: float = DEFAULT_MAX_ABS_GRADE_FOR_EXCLUSION,
     min_mean_speed_kmh: Optional[float] = None,
 ) -> pd.DataFrame:
-    """Flag stationary / near-stop segments that should be excluded from fitting.
+    """Flag immobile near-flat segments that should be excluded from fitting.
 
-    Low-speed checks use grade-adjusted ``meanSpeedEqKmh`` so legitimate steep climbs
-    are not treated as idle. Excluded segments remain in the frame for full-race
-    evaluation (aid-station stops or device-open dwell).
+    A segment is excluded only when **all** of the following hold:
+    - terrain is flat / almost flat (``|avgGrade| <= max_abs_grade``)
+    - AND there is immobility evidence: low grade-adjusted ``meanSpeedEqKmh``
+      and/or high ``stationaryTimeShare`` (device-open / aid-station dwell)
+
+    Steep climbs and descents are never excluded by the speed gate alone, because
+    slow raw (or even eq) speed there can be legitimate. Excluded segments remain
+    in the frame for full-race evaluation.
     """
     if segments_df.empty:
         return segments_df.copy()
@@ -572,17 +581,33 @@ def apply_segment_exclusion(
         stationary_share = pd.Series(0.0, index=out.index)
         out["stationaryTimeShare"] = stationary_share
 
+    if "avgGrade" in out.columns:
+        avg_grade = pd.to_numeric(out["avgGrade"], errors="coerce").fillna(0.0)
+    else:
+        logger.warning(
+            "apply_segment_exclusion: avgGrade missing; falling back to treating all "
+            "segments as flat for the near-flat gate"
+        )
+        avg_grade = pd.Series(0.0, index=out.index)
+
     reasons: list[str] = []
     eligible: list[bool] = []
     for idx in out.index:
         reason_parts: list[str] = []
         speed_val = speed_eq.loc[idx]
         share_val = stationary_share.loc[idx]
+        grade_val = float(avg_grade.loc[idx])
         if enabled:
-            if pd.notna(speed_val) and float(speed_val) < float(min_mean_speed_eq_kmh):
-                reason_parts.append("low_mean_speed_eq")
-            if pd.notna(share_val) and float(share_val) > float(max_stationary_time_share):
-                reason_parts.append("high_stationary_share")
+            near_flat = abs(grade_val) <= float(max_abs_grade)
+            low_speed = pd.notna(speed_val) and float(speed_val) < float(min_mean_speed_eq_kmh)
+            high_share = pd.notna(share_val) and float(share_val) > float(max_stationary_time_share)
+            # Immobile on flat/almost-flat only.
+            if near_flat and (low_speed or high_share):
+                reason_parts.append("near_flat")
+                if low_speed:
+                    reason_parts.append("low_mean_speed_eq")
+                if high_share:
+                    reason_parts.append("high_stationary_share")
         eligible.append(not reason_parts)
         reasons.append("|".join(reason_parts))
 
@@ -593,6 +618,7 @@ def apply_segment_exclusion(
         "min_mean_speed_eq_kmh": float(min_mean_speed_eq_kmh),
         "max_stationary_time_share": float(max_stationary_time_share),
         "stationary_speed_kmh": float(stationary_speed_kmh),
+        "max_abs_grade": float(max_abs_grade),
         "excluded_count": int((~pd.Series(out["isFitEligible"])).sum()) if enabled else 0,
     }
     return out
