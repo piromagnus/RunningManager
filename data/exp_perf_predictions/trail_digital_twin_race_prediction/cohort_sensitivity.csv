@@ -1,0 +1,13 @@
+cohort,race,fatigueCol,alpha,kappa,fatigueModel,predMin,actualMin,deltaMin,hms,nTrainActs
+hardTrailRun,lut_30k,cumTrimpBefore,0.9,0.3,exponential,180.7906700252457,177.3,3.4906700252457084,3h00m47s,43
+hardTrailRun,lut_30k,decayedTrimpBefore,0.9,0.3,exponential,178.8469277128403,177.3,1.5469277128403216,2h58m51s,43
+hardTrailRun,gresivaudan,cumTrimpBefore,0.9,0.3,exponential,203.13218561180494,212.98333333333332,-9.851147721528378,3h23m08s,43
+hardTrailRun,gresivaudan,decayedTrimpBefore,0.9,0.3,exponential,199.04996105975135,212.98333333333332,-13.933372273581972,3h19m03s,43
+hardRunOrTrailRun,lut_30k,cumTrimpBefore,0.9,0.3,exponential,180.7906700252457,177.3,3.4906700252457084,3h00m47s,101
+hardRunOrTrailRun,lut_30k,decayedTrimpBefore,0.9,0.3,exponential,178.8469277128403,177.3,1.5469277128403216,2h58m51s,101
+hardRunOrTrailRun,gresivaudan,cumTrimpBefore,0.9,0.3,exponential,203.13218561180494,212.98333333333332,-9.851147721528378,3h23m08s,101
+hardRunOrTrailRun,gresivaudan,decayedTrimpBefore,0.9,0.3,exponential,199.04996105975135,212.98333333333332,-13.933372273581972,3h19m03s,101
+selectedDateRaces,lut_30k,cumTrimpBefore,0.9,0.3,exponential,180.7906700252457,177.3,3.4906700252457084,3h00m47s,16
+selectedDateRaces,lut_30k,decayedTrimpBefore,0.9,0.3,exponential,178.8469277128403,177.3,1.5469277128403216,2h58m51s,16
+selectedDateRaces,gresivaudan,cumTrimpBefore,0.9,0.3,exponential,203.13218561180494,212.98333333333332,-9.851147721528378,3h23m08s,16
+selectedDateRaces,gresivaudan,decayedTrimpBefore,0.9,0.3,exponential,199.04996105975135,212.98333333333332,-13.933372273581972,3h19m03s,16

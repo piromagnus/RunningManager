@@ -104,7 +104,9 @@ Key metrics:
 
 ### Trail Performance Model
 - `gap_factor(grade)` / `trail_gap_multiplier(...)`: Minetti running GAP plus optional soft-ramped trail climb/descent scales (`gap_climb_scale`, `gap_descent_scale`)
-- Steep GAP journal: `docs/science/journal_steep.md`; grid script `scripts/steep_gap_scale_grid.py`
+- Pre-race constant-HRR prediction: `scripts/predict_race_constant_hrr.py` (hold-out races; planned profile only)
+- Model summary (athlete vs general params): `docs/science/trail_digital_twin_model_summary.md`
+- Prediction journal: `docs/science/journal_prediction.md`
 - `segment_timeseries(df)`: Aggregate processed activity streams into 1 km course segments; includes distance-weighted integrated GAP, mixed climb/descent diagnostics, `stationaryTimeShare`, and `actualMovingTimeSec`
 - `apply_segment_exclusion(...)`: Flag immobile segments that are flat on the altitude–time profile (`absAltitudeRateMph`) via `isFitEligible` + `exclusionReason`; requires low altitude rate AND (low `meanSpeedEqKmh` OR high `stationaryTimeShare`) so climbing/descending time profiles stay in the fit set
 - `grid_search_model(...)`: Fit paper-style `alpha` and fatigue/pacing-decay parameter

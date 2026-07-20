@@ -2152,6 +2152,10 @@ def simulate_constant_hrr_route(
     load_factor: float = 1.0,
     use_hrr_effort: bool = True,
     fatigue_input_col: str = "cumTrimpBefore",
+    gap_steep_threshold: float = DEFAULT_GAP_STEEP_THRESHOLD,
+    gap_soft_start: float = DEFAULT_GAP_SOFT_START,
+    gap_climb_scale: float = DEFAULT_GAP_CLIMB_SCALE,
+    gap_descent_scale: float = DEFAULT_GAP_DESCENT_SCALE,
 ) -> pd.DataFrame:
     """Predict a planned route at constant HRR with sequential predicted TRIMP fatigue.
 
@@ -2197,6 +2201,10 @@ def simulate_constant_hrr_route(
                 acute_trimp_col=fatigue_input_col,
                 load_factor_col="_preRaceLoadFactor",
                 use_hrr_effort=use_hrr_effort,
+                gap_steep_threshold=gap_steep_threshold,
+                gap_soft_start=gap_soft_start,
+                gap_climb_scale=gap_climb_scale,
+                gap_descent_scale=gap_descent_scale,
             ).iloc[0]
         )
         segment_trimp = _segment_trimp_from_prediction(predicted_time, float(hrr))
@@ -2351,6 +2359,10 @@ def sweep_constant_hrr_route(
     hr_max: Optional[float] = None,
     fatigue_input_col: str = "cumTrimpBefore",
     use_hrr_effort: bool = True,
+    gap_steep_threshold: float = DEFAULT_GAP_STEEP_THRESHOLD,
+    gap_soft_start: float = DEFAULT_GAP_SOFT_START,
+    gap_climb_scale: float = DEFAULT_GAP_CLIMB_SCALE,
+    gap_descent_scale: float = DEFAULT_GAP_DESCENT_SCALE,
 ) -> pd.DataFrame:
     """Sweep constant-HRR race estimates and mark historically feasible choices."""
     route_distance = float(
@@ -2378,6 +2390,10 @@ def sweep_constant_hrr_route(
             load_factor=load_factor,
             fatigue_input_col=fatigue_input_col,
             use_hrr_effort=use_hrr_effort,
+            gap_steep_threshold=gap_steep_threshold,
+            gap_soft_start=gap_soft_start,
+            gap_climb_scale=gap_climb_scale,
+            gap_descent_scale=gap_descent_scale,
         )
         total_time = float(pd.to_numeric(prediction.get("predictedTimeSec"), errors="coerce").sum())
         max_duration = max_duration_for_hrr(hrr, envelope_df) if has_envelope else np.nan
