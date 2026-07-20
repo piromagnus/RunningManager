@@ -105,7 +105,7 @@ Key metrics:
 ### Trail Performance Model
 - `prepare_raw_timeseries_for_segments(...)`: Fast raw GPS/HR/elevation preparation for notebook segment aggregation
 - `segment_timeseries(df)`: Aggregate processed activity streams into 1 km course segments; includes distance-weighted integrated GAP, mixed climb/descent diagnostics, and `stationaryTimeShare`
-- `apply_segment_exclusion(...)`: Flag stationary / near-stop segments via `isFitEligible` + `exclusionReason` (fit exclusion only)
+- `apply_segment_exclusion(...)`: Flag stationary / near-stop segments via `isFitEligible` + `exclusionReason`; low-speed gate uses `meanSpeedEqKmh` (not raw speed) so steep climbs are kept
 - `grid_search_model(...)`: Fit paper-style `alpha` and fatigue/pacing-decay parameter
 - `leave_one_out_grid_search(...)`: Race/activity-level LOO validation for notebook experiments
 - `top_hrr_hard_trailrun_ids(...)`: Build top hard TrailRun subset by average HR reserve

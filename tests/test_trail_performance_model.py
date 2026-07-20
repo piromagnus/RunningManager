@@ -1051,24 +1051,47 @@ def test_segment_timeseries_keeps_zero_distance_dwell_time() -> None:
     assert segments.iloc[0]["stationaryTimeShare"] > 0.5
 
 
-def test_apply_segment_exclusion_flags_low_speed_and_high_stationary_share() -> None:
+def test_apply_segment_exclusion_flags_low_speed_eq_and_high_stationary_share() -> None:
     segments = pd.DataFrame(
         {
-            "distanceKm": [1.0, 1.0, 1.0],
-            "actualTimeSec": [360.0, 3600.0, 600.0],
-            "meanSpeedKmh": [10.0, 0.4, 6.0],
-            "stationaryTimeShare": [0.05, 0.20, 0.95],
+            "distanceKm": [1.0, 1.0, 1.0, 1.0],
+            "actualTimeSec": [360.0, 1800.0, 600.0, 1200.0],
+            # Raw speed is slow on the steep climb, but speedEq stays healthy.
+            "meanSpeedKmh": [10.0, 1.5, 6.0, 2.0],
+            "meanSpeedEqKmh": [10.0, 1.2, 6.0, 7.5],
+            "stationaryTimeShare": [0.05, 0.20, 0.95, 0.10],
         }
     )
     annotated = model.apply_segment_exclusion(
         segments,
         enabled=True,
-        min_mean_speed_kmh=1.0,
+        min_mean_speed_eq_kmh=3.0,
         max_stationary_time_share=0.80,
     )
-    assert annotated["isFitEligible"].tolist() == [True, False, False]
-    assert "low_mean_speed" in annotated.loc[1, "exclusionReason"]
+    assert annotated["isFitEligible"].tolist() == [True, False, False, True]
+    assert "low_mean_speed_eq" in annotated.loc[1, "exclusionReason"]
     assert "high_stationary_share" in annotated.loc[2, "exclusionReason"]
+    assert annotated.loc[3, "exclusionReason"] == ""
+
+
+def test_apply_segment_exclusion_keeps_steep_climb_with_healthy_speed_eq() -> None:
+    segments = pd.DataFrame(
+        {
+            "distanceKm": [1.0],
+            "actualTimeSec": [1800.0],
+            "meanSpeedKmh": [2.0],
+            "meanSpeedEqKmh": [8.0],
+            "stationaryTimeShare": [0.05],
+            "avgGrade": [0.25],
+        }
+    )
+    annotated = model.apply_segment_exclusion(
+        segments,
+        enabled=True,
+        min_mean_speed_eq_kmh=3.0,
+        max_stationary_time_share=0.40,
+    )
+    assert bool(annotated.iloc[0]["isFitEligible"]) is True
 
 
 def test_hrr_trimp_grid_search_optimizes_on_fit_mask_and_scores_full_race() -> None:

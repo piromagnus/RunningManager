@@ -77,24 +77,24 @@ groups:
   mode: variants
   description: >
     A/B: hypothesis winner physiology with and without stationary-segment exclusion.
-    Fit on cleaned segments; evaluate full race LOO. Thresholds keep aid-station /
-    device-open dwell after zero-distance time is attributed to segments.
+    Low-speed gate uses grade-adjusted speedEq so steep climbs are not treated as idle.
+    Fit on cleaned segments; evaluate full race LOO.
   runs:
   - name: baseline_no_exclusion
     overrides:
       segment_exclusion.enabled: false
-  - name: exclude_stationary_speed_3kmh_share_040
+  - name: exclude_speed_eq_3kmh_share_040
     overrides:
       segment_exclusion.enabled: true
-      segment_exclusion.min_mean_speed_kmh: 3.0
+      segment_exclusion.min_mean_speed_eq_kmh: 3.0
       segment_exclusion.max_stationary_time_share: 0.40
       segment_exclusion.stationary_speed_kmh: 1.0
       segment_exclusion.exclude_from_fit: true
       segment_exclusion.report_full_race_eval: true
-  - name: exclude_stationary_speed_4kmh_share_030
+  - name: exclude_speed_eq_4kmh_share_030
     overrides:
       segment_exclusion.enabled: true
-      segment_exclusion.min_mean_speed_kmh: 4.0
+      segment_exclusion.min_mean_speed_eq_kmh: 4.0
       segment_exclusion.max_stationary_time_share: 0.30
       segment_exclusion.stationary_speed_kmh: 1.0
       segment_exclusion.exclude_from_fit: true

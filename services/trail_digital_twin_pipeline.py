@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import html
 import json
+import logging
 import math
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass, field
@@ -22,6 +23,8 @@ from plotly.offline import get_plotlyjs
 from plotly.subplots import make_subplots
 
 from services import trail_performance_model as tpm
+
+logger = logging.getLogger(__name__)
 
 try:
     import yaml
@@ -161,7 +164,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     },
     "segment_exclusion": {
         "enabled": False,
-        "min_mean_speed_kmh": 3.0,
+        "min_mean_speed_eq_kmh": 3.0,
         "max_stationary_time_share": 0.40,
         "stationary_speed_kmh": 1.0,
         "exclude_from_fit": True,
@@ -356,10 +359,18 @@ def _model_objective(objective: str) -> str:
 
 def _segment_exclusion_kwargs(config: Mapping[str, Any]) -> dict[str, object]:
     exclusion = config.get("segment_exclusion", {}) or {}
+    # Prefer grade-adjusted speed; accept deprecated raw-speed key for old YAMLs.
+    min_speed_eq = exclusion.get("min_mean_speed_eq_kmh")
+    if min_speed_eq is None and "min_mean_speed_kmh" in exclusion:
+        logger.warning(
+            "segment_exclusion.min_mean_speed_kmh is deprecated; "
+            "map it to min_mean_speed_eq_kmh"
+        )
+        min_speed_eq = exclusion.get("min_mean_speed_kmh")
     return {
         "enabled": bool(exclusion.get("enabled", False)),
-        "min_mean_speed_kmh": float(exclusion.get("min_mean_speed_kmh", 1.0)),
-        "max_stationary_time_share": float(exclusion.get("max_stationary_time_share", 0.80)),
+        "min_mean_speed_eq_kmh": float(min_speed_eq if min_speed_eq is not None else 3.0),
+        "max_stationary_time_share": float(exclusion.get("max_stationary_time_share", 0.40)),
         "stationary_speed_kmh": float(exclusion.get("stationary_speed_kmh", 1.0)),
     }
 

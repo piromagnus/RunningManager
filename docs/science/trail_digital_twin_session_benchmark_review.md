@@ -113,25 +113,27 @@ config when timeseries are available.
 
 Source: `data/exp_perf_predictions/trail_digital_twin_segment_exclusion/`
 
-Zero-distance GPS dwell is now kept inside 1 km segments (`stationaryTimeShare`).
-Hyperparameters are fit on cleaned segments; LOO still scores the **full race**.
+Zero-distance GPS dwell is kept inside 1 km segments (`stationaryTimeShare`).
+The low-speed gate uses grade-adjusted **`meanSpeedEqKmh`** (not raw speed) so
+legitimate steep climbs are not treated as idle. Hyperparameters are fit on cleaned
+segments; LOO still scores the **full race**.
 
 | run | full-race mean Stage3 MAE min | fit-eligible session MAE min | excluded segs | excluded time |
 | --- | ---: | ---: | ---: | ---: |
 | baseline_no_exclusion | 10.87 | 14.97 | 0 | 0 |
-| exclude speed&lt;3 / share&gt;0.40 | 12.32 | 10.50 | 64 | 1625 min |
-| exclude speed&lt;4 / share&gt;0.30 | 12.15 | 10.22 | 156 | 3076 min |
+| speedEq&lt;3 / share&gt;0.40 | 11.86 | 10.65 | 48 | 1102 min |
+| speedEq&lt;4 / share&gt;0.30 | **10.30** | **8.83** | 101 | 1919 min |
 
 Findings:
-- Fit-eligible MAE improves under exclusion (~10.2–10.5 min vs ~15 min baseline
-  fit-eligible diagnostic), confirming idle/aid segments were contaminating the fit.
-- Full-race aggregate MAE gets worse (+1.3 to +1.5 min): remaining residual is
-  informative non-model time (stops / device-open), not a signal to ignore.
-- `hardTrailRun` full-race MAE slightly improves (16.98 → 16.53); `selectedDateRaces`
-  and `top10HardTrailByHRR` degrade on full-race scoring when stops are common.
+- Using raw speed over-excluded steep climbs; speedEq removes that bias.
+- Best current exclusion profile (`speedEq&lt;4`, share&gt;0.30) **improves** aggregate
+  full-race MAE vs baseline (−0.58 min) and markedly improves fit-eligible MAE.
+- `hardTrailRun` 16.98 → 16.53; `selectedDateRaces` 10.94 → 9.34 under the best profile.
+- Remaining full-race residual on excluded time is still informative (stops / device-open).
 
-Default exclusion knobs after this sweep: `min_mean_speed_kmh=3.0`,
-`max_stationary_time_share=0.40` (disabled by default in production config).
+Default exclusion knobs: `min_mean_speed_eq_kmh=3.0`,
+`max_stationary_time_share=0.40` (disabled by default in production config;
+consider promoting `4.0 / 0.30` after a wider confirm).
 
 ## Interpretation Guide
 

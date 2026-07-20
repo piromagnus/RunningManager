@@ -25,7 +25,7 @@ EARTH_RADIUS_M = 6_371_000.0
 SEGMENT_GRADE_SHARE_THRESHOLD = 0.03
 MIXED_CLIMB_DESCENT_MIN_SHARE = 0.25
 DEFAULT_STATIONARY_SPEED_KMH = 1.0
-DEFAULT_MIN_MEAN_SPEED_KMH = 3.0
+DEFAULT_MIN_MEAN_SPEED_EQ_KMH = 3.0
 DEFAULT_MAX_STATIONARY_TIME_SHARE = 0.40
 DEFAULT_FORBIDDEN_ANONYMIZED_COLUMNS = frozenset(
     {
@@ -510,40 +510,64 @@ def apply_segment_exclusion(
     segments_df: pd.DataFrame,
     *,
     enabled: bool = True,
-    min_mean_speed_kmh: float = DEFAULT_MIN_MEAN_SPEED_KMH,
+    min_mean_speed_eq_kmh: float = DEFAULT_MIN_MEAN_SPEED_EQ_KMH,
     max_stationary_time_share: float = DEFAULT_MAX_STATIONARY_TIME_SHARE,
     stationary_speed_kmh: float = DEFAULT_STATIONARY_SPEED_KMH,
+    min_mean_speed_kmh: Optional[float] = None,
 ) -> pd.DataFrame:
     """Flag stationary / near-stop segments that should be excluded from fitting.
 
-    Excluded segments remain in the frame for full-race evaluation. Typical cases are
-    aid-station stops or the device remaining open while the athlete is not moving.
+    Low-speed checks use grade-adjusted ``meanSpeedEqKmh`` so legitimate steep climbs
+    are not treated as idle. Excluded segments remain in the frame for full-race
+    evaluation (aid-station stops or device-open dwell).
     """
     if segments_df.empty:
         return segments_df.copy()
 
-    out = segments_df.copy()
-    mean_speed = pd.to_numeric(out.get("meanSpeedKmh"), errors="coerce")
-    if mean_speed.isna().all() and {"distanceKm", "actualTimeSec"}.issubset(out.columns):
+    # Backward-compatible alias from earlier raw-speed configs.
+    if min_mean_speed_kmh is not None:
         logger.warning(
-            "apply_segment_exclusion: meanSpeedKmh missing; falling back to distance/time speed"
+            "apply_segment_exclusion: min_mean_speed_kmh is deprecated; "
+            "using it as min_mean_speed_eq_kmh (grade-adjusted)"
         )
-        distance = pd.to_numeric(out["distanceKm"], errors="coerce")
-        time_sec = pd.to_numeric(out["actualTimeSec"], errors="coerce")
-        mean_speed = pd.Series(
-            np.where(
-                (time_sec > 0) & np.isfinite(distance) & np.isfinite(time_sec),
-                distance / time_sec * 3600.0,
-                np.nan,
-            ),
-            index=out.index,
-        )
-        out["meanSpeedKmh"] = mean_speed
+        min_mean_speed_eq_kmh = float(min_mean_speed_kmh)
+
+    out = segments_df.copy()
+    speed_eq = pd.to_numeric(out.get("meanSpeedEqKmh"), errors="coerce")
+    if speed_eq.isna().all():
+        raw_speed = pd.to_numeric(out.get("meanSpeedKmh"), errors="coerce")
+        if not raw_speed.isna().all():
+            logger.warning(
+                "apply_segment_exclusion: meanSpeedEqKmh missing; "
+                "falling back to meanSpeedKmh (steep climbs may be over-excluded)"
+            )
+            speed_eq = raw_speed
+            out["meanSpeedEqKmh"] = speed_eq
+        elif {"distanceKm", "actualTimeSec"}.issubset(out.columns):
+            logger.warning(
+                "apply_segment_exclusion: speed columns missing; "
+                "falling back to distance/time speed"
+            )
+            distance = pd.to_numeric(out["distanceKm"], errors="coerce")
+            time_sec = pd.to_numeric(out["actualTimeSec"], errors="coerce")
+            speed_eq = pd.Series(
+                np.where(
+                    (time_sec > 0) & np.isfinite(distance) & np.isfinite(time_sec),
+                    distance / time_sec * 3600.0,
+                    np.nan,
+                ),
+                index=out.index,
+            )
+            out["meanSpeedEqKmh"] = speed_eq
+        else:
+            speed_eq = pd.Series(np.nan, index=out.index)
+
     if "stationaryTimeShare" in out.columns:
         stationary_share = pd.to_numeric(out["stationaryTimeShare"], errors="coerce")
     else:
         logger.warning(
-            "apply_segment_exclusion: stationaryTimeShare missing; falling back to mean-speed only"
+            "apply_segment_exclusion: stationaryTimeShare missing; "
+            "falling back to speed-eq only"
         )
         stationary_share = pd.Series(0.0, index=out.index)
         out["stationaryTimeShare"] = stationary_share
@@ -552,11 +576,11 @@ def apply_segment_exclusion(
     eligible: list[bool] = []
     for idx in out.index:
         reason_parts: list[str] = []
-        speed_val = mean_speed.loc[idx]
+        speed_val = speed_eq.loc[idx]
         share_val = stationary_share.loc[idx]
         if enabled:
-            if pd.notna(speed_val) and float(speed_val) < float(min_mean_speed_kmh):
-                reason_parts.append("low_mean_speed")
+            if pd.notna(speed_val) and float(speed_val) < float(min_mean_speed_eq_kmh):
+                reason_parts.append("low_mean_speed_eq")
             if pd.notna(share_val) and float(share_val) > float(max_stationary_time_share):
                 reason_parts.append("high_stationary_share")
         eligible.append(not reason_parts)
@@ -566,7 +590,7 @@ def apply_segment_exclusion(
     out["exclusionReason"] = reasons if enabled else [""] * len(out)
     out.attrs["segment_exclusion"] = {
         "enabled": bool(enabled),
-        "min_mean_speed_kmh": float(min_mean_speed_kmh),
+        "min_mean_speed_eq_kmh": float(min_mean_speed_eq_kmh),
         "max_stationary_time_share": float(max_stationary_time_share),
         "stationary_speed_kmh": float(stationary_speed_kmh),
         "excluded_count": int((~pd.Series(out["isFitEligible"])).sum()) if enabled else 0,
