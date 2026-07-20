@@ -1,0 +1,4 @@
+lapIndex,split,name,startTime,distanceKm,timeSec,elapsedSec,avgSpeedKmh,ascentM,distanceEqKm,avgHr,maxHr,hrReserveRatio,hrPercentMax,trimp,label
+1,1,Lap 1,2025-08-05T15:36:48Z,4.822,1579.0,1579.0,10.98,61.8,5.44,147.2,167.0,0.615,71.8,0.56,Run
+2,2,Lap 2,2025-08-05T16:03:08Z,0.334,67.0,67.0,17.93,31.2,0.646,187.2,195.0,0.881,91.3,0.06,Run
+3,3,Lap 3,2025-08-05T16:04:15Z,2.449,972.0,2381.0,9.07,88.0,3.329,151.4,195.0,0.643,73.9,0.38,Run

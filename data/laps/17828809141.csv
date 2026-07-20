@@ -1,0 +1,2 @@
+lapIndex,split,name,startTime,distanceKm,timeSec,elapsedSec,avgSpeedKmh,ascentM,distanceEqKm,avgHr,maxHr,hrReserveRatio,hrPercentMax,trimp,label
+1,1,Lap 1,2026-03-23T14:30:34Z,4.01,4069.0,4069.0,3.56,27.0,4.28,102.0,129.0,0.313,49.8,0.41,Recovery

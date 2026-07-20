@@ -1,0 +1,5 @@
+zone,zone_label,hr_mean,hr_min,hr_max,time_seconds,avg_speed_kmh,avg_speedeq_kmh,pct_time
+1,Z1,111.49161270695203,81.125,132.7,1487.0,12.486503414634146,10.260478383221018,100.0
+2,Z2,,,,0.0,,,0.0
+3,Z3,,,,0.0,,,0.0
+4,Z4,,,,0.0,,,0.0
