@@ -1,0 +1,2 @@
+model,formula,coefficient,exponent,r2Log,weightedR2Log,maeHrr,weightedMaeHrr,targetStatistic,targetQuantile,minActivityCount,fitWeightMode,fitWeightPower,fitWindowCount,hrrMin,hrrMax,minWindowSec,maxWindowSec,observedMinDurationSec,observedMaxDurationSec
+hrr_duration_power_law,HRR(T_hours) = coefficient * T_hours ** exponent,0.804463098025444,-0.05951020581919471,0.7565625510420635,0.7160885565308288,0.03380946632479874,0.030153920265097642,max,,2,performance,4.0,13,0.3,0.98,300.0,86400.0,332.0,42256.0

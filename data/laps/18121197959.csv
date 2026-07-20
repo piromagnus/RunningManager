@@ -1,0 +1,2 @@
+lapIndex,split,name,startTime,distanceKm,timeSec,elapsedSec,avgSpeedKmh,ascentM,distanceEqKm,avgHr,maxHr,hrReserveRatio,hrPercentMax,trimp,label
+1,1,Lap 1,2026-04-15T16:48:26Z,4.332,1278.0,1278.0,12.2,21.0,4.542,130.4,173.0,0.503,63.6,0.3,Run
