@@ -131,6 +131,11 @@ hypothesis campaigns.
 4. Investigate residual MAE on high-duration / high-TRIMP hard trails
    (stress-duration and terrain mechanics).
 5. Optionally re-evaluate Minetti clamp with a dedicated terrain sweep.
+6. Run `configs/trail_digital_twin_benchmark_segment_exclusion.yaml` to fit on
+   cleaned (non-stationary) segments then score full-race LOO; review with
+   `scripts/synthesize_trail_digital_twin_sessions.py`.
+7. Session-level residual triage:
+   `docs/science/trail_digital_twin_session_benchmark_review.md`.
 
 ## Source Artifacts
 

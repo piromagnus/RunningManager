@@ -159,6 +159,14 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "segment_length_sensitivity": False,
         "segment_length_km": 0.50,
     },
+    "segment_exclusion": {
+        "enabled": False,
+        "min_mean_speed_kmh": 1.0,
+        "max_stationary_time_share": 0.80,
+        "stationary_speed_kmh": 1.0,
+        "exclude_from_fit": True,
+        "report_full_race_eval": True,
+    },
     "outputs": {
         "write_csv": True,
         "write_html": True,
@@ -346,6 +354,23 @@ def _model_objective(objective: str) -> str:
     return "segment" if objective == "segment" else "race"
 
 
+def _segment_exclusion_kwargs(config: Mapping[str, Any]) -> dict[str, object]:
+    exclusion = config.get("segment_exclusion", {}) or {}
+    return {
+        "enabled": bool(exclusion.get("enabled", False)),
+        "min_mean_speed_kmh": float(exclusion.get("min_mean_speed_kmh", 1.0)),
+        "max_stationary_time_share": float(exclusion.get("max_stationary_time_share", 0.80)),
+        "stationary_speed_kmh": float(exclusion.get("stationary_speed_kmh", 1.0)),
+    }
+
+
+def _fit_mask_col(config: Mapping[str, Any]) -> str | None:
+    exclusion = config.get("segment_exclusion", {}) or {}
+    if bool(exclusion.get("enabled", False)) and bool(exclusion.get("exclude_from_fit", True)):
+        return "isFitEligible"
+    return None
+
+
 def _rename_load_features(df: pd.DataFrame, prefix: str) -> pd.DataFrame:
     return df.rename(
         columns={
@@ -513,7 +538,20 @@ def _build_segments(
             hr_rest=hr_rest,
             hr_max=hr_max,
         )
+        if not segments.empty:
+            segments = tpm.apply_segment_exclusion(segments, **_segment_exclusion_kwargs(config))
         usable = not segments.empty and segments["distanceKm"].sum() > 0 and segments["actualTimeSec"].sum() > 0
+        fit_eligible_count = (
+            int(segments["isFitEligible"].fillna(False).astype(bool).sum())
+            if usable and "isFitEligible" in segments.columns
+            else (len(segments) if usable else 0)
+        )
+        excluded_count = int(len(segments) - fit_eligible_count) if usable else 0
+        excluded_time = 0.0
+        if usable and "isFitEligible" in segments.columns:
+            excluded_time = float(
+                segments.loc[~segments["isFitEligible"].fillna(False).astype(bool), "actualTimeSec"].sum()
+            )
         qc_rows.append(
             {
                 "activityId": activity_id,
@@ -521,6 +559,9 @@ def _build_segments(
                 "category": row.get("category"),
                 "usableSegments": usable,
                 "segmentCount": len(segments),
+                "fitEligibleSegmentCount": fit_eligible_count,
+                "excludedSegmentCount": excluded_count,
+                "excludedTimeSec": excluded_time,
                 "segmentDistanceKm": float(segments["distanceKm"].sum()) if usable else 0.0,
                 "segmentTimeSec": float(segments["actualTimeSec"].sum()) if usable else 0.0,
             }
@@ -1052,6 +1093,7 @@ def _run_paper_stage_models_for_objective(task: tuple[object, ...]) -> dict[str,
     fitting = config["fitting"]
     physiology = config["physiology"]
     run_loo = "loo" in set(fitting.get("validation_modes", ["in_sample", "loo"]))
+    fit_mask_col = _fit_mask_col(config)
     rows: list[dict[str, object]] = []
     params: list[dict[str, object]] = []
     predictions: list[pd.DataFrame] = []
@@ -1131,6 +1173,7 @@ def _run_paper_stage_models_for_objective(task: tuple[object, ...]) -> dict[str,
             acute_trimp_col=spec["acuteTrimpCol"],
             objective=_model_objective(objective),
             observed_activity_times_sec=observed,
+            fit_mask_col=fit_mask_col,
         )
         grid_search_frames.append(
             _hrr_trimp_grid_frame(
@@ -1168,6 +1211,7 @@ def _run_paper_stage_models_for_objective(task: tuple[object, ...]) -> dict[str,
                 acute_trimp_col=spec["acuteTrimpCol"],
                 observed_activity_times_sec=observed,
                 objective=_model_objective(objective),
+                fit_mask_col=fit_mask_col,
             )
             if run_loo
             else pd.DataFrame()
@@ -1214,6 +1258,7 @@ def _run_paper_stage_models_for_objective(task: tuple[object, ...]) -> dict[str,
                 secondary_fatigue_model=secondary_model or None,
                 objective=_model_objective(objective),
                 observed_activity_times_sec=observed,
+                fit_mask_col=fit_mask_col,
             )
             grid_frame = _hrr_trimp_grid_frame(
                 grid,
@@ -1266,6 +1311,7 @@ def _run_paper_stage_models_for_objective(task: tuple[object, ...]) -> dict[str,
                     secondary_fatigue_model=secondary_model or None,
                     observed_activity_times_sec=observed,
                     objective=_model_objective(objective),
+                    fit_mask_col=fit_mask_col,
                 )
                 if run_loo
                 else pd.DataFrame()
@@ -1588,6 +1634,7 @@ def run_robustness_checks(
     rows: list[dict[str, object]] = []
     fitting = config["fitting"]
     physiology = config["physiology"]
+    fit_mask_col = _fit_mask_col(config)
     objective = "activity"
     for decay_lambda in config["robustness"]["decay_lambdas"]:
         decayed_segments = tpm.add_in_activity_trimp_features(all_segments_df, decay_lambda=decay_lambda)
@@ -1611,6 +1658,7 @@ def run_robustness_checks(
                     acute_trimp_col="decayedTrimpBefore",
                     objective=_model_objective(objective),
                     observed_activity_times_sec=observed,
+                    fit_mask_col=fit_mask_col,
                 )
                 rows.append(
                     {
@@ -1656,6 +1704,7 @@ def run_robustness_checks(
                 acute_trimp_col="decayedTrimpBefore",
                 objective=_model_objective(objective),
                 observed_activity_times_sec=observed_elapsed,
+                fit_mask_col=fit_mask_col,
             )
             rows.append(
                 {

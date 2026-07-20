@@ -1012,3 +1012,103 @@ def test_hr_regression_keeps_low_submaximal_effort_rows() -> None:
 
     assert len(predicted) == 4
     assert np.isfinite(predicted).all()
+
+
+def test_segment_timeseries_records_stationary_share_for_idle_block() -> None:
+    # Moving first half, then device-open idle with tiny GPS jitter.
+    distances = [0.1, 0.2, 0.3, 0.4, 0.401, 0.402, 0.403, 0.404]
+    durations = [60.0, 120.0, 180.0, 240.0, 540.0, 840.0, 1140.0, 1440.0]
+    df = pd.DataFrame(
+        {
+            "cumulated_distance": distances,
+            "cumulated_duration_seconds": durations,
+            "grade_ma_10": [0.0] * len(distances),
+            "hr": [140.0] * len(distances),
+        }
+    )
+
+    segments = model.segment_timeseries(df, segment_km=1.0)
+    assert len(segments) == 1
+    assert segments.iloc[0]["stationaryTimeShare"] > 0.5
+    assert segments.iloc[0]["meanSpeedKmh"] < 2.0
+
+
+def test_apply_segment_exclusion_flags_low_speed_and_high_stationary_share() -> None:
+    segments = pd.DataFrame(
+        {
+            "distanceKm": [1.0, 1.0, 1.0],
+            "actualTimeSec": [360.0, 3600.0, 600.0],
+            "meanSpeedKmh": [10.0, 0.4, 6.0],
+            "stationaryTimeShare": [0.05, 0.20, 0.95],
+        }
+    )
+    annotated = model.apply_segment_exclusion(
+        segments,
+        enabled=True,
+        min_mean_speed_kmh=1.0,
+        max_stationary_time_share=0.80,
+    )
+    assert annotated["isFitEligible"].tolist() == [True, False, False]
+    assert "low_mean_speed" in annotated.loc[1, "exclusionReason"]
+    assert "high_stationary_share" in annotated.loc[2, "exclusionReason"]
+
+
+def test_hrr_trimp_grid_search_optimizes_on_fit_mask_and_scores_full_race() -> None:
+    segments = pd.DataFrame(
+        {
+            "activityId": ["a", "a", "a", "b", "b", "b"],
+            "distanceKm": [1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+            "avgGrade": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            "meanAltitudeM": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            "meanHrReserve": [0.70, 0.72, 0.70, 0.70, 0.74, 0.70],
+            "decayedTrimpBefore": [0.0, 4.0, 8.0, 0.0, 5.0, 9.0],
+            "isFitEligible": [True, True, False, True, True, False],
+        }
+    )
+    clean = segments[segments["isFitEligible"]].copy()
+    clean["actualTimeSec"] = model.predict_hrr_trimp_segment_times(
+        clean,
+        v_anchor_kmh=12.0,
+        alpha=0.80,
+        fatigue_coef=0.30,
+        fatigue_model="linear",
+        trimp_scale=10.0,
+    )
+    segments = segments.merge(
+        clean[["activityId", "decayedTrimpBefore", "actualTimeSec"]],
+        on=["activityId", "decayedTrimpBefore"],
+        how="left",
+        suffixes=("", "_clean"),
+    )
+    # Idle segments are much slower than the model would expect.
+    segments.loc[~segments["isFitEligible"], "actualTimeSec"] = 1800.0
+
+    best, grid, prediction = model.hrr_trimp_grid_search_model(
+        segments,
+        v_anchor_kmh=12.0,
+        alpha_grid=[0.70, 0.80, 0.90],
+        fatigue_coef_grid=[0.0, 0.30],
+        fatigue_models=("linear",),
+        trimp_scale=10.0,
+        fit_mask_col="isFitEligible",
+    )
+    loo = model.leave_one_out_hrr_trimp_grid_search(
+        segments,
+        v_anchor_kmh=12.0,
+        alpha_grid=[0.70, 0.80, 0.90],
+        fatigue_coef_grid=[0.0, 0.30],
+        fatigue_models=("linear",),
+        trimp_scale=10.0,
+        fit_mask_col="isFitEligible",
+    )
+
+    assert best["alpha"] == pytest.approx(0.80)
+    assert best["fatigueCoef"] == pytest.approx(0.30)
+    assert best["fitSegmentCount"] == 4
+    assert best["fullSegmentCount"] == 6
+    assert best["raceMaeSecFull"] > best["raceMaeSec"]
+    assert prediction["isFitEligible"].tolist() == [True, True, False, True, True, False]
+    assert len(loo) == 2
+    assert {"excludedSegmentCount", "excludedTimeSec", "predictedFitEligibleSec"}.issubset(loo.columns)
+    assert int(loo["excludedSegmentCount"].sum()) == 2
+    assert float(grid["segmentMaeSec"].min()) <= float(grid["segmentMaeSecFull"].min()) + 1e-9

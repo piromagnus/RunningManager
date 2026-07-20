@@ -1,0 +1,100 @@
+execution:
+  output_dir: data/exp_perf_predictions/trail_digital_twin_segment_exclusion
+  per_run_csv: true
+  per_run_html: false
+  disable_inner_robustness: true
+  disable_inner_segment_grid: true
+  write_html: true
+  fail_fast: false
+  jobs: 2
+  common_overrides:
+    fitting.enabled_objectives:
+    - activity
+    fitting.validation_modes:
+    - in_sample
+    - loo
+    fitting.hrr_trimp_alpha_grid:
+    - 0.85
+    - 0.9
+    - 0.95
+    - 1.0
+    - 1.05
+    fitting.hrr_trimp_kappa_grid:
+    - 0.2
+    - 0.3
+    - 0.4
+    - 0.6
+    - 0.8
+    fitting.hrr_trimp_secondary_kappa_grid:
+    - 0.0
+    - 0.1
+    - 0.2
+    fitting.fatigue_models:
+    - linear
+    - exponential
+    fitting.stage3_fatigue_states:
+    - fatigue_state: decayed
+      acute_trimp_col: decayedTrimpBefore
+      label: decayed TRIMP
+    - fatigue_state: cumulative
+      acute_trimp_col: cumTrimpBefore
+      label: cumulative TRIMP
+    - fatigue_state: decayed_progress
+      acute_trimp_col: decayedTrimpBefore
+      label: decayed exp + progress
+      fatigue_models:
+      - exponential
+      secondary_acute_trimp_col: progress
+      secondary_fatigue_model: exponential
+    - fatigue_state: decayed_cumulative
+      acute_trimp_col: decayedTrimpBefore
+      label: decayed exp + cumulative TRIMP
+      fatigue_models:
+      - exponential
+      secondary_acute_trimp_col: cumTrimpBefore
+      secondary_fatigue_model: exponential
+    readiness.ctl_weight: 0.05
+    readiness.tsb_weight: 0.1
+    readiness.ctl_factor_min: 0.9
+    readiness.ctl_factor_max: 1.1
+    physiology.hrr_reference: 0.88
+    physiology.hrr_min_factor: 0.3
+    physiology.hrr_max_factor: 1.0
+    physiology.decay_lambda: 0.2
+    physiology.min_fatigue_factor: 0.6
+selection:
+  primary_stage: Stage 3 HRR speed ratio LOO
+  fallback_stage: Stage 3 HRR speed ratio
+  aggregate_objectives:
+  - activity
+  aggregate_cohorts:
+  - hardTrailRun
+  - hardRunOrTrailRun
+  - top10HardTrailByHRR
+  - selectedDateRaces
+groups:
+- id: segment_exclusion_ab
+  mode: variants
+  description: >
+    A/B: hypothesis winner physiology with and without stationary-segment exclusion.
+    Fit on cleaned segments; evaluate full race LOO.
+  runs:
+  - name: baseline_no_exclusion
+    overrides:
+      segment_exclusion.enabled: false
+  - name: exclude_stationary_speed_1kmh_share_080
+    overrides:
+      segment_exclusion.enabled: true
+      segment_exclusion.min_mean_speed_kmh: 1.0
+      segment_exclusion.max_stationary_time_share: 0.80
+      segment_exclusion.stationary_speed_kmh: 1.0
+      segment_exclusion.exclude_from_fit: true
+      segment_exclusion.report_full_race_eval: true
+  - name: exclude_stationary_speed_2kmh_share_070
+    overrides:
+      segment_exclusion.enabled: true
+      segment_exclusion.min_mean_speed_kmh: 2.0
+      segment_exclusion.max_stationary_time_share: 0.70
+      segment_exclusion.stationary_speed_kmh: 1.0
+      segment_exclusion.exclude_from_fit: true
+      segment_exclusion.report_full_race_eval: true

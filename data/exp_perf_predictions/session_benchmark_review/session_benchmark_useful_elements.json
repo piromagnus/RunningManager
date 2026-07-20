@@ -1,0 +1,223 @@
+{
+  "experiment": "trail_digital_twin_hypothesis_refined",
+  "winner": {
+    "runId": "000_h1_high_reference_refined_h1_refined_000_hrr_reference_0_88_hrr_min_factor_0_3_hrr_max_factor_1_decay_lamb",
+    "meanStage3MaeMin": 10.844754365359284,
+    "meanStage3MapePct": 7.91450954907153,
+    "meanStage3R2": 0.9820084445302756,
+    "hrrReference": 0.88,
+    "hrrMinFactor": 0.3,
+    "hrrMaxFactor": 1.0,
+    "decayLambda": 0.2,
+    "minFatigueFactor": 0.6,
+    "overrideJson": "{\"fitting.enabled_objectives\":[\"activity\"],\"fitting.fatigue_models\":[\"linear\",\"exponential\"],\"fitting.hrr_trimp_alpha_grid\":[0.85,0.9,0.95,1.0,1.05],\"fitting.hrr_trimp_kappa_grid\":[0.2,0.3,0.4,0.6,0.8],\"fitting.hrr_trimp_secondary_kappa_grid\":[0.0,0.1,0.2],\"fitting.stage3_fatigue_states\":[{\"acute_trimp_col\":\"decayedTrimpBefore\",\"fatigue_state\":\"decayed\",\"label\":\"decayed TRIMP\"},{\"acute_trimp_col\":\"cumTrimpBefore\",\"fatigue_state\":\"cumulative\",\"label\":\"cumulative TRIMP\"},{\"acute_trimp_col\":\"decayedTrimpBefore\",\"fatigue_models\":[\"exponential\"],\"fatigue_state\":\"decayed_progress\",\"label\":\"decayed exp + progress\",\"secondary_acute_trimp_col\":\"progress\",\"secondary_fatigue_model\":\"exponential\"},{\"acute_trimp_col\":\"decayedTrimpBefore\",\"fatigue_models\":[\"exponential\"],\"fatigue_state\":\"decayed_cumulative\",\"label\":\"decayed exp + cumulative TRIMP\",\"secondary_acute_trimp_col\":\"cumTrimpBefore\",\"secondary_fatigue_model\":\"exponential\"}],\"fitting.validation_modes\":[\"in_sample\",\"loo\"],\"physiology.decay_lambda\":0.2,\"physiology.hrr_max_factor\":1.0,\"physiology.hrr_min_factor\":0.3,\"physiology.hrr_reference\":0.88,\"physiology.min_fatigue_factor\":0.6,\"readiness.ctl_factor_max\":1.1,\"readiness.ctl_factor_min\":0.9,\"readiness.ctl_weight\":0.05,\"readiness.tsb_weight\":0.1}"
+  },
+  "cohortMae": [
+    {
+      "cohort": "top10HardTrailByHRR",
+      "maeMin": 4.244515130963598,
+      "mapePct": 5.717758886186575,
+      "r2": 0.9914647240995356,
+      "biasMin": -1.6823332571120628
+    },
+    {
+      "cohort": "selectedDateRaces",
+      "maeMin": 7.865146999209148,
+      "mapePct": 4.499929537357284,
+      "r2": 0.9949345812899644,
+      "biasMin": 3.7344204600933897
+    },
+    {
+      "cohort": "hardRunOrTrailRun",
+      "maeMin": 12.240035621207884,
+      "mapePct": 9.515107157283962,
+      "r2": 0.9698919352460248,
+      "biasMin": 1.9797204996692055
+    },
+    {
+      "cohort": "hardTrailRun",
+      "maeMin": 19.02931971005651,
+      "mapePct": 11.925242615458306,
+      "r2": 0.9717425374855784,
+      "biasMin": 3.050189779085563
+    }
+  ],
+  "fittedParams": [
+    {
+      "cohort": "hardTrailRun",
+      "alpha": 0.9,
+      "fatigueCoef": 0.6,
+      "fatigueModel": "exponential",
+      "fatigueState": "decayed",
+      "secondaryFatigueCoef": 0.0,
+      "raceMaeSec": 1141.7591826033902,
+      "segmentMaeSec": 114.92745846235243
+    },
+    {
+      "cohort": "hardRunOrTrailRun",
+      "alpha": 0.9,
+      "fatigueCoef": 0.4,
+      "fatigueModel": "linear",
+      "fatigueState": "decayed",
+      "secondaryFatigueCoef": 0.0,
+      "raceMaeSec": 701.637793028598,
+      "segmentMaeSec": 78.17278109005221
+    },
+    {
+      "cohort": "top10HardTrailByHRR",
+      "alpha": 0.9,
+      "fatigueCoef": 0.3,
+      "fatigueModel": "exponential",
+      "fatigueState": "decayed",
+      "secondaryFatigueCoef": 0.0,
+      "raceMaeSec": 254.6709078578164,
+      "segmentMaeSec": 49.39348437436927
+    },
+    {
+      "cohort": "selectedDateRaces",
+      "alpha": 0.9,
+      "fatigueCoef": 0.3,
+      "fatigueModel": "linear",
+      "fatigueState": "decayed",
+      "secondaryFatigueCoef": 0.0,
+      "raceMaeSec": 471.90881995255,
+      "segmentMaeSec": 75.95230908066655
+    }
+  ],
+  "hardTrailStrata": [
+    {
+      "strataType": "in_race_trimp_tertile",
+      "strataValue": "high",
+      "activityCount": 18,
+      "maeMin": 30.648511166941333,
+      "biasMin": -3.963351987535348
+    },
+    {
+      "strataType": "duration_tertile",
+      "strataValue": "high",
+      "activityCount": 20,
+      "maeMin": 28.71396920014638,
+      "biasMin": -1.9780614532796228
+    },
+    {
+      "strataType": "dominant_terrain",
+      "strataValue": "Steep descent",
+      "activityCount": 1,
+      "maeMin": 26.078343053451228,
+      "biasMin": 26.078343053451228
+    },
+    {
+      "strataType": "hrr70_share_tertile",
+      "strataValue": "low",
+      "activityCount": 22,
+      "maeMin": 25.607170343070525,
+      "biasMin": -4.315970917673242
+    },
+    {
+      "strataType": "dominant_terrain",
+      "strataValue": "Flat",
+      "activityCount": 11,
+      "maeMin": 20.49555215291873,
+      "biasMin": 16.45296172856938
+    },
+    {
+      "strataType": "dominant_terrain",
+      "strataValue": "Ascent",
+      "activityCount": 21,
+      "maeMin": 20.429708597215942,
+      "biasMin": -2.0672083748526804
+    },
+    {
+      "strataType": "hrr70_share_tertile",
+      "strataValue": "high",
+      "activityCount": 10,
+      "maeMin": 18.70790777431377,
+      "biasMin": 18.01908891191433
+    },
+    {
+      "strataType": "dominant_terrain",
+      "strataValue": "Steep ascent",
+      "activityCount": 6,
+      "maeMin": 16.824387127530333,
+      "biasMin": -8.928991450691607
+    },
+    {
+      "strataType": "dominant_terrain",
+      "strataValue": "Descent",
+      "activityCount": 3,
+      "maeMin": 16.797360019336935,
+      "biasMin": 16.797360019336935
+    },
+    {
+      "strataType": "duration_tertile",
+      "strataValue": "mid",
+      "activityCount": 15,
+      "maeMin": 15.367463131554926,
+      "biasMin": 10.560820692830456
+    },
+    {
+      "strataType": "in_race_trimp_tertile",
+      "strataValue": "mid",
+      "activityCount": 19,
+      "maeMin": 12.268978335673657,
+      "biasMin": 8.594509836052536
+    },
+    {
+      "strataType": "in_race_trimp_tertile",
+      "strataValue": "low",
+      "activityCount": 8,
+      "maeMin": 8.941949696224972,
+      "biasMin": 5.662898618686054
+    }
+  ],
+  "hardTrailTerrain": [
+    {
+      "terrainFamily": "steep_climb",
+      "terrainLabel": "Steep ascent",
+      "segmentCount": 61,
+      "maeMin": 4.201732788070378,
+      "biasMin": 3.8468610042570215,
+      "mapePct": 25.67500778729068
+    },
+    {
+      "terrainFamily": "steep_descent",
+      "terrainLabel": "Steep descent",
+      "segmentCount": 67,
+      "maeMin": 3.421965348345426,
+      "biasMin": -3.393938632789652,
+      "mapePct": 33.70284858494126
+    },
+    {
+      "terrainFamily": "climb",
+      "terrainLabel": "Ascent",
+      "segmentCount": 189,
+      "maeMin": 2.145190143920047,
+      "biasMin": 1.6607343355289714,
+      "mapePct": 19.68300829669169
+    },
+    {
+      "terrainFamily": "mixed_climb_descent",
+      "terrainLabel": "Mixed climb/descent",
+      "segmentCount": 110,
+      "maeMin": 1.6857977916797555,
+      "biasMin": 0.3688265101016335,
+      "mapePct": 16.770197757985375
+    },
+    {
+      "terrainFamily": "descent",
+      "terrainLabel": "Descent",
+      "segmentCount": 192,
+      "maeMin": 1.4113757878955109,
+      "biasMin": -0.9978241882708272,
+      "mapePct": 16.330495256012156
+    },
+    {
+      "terrainFamily": "flat",
+      "terrainLabel": "Flat",
+      "segmentCount": 218,
+      "maeMin": 1.173384502645782,
+      "biasMin": 0.5397237575745665,
+      "mapePct": 17.743500165624546
+    }
+  ]
+}

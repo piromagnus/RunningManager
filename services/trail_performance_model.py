@@ -6,6 +6,7 @@ Trail running digital-twin helpers used by the research notebook.
 
 from __future__ import annotations
 
+import logging
 import math
 from dataclasses import dataclass
 from typing import Iterable, Mapping, Optional, Sequence
@@ -15,12 +16,17 @@ import pandas as pd
 
 from utils.redi import compute_redi
 
+logger = logging.getLogger(__name__)
+
 MINETTI_RUNNING_FLAT_COST = 3.6
 MINETTI_GRADE_CLAMP = 0.75
 GRADE_OUTLIER_ABS_THRESHOLD = 1.0
 EARTH_RADIUS_M = 6_371_000.0
 SEGMENT_GRADE_SHARE_THRESHOLD = 0.03
 MIXED_CLIMB_DESCENT_MIN_SHARE = 0.25
+DEFAULT_STATIONARY_SPEED_KMH = 1.0
+DEFAULT_MIN_MEAN_SPEED_KMH = 1.0
+DEFAULT_MAX_STATIONARY_TIME_SHARE = 0.80
 DEFAULT_FORBIDDEN_ANONYMIZED_COLUMNS = frozenset(
     {
         "activityid",
@@ -447,6 +453,14 @@ def segment_timeseries(
         else:
             mean_speed_eq = mean_speed
 
+        delta_time = pd.to_numeric(seg_df["delta_time_sec"], errors="coerce").fillna(0.0)
+        delta_km = pd.to_numeric(seg_df["delta_km"], errors="coerce").fillna(0.0)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            instant_speed = np.where(delta_time > 0.0, delta_km / delta_time * 3600.0, 0.0)
+        stationary_mask = instant_speed < DEFAULT_STATIONARY_SPEED_KMH
+        stationary_time_sec = float(delta_time.to_numpy(dtype=float)[stationary_mask].sum())
+        stationary_time_share = stationary_time_sec / time_sec if time_sec > 0 else 0.0
+
         technicality = 0.0
         if "lat" in seg_df.columns and "lon" in seg_df.columns:
             technicality = gps_technicality_index(seg_df["lat"], seg_df["lon"])
@@ -482,11 +496,107 @@ def segment_timeseries(
                 "meanHrReserve": mean_hr_reserve,
                 "meanSpeedKmh": mean_speed,
                 "meanSpeedEqKmh": mean_speed_eq,
+                "stationaryTimeShare": stationary_time_share,
+                "stationaryTimeSec": stationary_time_sec,
                 "progress": progress,
             }
         )
 
     return pd.DataFrame(rows)
+
+
+def apply_segment_exclusion(
+    segments_df: pd.DataFrame,
+    *,
+    enabled: bool = True,
+    min_mean_speed_kmh: float = DEFAULT_MIN_MEAN_SPEED_KMH,
+    max_stationary_time_share: float = DEFAULT_MAX_STATIONARY_TIME_SHARE,
+    stationary_speed_kmh: float = DEFAULT_STATIONARY_SPEED_KMH,
+) -> pd.DataFrame:
+    """Flag stationary / near-stop segments that should be excluded from fitting.
+
+    Excluded segments remain in the frame for full-race evaluation. Typical cases are
+    aid-station stops or the device remaining open while the athlete is not moving.
+    """
+    if segments_df.empty:
+        return segments_df.copy()
+
+    out = segments_df.copy()
+    mean_speed = pd.to_numeric(out.get("meanSpeedKmh"), errors="coerce")
+    if mean_speed.isna().all() and {"distanceKm", "actualTimeSec"}.issubset(out.columns):
+        logger.warning(
+            "apply_segment_exclusion: meanSpeedKmh missing; falling back to distance/time speed"
+        )
+        distance = pd.to_numeric(out["distanceKm"], errors="coerce")
+        time_sec = pd.to_numeric(out["actualTimeSec"], errors="coerce")
+        mean_speed = pd.Series(
+            np.where(
+                (time_sec > 0) & np.isfinite(distance) & np.isfinite(time_sec),
+                distance / time_sec * 3600.0,
+                np.nan,
+            ),
+            index=out.index,
+        )
+        out["meanSpeedKmh"] = mean_speed
+    if "stationaryTimeShare" in out.columns:
+        stationary_share = pd.to_numeric(out["stationaryTimeShare"], errors="coerce")
+    else:
+        logger.warning(
+            "apply_segment_exclusion: stationaryTimeShare missing; falling back to mean-speed only"
+        )
+        stationary_share = pd.Series(0.0, index=out.index)
+        out["stationaryTimeShare"] = stationary_share
+
+    reasons: list[str] = []
+    eligible: list[bool] = []
+    for idx in out.index:
+        reason_parts: list[str] = []
+        speed_val = mean_speed.loc[idx]
+        share_val = stationary_share.loc[idx]
+        if enabled:
+            if pd.notna(speed_val) and float(speed_val) < float(min_mean_speed_kmh):
+                reason_parts.append("low_mean_speed")
+            if pd.notna(share_val) and float(share_val) > float(max_stationary_time_share):
+                reason_parts.append("high_stationary_share")
+        eligible.append(not reason_parts)
+        reasons.append("|".join(reason_parts))
+
+    out["isFitEligible"] = eligible if enabled else [True] * len(out)
+    out["exclusionReason"] = reasons if enabled else [""] * len(out)
+    out.attrs["segment_exclusion"] = {
+        "enabled": bool(enabled),
+        "min_mean_speed_kmh": float(min_mean_speed_kmh),
+        "max_stationary_time_share": float(max_stationary_time_share),
+        "stationary_speed_kmh": float(stationary_speed_kmh),
+        "excluded_count": int((~pd.Series(out["isFitEligible"])).sum()) if enabled else 0,
+    }
+    return out
+
+
+def _resolve_fit_mask(
+    segments_df: pd.DataFrame,
+    fit_mask_col: Optional[str],
+    *,
+    context: str,
+) -> pd.Series:
+    """Return a boolean fit mask; fall back to all-True with a warning when missing."""
+    if not fit_mask_col:
+        return pd.Series(True, index=segments_df.index)
+    if fit_mask_col not in segments_df.columns:
+        logger.warning(
+            "%s: fit_mask_col=%s missing; falling back to fitting on all segments",
+            context,
+            fit_mask_col,
+        )
+        return pd.Series(True, index=segments_df.index)
+    mask = segments_df[fit_mask_col].fillna(False).astype(bool)
+    if not bool(mask.any()):
+        logger.warning(
+            "%s: fit mask excluded every segment; falling back to fitting on all segments",
+            context,
+        )
+        return pd.Series(True, index=segments_df.index)
+    return mask
 
 
 def route_segments_from_points(
@@ -2117,23 +2227,37 @@ def hrr_trimp_grid_search_model(
     activity_col: str = "activityId",
     objective: str = "race",
     observed_activity_times_sec: Optional[Mapping[str, float]] = None,
+    fit_mask_col: Optional[str] = None,
     **prediction_kwargs: object,
 ) -> tuple[dict[str, object], pd.DataFrame, pd.DataFrame]:
-    """Grid-search the constrained HRR+TRIMP model with segment and race metrics."""
+    """Grid-search the constrained HRR+TRIMP model with segment and race metrics.
+
+    When ``fit_mask_col`` is set, hyperparameters are selected using only fit-eligible
+    segments. Predictions are still produced for every segment so full-race evaluation
+    remains available after optimization.
+    """
     if segments_df.empty:
         empty = pd.DataFrame()
         return {}, empty, empty
 
+    fit_mask = _resolve_fit_mask(segments_df, fit_mask_col, context="hrr_trimp_grid_search_model")
     actual_segment = pd.to_numeric(segments_df["actualTimeSec"], errors="coerce")
     actual_segment_values = actual_segment.to_numpy(dtype=float)
+    fit_mask_values = fit_mask.to_numpy(dtype=bool)
     activity_codes: Optional[np.ndarray] = None
     race_actual_values = np.array([], dtype=float)
+    race_actual_fit_values = np.array([], dtype=float)
     if activity_col in segments_df.columns:
         activity_labels, activity_uniques = pd.factorize(segments_df[activity_col].astype(str), sort=False)
         activity_codes = activity_labels.astype(int)
         race_actual_values = np.bincount(
             activity_codes,
             weights=np.nan_to_num(actual_segment_values, nan=0.0),
+            minlength=len(activity_uniques),
+        ).astype(float)
+        race_actual_fit_values = np.bincount(
+            activity_codes,
+            weights=np.nan_to_num(actual_segment_values * fit_mask_values, nan=0.0),
             minlength=len(activity_uniques),
         ).astype(float)
         if observed_activity_times_sec is not None:
@@ -2177,8 +2301,21 @@ def hrr_trimp_grid_search_model(
                         secondary_fatigue_model=secondary_model,
                         has_secondary_fatigue=has_secondary_fatigue,
                     )
-                    segment_metrics = _regression_metrics_arrays(actual_segment_values, predicted_values)
+                    segment_metrics = _regression_metrics_arrays(
+                        actual_segment_values[fit_mask_values],
+                        predicted_values[fit_mask_values],
+                    )
+                    segment_metrics_full = _regression_metrics_arrays(
+                        actual_segment_values,
+                        predicted_values,
+                    )
                     race_metrics = {
+                        "r2": np.nan,
+                        "maeSec": np.nan,
+                        "mapePct": np.nan,
+                        "biasSec": np.nan,
+                    }
+                    race_metrics_full = {
                         "r2": np.nan,
                         "maeSec": np.nan,
                         "mapePct": np.nan,
@@ -2190,7 +2327,28 @@ def hrr_trimp_grid_search_model(
                             weights=np.nan_to_num(predicted_values, nan=0.0),
                             minlength=len(race_actual_values),
                         ).astype(float)
-                        race_metrics = _regression_metrics_arrays(race_actual_values, race_predicted_values)
+                        race_predicted_fit_values = np.bincount(
+                            activity_codes,
+                            weights=np.nan_to_num(predicted_values * fit_mask_values, nan=0.0),
+                            minlength=len(race_actual_fit_values),
+                        ).astype(float)
+                        # When exclusion is active, optimize on cleaned segment totals.
+                        # Otherwise keep legacy full-race / observed-time selection.
+                        use_fit_only = bool(fit_mask_col) and (not bool(fit_mask_values.all()))
+                        if use_fit_only:
+                            race_metrics = _regression_metrics_arrays(
+                                race_actual_fit_values,
+                                race_predicted_fit_values,
+                            )
+                        else:
+                            race_metrics = _regression_metrics_arrays(
+                                race_actual_values,
+                                race_predicted_values,
+                            )
+                        race_metrics_full = _regression_metrics_arrays(
+                            race_actual_values,
+                            race_predicted_values,
+                        )
                     row = {
                         "alpha": alpha,
                         "fatigueCoef": fatigue_coef,
@@ -2202,10 +2360,20 @@ def hrr_trimp_grid_search_model(
                         "segmentMaeSec": segment_metrics["maeSec"],
                         "segmentMapePct": segment_metrics["mapePct"],
                         "segmentBiasSec": segment_metrics["biasSec"],
+                        "segmentR2Full": segment_metrics_full["r2"],
+                        "segmentMaeSecFull": segment_metrics_full["maeSec"],
+                        "segmentMapePctFull": segment_metrics_full["mapePct"],
+                        "segmentBiasSecFull": segment_metrics_full["biasSec"],
                         "raceR2": race_metrics["r2"],
                         "raceMaeSec": race_metrics["maeSec"],
                         "raceMapePct": race_metrics["mapePct"],
                         "raceBiasSec": race_metrics["biasSec"],
+                        "raceR2Full": race_metrics_full["r2"],
+                        "raceMaeSecFull": race_metrics_full["maeSec"],
+                        "raceMapePctFull": race_metrics_full["mapePct"],
+                        "raceBiasSecFull": race_metrics_full["biasSec"],
+                        "fitSegmentCount": int(fit_mask_values.sum()),
+                        "fullSegmentCount": int(len(fit_mask_values)),
                     }
                     rows.append(row)
                     if best is None:
@@ -2229,6 +2397,7 @@ def hrr_trimp_grid_search_model(
     prediction_df = segments_df.copy()
     prediction_df["predictedTimeSec"] = best_prediction_values.astype(float)
     prediction_df["errorSec"] = prediction_df["predictedTimeSec"] - actual_segment
+    prediction_df["isFitEligible"] = fit_mask_values
     assert best is not None
     return best, pd.DataFrame(rows), prediction_df
 
@@ -2243,15 +2412,23 @@ def leave_one_out_hrr_trimp_grid_search(
     activity_col: str = "activityId",
     observed_activity_times_sec: Optional[Mapping[str, float]] = None,
     objective: str = "race",
+    fit_mask_col: Optional[str] = None,
     **prediction_kwargs: object,
 ) -> pd.DataFrame:
-    """Leave-one-activity-out validation for the constrained HRR+TRIMP model."""
+    """Leave-one-activity-out validation for the constrained HRR+TRIMP model.
+
+    Hyperparameters are fit on cleaned segments of the training activities. Each fold
+    still scores the held-out activity on the full race (all segments), so residual
+    error on excluded stops remains informative.
+    """
     if segments_df.empty or activity_col not in segments_df.columns:
         return pd.DataFrame()
 
     folds: list[dict[str, object]] = []
     working = segments_df.copy()
     working[activity_col] = working[activity_col].astype(str)
+    fit_mask = _resolve_fit_mask(working, fit_mask_col, context="leave_one_out_hrr_trimp_grid_search")
+    working["_fitMask"] = fit_mask.to_numpy(dtype=bool)
     for held_out in working[activity_col].dropna().unique().tolist():
         train = working[working[activity_col].ne(held_out)]
         test = working[working[activity_col].eq(held_out)]
@@ -2267,6 +2444,7 @@ def leave_one_out_hrr_trimp_grid_search(
             activity_col=activity_col,
             objective=objective,
             observed_activity_times_sec=observed_activity_times_sec,
+            fit_mask_col="_fitMask",
             **prediction_kwargs,
         )
         predicted_segments = predict_hrr_trimp_segment_times(
@@ -2284,7 +2462,10 @@ def leave_one_out_hrr_trimp_grid_search(
         )
         if not math.isfinite(actual):
             actual = pd.to_numeric(test["actualTimeSec"], errors="coerce").sum()
-        predicted = predicted_segments.sum()
+        predicted = float(predicted_segments.sum())
+        test_mask = test["_fitMask"].to_numpy(dtype=bool)
+        actual_fit = float(pd.to_numeric(test["actualTimeSec"], errors="coerce").to_numpy()[test_mask].sum())
+        predicted_fit = float(np.asarray(predicted_segments, dtype=float)[test_mask].sum())
         folds.append(
             {
                 "activityId": held_out,
@@ -2295,11 +2476,19 @@ def leave_one_out_hrr_trimp_grid_search(
                 "secondaryFatigueModel": best.get("secondaryFatigueModel", ""),
                 "secondaryAcuteTrimpCol": best.get("secondaryAcuteTrimpCol", ""),
                 "actualTimeSec": float(actual),
-                "predictedTimeSec": float(predicted),
+                "predictedTimeSec": predicted,
                 "errorSec": float(predicted - actual),
                 "errorPct": float((predicted - actual) / actual * 100.0)
                 if actual > 0
                 else np.nan,
+                "actualFitEligibleSec": actual_fit,
+                "predictedFitEligibleSec": predicted_fit,
+                "fitEligibleErrorSec": float(predicted_fit - actual_fit),
+                "fitEligibleSegmentCount": int(test_mask.sum()),
+                "excludedSegmentCount": int((~test_mask).sum()),
+                "excludedTimeSec": float(
+                    pd.to_numeric(test["actualTimeSec"], errors="coerce").to_numpy()[~test_mask].sum()
+                ),
             }
         )
     return pd.DataFrame(folds)

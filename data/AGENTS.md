@@ -37,7 +37,10 @@ CSV-backed persistence layer for Running Manager. All data uses `.` as decimal s
 - Aggregate CSVs and HTML reports are versioned (leaderboard, stage metrics, fitted parameters, etc.)
 - `benchmark_hrr_trimp_grid_search.csv` is gitignored (hundreds of MB; recomputable from benchmark reruns)
 - Synthesis report: `docs/science/trail_digital_twin_experiment_synthesis_report.md`
+- Session review: `docs/science/trail_digital_twin_session_benchmark_review.md`
+- Session CSV: `exp_perf_predictions/session_benchmark_review/`
 - Regenerate synthesis: `uv run python scripts/synthesize_trail_digital_twin_experiments.py`
+- Regenerate session review: `uv run python scripts/synthesize_trail_digital_twin_sessions.py`
 
 ## Key Schema References
 
