@@ -1,0 +1,6 @@
+cohort,activityCount,temperatureAvailableCount,temperatureCoveragePct,temperatureCMedian,temperatureCP05,temperatureCP95
+hardTrailRun,45,0,0.0,,,
+hardRunOrTrailRun,103,6,5.825242718446602,20.5,16.75,23.25
+runTrailOver20Min,208,18,8.653846153846153,21.0,15.85,26.0
+top10HardTrailByHRR,10,0,0.0,,,
+selectedDateRaces,18,1,5.555555555555555,11.0,11.0,11.0

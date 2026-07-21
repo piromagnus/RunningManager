@@ -1,0 +1,19 @@
+{
+  "multi_athlete": "blocked_single_athlete_case_study",
+  "preregistered_splits": "done",
+  "nested_loo_bootstrap_alpha_kappa": "done",
+  "physics_baseline_matched": "done",
+  "broader_prospective": "done_lut_gresivaudan_rome",
+  "finish_time_uncertainty_bands": "done",
+  "sex_age_strata": "blocked_single_athlete",
+  "weather_coverage": "done_sparse_no_model_term",
+  "aid_nutrition_logs": "blocked_no_structured_logs_moving_time_proxy",
+  "hr_qc": "done",
+  "dem_elevation": "blocked_no_dem_barometric_qa_only",
+  "frozen_ablation": "done",
+  "segment_vs_race_objective": "done",
+  "software_versions_seeds": "done",
+  "figures": "done",
+  "runTrailOver20Min_cohort": "done",
+  "speed_vs_hrr_1km_curve": "done"
+}

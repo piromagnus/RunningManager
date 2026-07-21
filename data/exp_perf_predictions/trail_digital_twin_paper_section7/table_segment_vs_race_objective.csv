@@ -1,0 +1,10 @@
+cohort,stage,activity,segment,deltaMaeMin_activityMinusSegment,note
+hardRunOrTrailRun,Stage 3 HRR speed ratio,9.617866596113975,10.024692881713204,-0.4068262855992284,objectives agree within ~1 min MAE
+hardRunOrTrailRun,Stage 3 HRR speed ratio LOO,9.090699736517465,9.32667767632872,-0.2359779398112547,objectives agree within ~1 min MAE
+hardTrailRun,Stage 3 HRR speed ratio,17.38876304917636,17.96853452162027,-0.5797714724439089,objectives agree within ~1 min MAE
+hardTrailRun,Stage 3 HRR speed ratio LOO,17.388763049176358,17.968534521620263,-0.5797714724439054,objectives agree within ~1 min MAE
+runTrailOver20Min,Stage 3 HRR speed ratio,6.549719227901047,6.68197309894592,-0.13225387104487307,objectives agree within ~1 min MAE
+runTrailOver20Min,Stage 3 HRR speed ratio LOO,5.087777539651174,5.060363681997365,0.027413857653809437,objectives agree within ~1 min MAE
+selectedDateRaces,Stage 3 HRR speed ratio,9.111149449331538,7.716936251162355,1.394213198169183,"objectives disagree; race objective prioritizes finish-time, segment prioritizes local fit"
+selectedDateRaces,Stage 3 HRR speed ratio LOO,11.84304485051135,7.716936251162358,4.126108599348991,"objectives disagree; race objective prioritizes finish-time, segment prioritizes local fit"
+top10HardTrailByHRR,Stage 3 HRR speed ratio,3.815792252284412,3.815792252284412,0.0,objectives agree within ~1 min MAE

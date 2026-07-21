@@ -1,0 +1,77 @@
+{
+  "selected_race_dates": [
+    "2025-10-18",
+    "2026-04-12",
+    "2025-08-06",
+    "2025-09-28",
+    "2025-06-23",
+    "2025-07-27",
+    "2025-07-24",
+    "2025-08-01",
+    "2024-08-18",
+    "2025-11-01",
+    "2025-04-27",
+    "2025-07-12",
+    "2026-02-22",
+    "2026-04-18",
+    "2024-07-28",
+    "2025-08-03",
+    "2025-06-29",
+    "2025-08-23"
+  ],
+  "holdout_activity_ids": [
+    "17481444994",
+    "16325125849",
+    "17815897198"
+  ],
+  "prospective_races": {
+    "lut_30k": {
+      "label": "Lyon Urban Trail By Night 2025",
+      "activityId": "16325125849",
+      "gpx": "divers/30km - LUT By Night .gpx",
+      "race_pacing_id": "d8b4117c-ef61-488c-9317-812622d44863"
+    },
+    "gresivaudan": {
+      "label": "Trail du Gr\u00e9sivaudan 2026 : Le Grand V",
+      "activityId": "17481444994",
+      "gpx": "divers/trail-du-gresivaudan-2026.gpx",
+      "race_pacing_id": "c67065ad-ec3c-41ce-9388-d62acd4d1531"
+    },
+    "rome_marathon": {
+      "label": "Marathon de Rome 2026",
+      "activityId": "17815897198",
+      "gpx": "divers/Marathon de rome.gpx",
+      "race_pacing_id": "dd6443fb-705a-4a09-99ec-693a5f7bb440"
+    }
+  },
+  "cohorts_include": [
+    "hardTrailRun",
+    "hardRunOrTrailRun",
+    "runTrailOver20Min",
+    "top10HardTrailByHRR",
+    "selectedDateRaces"
+  ],
+  "loo_include": [
+    "hardTrailRun",
+    "hardRunOrTrailRun",
+    "runTrailOver20Min",
+    "selectedDateRaces"
+  ],
+  "loo_activity_cap": 80,
+  "physiology": {
+    "segment_km": 1.0,
+    "vma_flat_kmh": 18.0,
+    "vt2_threshold_name": "Threshold 30",
+    "vt2_fallback_kmh": 15.0,
+    "hrr_reference": 0.88,
+    "hrr_min_factor": 0.3,
+    "hrr_max_factor": 1.0,
+    "decay_lambda": 0.2,
+    "min_fatigue_factor": 0.6,
+    "gap_steep_threshold": 0.15,
+    "gap_soft_start": 0.04,
+    "gap_climb_scale": 0.85,
+    "gap_descent_scale": 1.6
+  },
+  "gitSha": "45a982a0043e490851687133cc22d690c27b8540"
+}

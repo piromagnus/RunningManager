@@ -250,21 +250,26 @@ A single HRR+TRIMP trail digital twin, evaluated with LOO and prospective consta
 
 ### 7.1 Scientific / experimental
 
-| Missing item | Why it matters | Minimal fix |
-|--------------|----------------|-------------|
-| **≥8–15 athletes** (or explicit case-study framing) | External validity | Same pipeline; per-athlete + pooled MAE |
-| **Pre-registered race set & splits** | Avoid selective reporting | Freeze race IDs, dates, inclusion rules |
-| **Nested CV / repeated LOO** | Honest uncertainty on α,κ | Outer LOO + inner grid; bootstrap CIs |
-| **Matched physics-only baseline on same data** | Fair vs 2026 twin | Re-implement no-HR twin on identical races |
-| **Broader prospective set** | Strengthen “prediction” claim | Expand E3 beyond two races |
-| **Uncertainty bands on finish time** | Coaching utility | Bootstrap / posterior on (α,κ) |
-| **Sex, level, age strata** | Population heterogeneity | Recruit diversity; subgroup errors |
-| **Weather / heat / mud** | Environmental variance | Log conditions; optional multipliers |
-| **Structured aid / nutrition logs** | Stationary ≠ fatigue | Beyond moving-time scrubbing |
-| **HR QC (% valid samples)** | Strap dropouts bias HRR | Artifact filters; coverage threshold |
-| **DEM / barometric elevation QA** | Grade noise | Prefer DEM-corrected elevation |
-| **Frozen ablation table** | Paper clarity | Physics / +HRR / +TRIMP / +GAP scales |
-| **Segment vs race objective analysis** | Why objectives disagree | Short bias–variance note |
+| Missing item | Why it matters | Minimal fix | Status (this repo) |
+|--------------|----------------|-------------|--------------------|
+| **≥8–15 athletes** (or explicit case-study framing) | External validity | Same pipeline; per-athlete + pooled MAE | Blocked (single athlete) |
+| **Pre-registered race set & splits** | Avoid selective reporting | Freeze race IDs, dates, inclusion rules | Done → `preregistered_race_protocol.json` |
+| **Nested CV / repeated LOO** | Honest uncertainty on α,κ | Outer LOO + inner grid; bootstrap CIs | Done → bootstrap MAE + α/κ tables |
+| **Matched physics-only baseline on same data** | Fair vs 2026 twin | Re-implement no-HR twin on identical races | Done → `table_frozen_physics_vs_hrr.csv` |
+| **Broader prospective set** | Strengthen “prediction” claim | Expand E3 beyond two races | Done (LUT, Grésivaudan, Rome) |
+| **Uncertainty bands on finish time** | Coaching utility | Bootstrap / posterior on (α,κ) | Done → prospective bands CSV |
+| **Sex, level, age strata** | Population heterogeneity | Recruit diversity; subgroup errors | Blocked |
+| **Weather / heat / mud** | Environmental variance | Log conditions; optional multipliers | Coverage logged (sparse); no fitted term |
+| **Structured aid / nutrition logs** | Stationary ≠ fatigue | Beyond moving-time scrubbing | Blocked (moving-time proxy only) |
+| **HR QC (% valid samples)** | Strap dropouts bias HRR | Artifact filters; coverage threshold | Done → `table_hr_qc.csv` |
+| **DEM / barometric elevation QA** | Grade noise | Prefer DEM-corrected elevation | Barometric QA only (no DEM) |
+| **Frozen ablation table** | Paper clarity | Physics / +HRR / +TRIMP / +GAP scales | Done |
+| **Segment vs race objective analysis** | Why objectives disagree | Short bias–variance note | Done |
+| **Cohort run/trail >20 min** | Broader activity mix | `runTrailOver20Min` | Done (n=208; LOO capped at 80) |
+| **Speed vs HRR (1 km)** | Effort–speed response curve | `speed_vs_hrr_1km.csv` | Done |
+
+See `docs/science/section7_implementation_status.md` and  
+`data/exp_perf_predictions/trail_digital_twin_paper_section7/`.
 
 ### 7.2 Reporting / ethics / reproducibility
 

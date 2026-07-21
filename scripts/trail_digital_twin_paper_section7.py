@@ -92,22 +92,65 @@ def _write_html(fig: go.Figure, path: Path) -> None:
 
 def weather_coverage_table(activity_features: pd.DataFrame, cohorts: dict[str, pd.DataFrame]) -> pd.DataFrame:
     rows: list[dict[str, object]] = []
-    for cohort_name, cohort_df in cohorts.items():
-        ids = set(cohort_df["activityId"].astype(str))
-        subset = activity_features[activity_features["activityId"].astype(str).isin(ids)].copy()
-        temp = pd.to_numeric(subset.get("temperatureC"), errors="coerce")
-        rows.append(
+    if activity_features.empty:
+        return pd.DataFrame()
+    temp_all = pd.to_numeric(activity_features.get("temperatureC"), errors="coerce")
+
+    # Prefer explicit activityId join; else anonymized cohort_* flags.
+    if "activityId" in activity_features.columns and cohorts:
+        for cohort_name, cohort_df in cohorts.items():
+            ids = set(cohort_df["activityId"].astype(str))
+            subset = activity_features[activity_features["activityId"].astype(str).isin(ids)].copy()
+            temp = pd.to_numeric(subset.get("temperatureC"), errors="coerce")
+            rows.append(
+                {
+                    "cohort": cohort_name,
+                    "activityCount": int(len(subset)),
+                    "temperatureAvailableCount": int(temp.notna().sum()),
+                    "temperatureCoveragePct": float(temp.notna().mean() * 100.0) if len(subset) else np.nan,
+                    "temperatureCMedian": float(temp.median()) if temp.notna().any() else np.nan,
+                    "temperatureCP05": float(temp.quantile(0.05)) if temp.notna().any() else np.nan,
+                    "temperatureCP95": float(temp.quantile(0.95)) if temp.notna().any() else np.nan,
+                }
+            )
+        return pd.DataFrame(rows)
+
+    cohort_flag_cols = [c for c in activity_features.columns if str(c).startswith("cohort_")]
+    if cohort_flag_cols:
+        for col in cohort_flag_cols:
+            cohort_name = str(col).removeprefix("cohort_")
+            mask = activity_features[col].astype(str).str.lower().isin(["true", "1", "yes"])
+            if activity_features[col].dtype == bool:
+                mask = activity_features[col].fillna(False)
+            subset = activity_features.loc[mask]
+            temp = pd.to_numeric(subset.get("temperatureC"), errors="coerce")
+            rows.append(
+                {
+                    "cohort": cohort_name,
+                    "activityCount": int(len(subset)),
+                    "temperatureAvailableCount": int(temp.notna().sum()),
+                    "temperatureCoveragePct": float(temp.notna().mean() * 100.0) if len(subset) else np.nan,
+                    "temperatureCMedian": float(temp.median()) if temp.notna().any() else np.nan,
+                    "temperatureCP05": float(temp.quantile(0.05)) if temp.notna().any() else np.nan,
+                    "temperatureCP95": float(temp.quantile(0.95)) if temp.notna().any() else np.nan,
+                }
+            )
+        return pd.DataFrame(rows)
+
+    logger.warning("weather_coverage_table: falling back to global temperature coverage")
+    return pd.DataFrame(
+        [
             {
-                "cohort": cohort_name,
-                "activityCount": int(len(subset)),
-                "temperatureAvailableCount": int(temp.notna().sum()),
-                "temperatureCoveragePct": float(temp.notna().mean() * 100.0) if len(subset) else np.nan,
-                "temperatureCMedian": float(temp.median()) if temp.notna().any() else np.nan,
-                "temperatureCP05": float(temp.quantile(0.05)) if temp.notna().any() else np.nan,
-                "temperatureCP95": float(temp.quantile(0.95)) if temp.notna().any() else np.nan,
+                "cohort": "all",
+                "activityCount": int(len(activity_features)),
+                "temperatureAvailableCount": int(temp_all.notna().sum()),
+                "temperatureCoveragePct": float(temp_all.notna().mean() * 100.0) if len(activity_features) else np.nan,
+                "temperatureCMedian": float(temp_all.median()) if temp_all.notna().any() else np.nan,
+                "temperatureCP05": float(temp_all.quantile(0.05)) if temp_all.notna().any() else np.nan,
+                "temperatureCP95": float(temp_all.quantile(0.95)) if temp_all.notna().any() else np.nan,
             }
-        )
-    return pd.DataFrame(rows)
+        ]
+    )
 
 
 def elevation_qa_table(segments: pd.DataFrame) -> pd.DataFrame:
