@@ -42,7 +42,7 @@ Figure. Leave-one-out mean absolute error across successive model additions (M0 
 
 ## `fig_component_ablation_delta_mae.png`
 
-Figure. Increase in mean absolute error after ablating individual components of the full Stage-3 specification (positive values indicate loss of accuracy).
+Figure. Increase in leave-one-out mean absolute error after removing individual components and re-optimizing (α, κ) (positive values indicate loss of accuracy).
 
 ## `fig_segment_rejection_policies.png`
 

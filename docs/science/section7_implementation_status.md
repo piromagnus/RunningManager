@@ -15,7 +15,8 @@ Artifacts: `data/exp_perf_predictions/trail_digital_twin_paper_section7/`.
 | Weather coverage (sparse) | `table_weather_coverage.csv` |
 | HR QC (% valid samples) | `table_hr_qc.csv` / `segment_qc.csv` |
 | Elevation QA (barometric only) | `table_elevation_qa.csv` |
-| Frozen ablation (+ trail GAP scales) | `table_frozen_stage3_ablation.csv` |
+| Frozen ablation (+ trail GAP scales) | superseded by reoptimized protocol |
+| Reoptimized component ablation (LOO) | `table_frozen_stage3_ablation.csv` (`ablationProtocol=reoptimize_loo`) |
 | Segment vs race objective | `table_segment_vs_race_objective.csv` |
 | Software versions / seeds | `software_versions.json` |
 | Figures (pred vs actual, Bland–Altman) | `figures/` |

@@ -17,7 +17,7 @@ Domain services for planning, analytics, metrics, and external integrations.
 | `garmin_import_service.py` | Garmin import (stub) |
 | `garmin_export_service.py` | TCX export for intervals |
 | `dashboard_data_service.py` | Dashboard data preprocessing |
-| `trail_digital_twin_pipeline.py` | Configurable trail digital-twin fitting/report pipeline; cohorts include `runTrailOver20Min`; LOO caps/`loo_include`; HR QC in `segment_qc`; `software_versions.json` |
+| `trail_digital_twin_pipeline.py` | Configurable trail digital-twin fitting/report pipeline; cohorts include `runTrailOver20Min`; LOO caps/`loo_include`; HR QC in `segment_qc`; `software_versions.json`; Stage-3 ablation protocols `reoptimize` (default) vs `frozen` |
 | `trail_digital_twin_benchmark.py` | Benchmark sweep expansion, leaderboard extraction, HTML reporting; bootstrap MAE + α/κ uncertainty helpers |
 | `activity_feed_service.py` | Activity list building |
 | `activity_detail_service.py` | Single activity detail loading |

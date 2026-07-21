@@ -76,6 +76,10 @@ fitting:
   validation_modes:
     - in_sample
     - loo
+  # Re-fit (α, κ) after each component removal; evaluate with LOO.
+  ablation_protocol: reoptimize
+  ablation_fit_objectives:
+    - activity
   stage0_alpha_grid:
     - 0.70
     - 0.80

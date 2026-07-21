@@ -3,7 +3,7 @@ SPDX-License-Identifier: GPL-3.0-or-later
 
 Run available §7 paper-readiness experiments for the HR digital twin.
 
-Produces LOO metrics (incl. runTrailOver20Min), bootstrap CIs, frozen ablation,
+Produces LOO metrics (incl. runTrailOver20Min), bootstrap CIs, reoptimized component ablation,
 figures, speed-vs-HRR curve, weather/HR QC/elevation coverage, and prospective
 finish-time bands.
 """

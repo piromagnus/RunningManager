@@ -159,6 +159,7 @@ def table_component_ablation(src: Path) -> pd.DataFrame:
                 "Bias (min)": round(float(row["biasMin"]), 2),
                 "R²": round(float(row["r2"]), 3),
                 "ΔMAE vs full (min)": round(float(row["deltaMaeMinVsFull"]), 2),
+                "Protocol": str(row["ablationProtocol"]) if "ablationProtocol" in abl.columns else "frozen",
             }
         )
     return pd.DataFrame(rows)
@@ -463,8 +464,9 @@ def write_tables(src: Path, out_dir: Path) -> dict[str, Path]:
         ),
         "table03_component_ablation": (
             table_component_ablation(src),
-            "Table 3. Component ablation of the full Stage-3 model (in-sample activity objective).",
-            "Positive ΔMAE indicates degraded accuracy after removing the component. "
+            "Table 3. Component ablation with re-optimized (α, κ) per removal (LOO, activity objective).",
+            "Positive ΔMAE indicates degraded accuracy after removing the component and re-fitting. "
+            "Protocol column reports reoptimize_loo (preferred) vs legacy frozen. "
             "Trail GAP scales refer to asymmetric soft-ramped climb/descent corrections.",
         ),
         "table04_bootstrap_uncertainty": (
@@ -922,8 +924,8 @@ def write_captions(figures: dict[str, Path], out_dir: Path) -> Path:
             "(M0 physics baseline → M1 acute TRIMP → M2 REDI → M3 HRR effort)."
         ),
         "fig_component_ablation_delta_mae.png": (
-            "Figure. Increase in mean absolute error after ablating individual components of the "
-            "full Stage-3 specification (positive values indicate loss of accuracy)."
+            "Figure. Increase in leave-one-out mean absolute error after removing individual "
+            "components and re-optimizing (α, κ) (positive values indicate loss of accuracy)."
         ),
         "fig_segment_rejection_policies.png": (
             "Figure. Extent of near-flat immobile segment rejection (bars) and associated mean "

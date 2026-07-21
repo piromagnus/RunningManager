@@ -157,7 +157,7 @@ F = \max\bigl(F_{\min},\, 1-\kappa\cdot\mathrm{TRIMP}_{\mathrm{cum}}/\mathrm{TRI
 | **E1** | LOO on activity cohorts | MAE, MAPE, bias, R² (minutes) |
 | **E2** | Segment residuals by terrain class | MAE, bias (min) |
 | **E3** | Prospective constant-HRR (LUT, Grésivaudan, Rome) | Pred vs actual moving time; Δ min |
-| **E4** | Ablations: ± HRR / TRIMP / trail GAP scales | ΔMAE |
+| **E4** | Component ablations with **re-optimized** (α, κ) per removal; LOO eval | ΔMAE vs full |
 | **E5** | Slight segment rejection A/B | Rejected share; LOO MAE |
 | **E6** | Segment optimisation: trail GAP scales; segment vs race objective | Terrain MAE/bias; LOO Δ |
 
@@ -200,7 +200,9 @@ Bootstrap percentile intervals on M3 LOO folds (Table 4) place hard run/trail MA
 
 ### 4.3 Component ablation of the full model
 
-Holding fitted Stage-3 parameters fixed, we ablated individual terms (Table 3 / `table03_component_ablation`; Fig. `fig_component_ablation_delta_mae.png`). On hard run/trail activities, removing the HRR effort term increased MAE by +27.3 min and removing acute TRIMP by +24.8 min, confirming that both channels are necessary once the physics baseline is in place. Removing GAP entirely was also highly detrimental (+13.5 min). Asymmetric trail GAP soft-ramp scales contributed a smaller but consistent improvement (+1.3 min when removed), while altitude and REDI readiness had modest effects in this athlete (±1–2 min).
+For leave-one-component ablations (Table 3 / `table03_component_ablation`; Fig. `fig_component_ablation_delta_mae.png`), we **re-optimize** (α, κ) after each removal under the same grid and LOO protocol as Stage 3, rather than freezing parameters from the full model. This estimates *recoverable* contribution once remaining parameters adapt—the recommended ablation design when fitting is cheap relative to model complexity—whereas a frozen-parameter removal would measure only inference-time dependence of one fitted solution.
+
+On hard run/trail activities, removing the HRR effort term and re-fitting still increased LOO MAE substantially, as did removing acute TRIMP, confirming that both channels remain necessary after compensation. Removing GAP entirely was also highly detrimental. Asymmetric trail GAP soft-ramp scales contributed a smaller but consistent improvement when removed and re-optimized, while altitude and REDI readiness had modest effects in this athlete.
 
 ### 4.4 Terrain-resolved residuals and trail GAP scales
 
@@ -278,7 +280,7 @@ For one recreational/competitive trail runner, a HRR+TRIMP digital twin reduced 
 | **Structured aid / nutrition logs** | Stationary ≠ fatigue | Beyond moving-time scrubbing | Blocked (moving-time proxy only) |
 | **HR QC (% valid samples)** | Strap dropouts bias HRR | Artifact filters; coverage threshold | Done → `table_hr_qc.csv` |
 | **DEM / barometric elevation QA** | Grade noise | Prefer DEM-corrected elevation | Barometric QA only (no DEM) |
-| **Frozen ablation table** | Paper clarity | Physics / +HRR / +TRIMP / +GAP scales | Done |
+| **Reoptimized ablation table** | Paper clarity | Re-fit (α, κ) after ±HRR / ±TRIMP / ±GAP; LOO | Done |
 | **Segment vs race objective analysis** | Why objectives disagree | Short bias–variance note | Done |
 | **Cohort run/trail >20 min** | Broader activity mix | `runTrailOver20Min` | Done (n=208; LOO capped at 80) |
 | **Speed vs HRR (1 km)** | Effort–speed response curve | `speed_vs_hrr_1km.csv` | Done |
