@@ -1,7 +1,11 @@
 # Journal: prospective constant-HRR race prediction
 
 Started: 2026-07-20  
-Goal: predict **best constant-hard HRR** finish times for LUT 30k and Grésivaudan **before** the race (profile only).  
+Goal: predict finish times at **constant \(\mathrm{HRR}=\mathrm{HRR}_{\mathrm{ref}}\)**
+(\(E=1\) reference effort under the paper effort law) for LUT 30k and Grésivaudan
+**before** the race (profile only).  
+Note: \(\mathrm{HRR}_{\mathrm{ref}}\) is the normalization/ceiling of \(E(\mathrm{HRR})\),
+**not** “HRR at VMA” (VMA is `vma_flat_kmh`; flat fresh speed at \(E=1\) is \(v_{\mathrm{VMA}}\cdot\alpha\)).  
 Hard rule: **no observed race HR / times / streams in fit or prediction**. Actuals used only for evaluation.
 
 Model summary (athlete vs general): `docs/science/trail_digital_twin_model_summary.md`
@@ -27,7 +31,7 @@ Athlete expectation (qualitative):
 1. Train Stage 3 on `hardRunOrTrailRun` segments **excluding** both hold-out IDs.
 2. Physiology (existing, no new knobs): `vma=18`, `hrr_ref=0.88`, `gap_climb=0.85`, `gap_descent=1.60`, `λ=0.2`, fatigue floor `0.6`.
 3. Course = planned `race_pacing` segments (D+ close to race) + mean altitude from GPX (not race GPS).
-4. Constant hard HRR = **`hrr_reference = 0.88`** → effort multiplier \(E=1\) (higher HRR cannot raise \(E\) because `hrr_max_factor=1.0`; it only adds TRIMP fatigue).
+4. Constant \(\mathrm{HRR}=\mathrm{HRR}_{\mathrm{ref}}=0.88\) → effort multiplier \(E=1\) (higher HRR cannot raise \(E\) because `hrr_max_factor=1.0`; it only adds TRIMP fatigue). This is reference effort, not lab VMA heart rate.
 5. Sequential `cumTrimpBefore` fatigue along the course.
 6. Script: `scripts/predict_race_constant_hrr.py`
 

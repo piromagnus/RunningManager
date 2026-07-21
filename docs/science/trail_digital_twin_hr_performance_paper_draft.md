@@ -12,7 +12,7 @@
 
 ## Abstract (draft)
 
-Accurate prediction of trail-running finish times remains difficult because grade, altitude, and fatigue interact nonlinearly with athlete physiology. Building on the physics-informed digital-twin framework of Jaén-Carrillo and Pattis (2026), we evaluate a **single athlete-specific** model that uses continuous heart-rate reserve (HRR) as instantaneous effort and Banister-style TRIMP as intra-activity fatigue, with soft-ramped trail-grade cost corrections. Using leave-one-out (LOO) validation across hard-run, hard-trail, and run/trail (>20 min) cohorts—with moving-time fitting and slight near-flat immobile segment rejection—a physics baseline (M0) yielded substantially larger errors than the full HRR+TRIMP specification (M3): for mixed hard run/trail activities, MAE decreased from **30.2 to 9.1 min** (MAPE 26.5% → 6.5%). Re-optimized component ablations attribute most of this gain to HRR and acute TRIMP. Soft-ramped trail GAP scales reduced steep-terrain segment MAE by ≈46%. Prospective constant-HRR simulations for held-out races produced finish times at or faster than observed performances when race HRR was submaximal (LUT −4.1 min; Passerelles −8.0 min; Grésivaudan −17.0 min; Échappée Belle −164 min at observed mean HRR ≈0.65), while a road marathon (Rome) failed to transfer (−79 min). Publication assets: `docs/science/paper/`.
+Accurate prediction of trail-running finish times remains difficult because grade, altitude, and fatigue interact nonlinearly with athlete physiology. Building on the physics-informed digital-twin framework of Jaén-Carrillo and Pattis (2026), we evaluate a **single athlete-specific** model that uses continuous heart-rate reserve (HRR) as instantaneous effort and Banister-style TRIMP as intra-activity fatigue, with soft-ramped trail-grade cost corrections. Using leave-one-out (LOO) validation across hard-run, hard-trail, and run/trail (>20 min) cohorts—with moving-time fitting and slight near-flat immobile segment rejection—a physics baseline (M0) yielded substantially larger errors than the full HRR+TRIMP specification (M3): for mixed hard run/trail activities, MAE decreased from **30.2 to 9.1 min** (MAPE 26.5% → 6.5%). Re-optimized component ablations attribute most of this gain to HRR and acute TRIMP. Soft-ramped trail GAP scales reduced steep-terrain segment MAE by ≈46%. Prospective simulations hold \(\mathrm{HRR}=\mathrm{HRR}_{\mathrm{ref}}=0.88\) (\(E=1\) reference effort, not “HRR at VMA”) and finish at or faster than observed races when mean race HRR was below reference (LUT −4.1 min; Passerelles −8.0 min; Grésivaudan −17.0 min; Échappée Belle −164 min at observed mean HRR ≈0.65), while a road marathon (Rome) failed to transfer (−79 min). Publication assets: `docs/science/paper/`.
 
 **Keywords:** trail running; digital twin; heart-rate reserve; TRIMP; performance prediction; leave-one-out; grade-adjusted pace
 
@@ -41,7 +41,7 @@ We deliberately defer multi-athlete transfer, sensor fusion, and product UX to a
 
 - **RQ1.** Does an athlete-specific HRR+TRIMP digital twin reduce LOO race-time error relative to physics-only references on diverse trail/road hard efforts?  
 - **RQ2.** How do errors distribute across terrain classes (flat, climb, steep climb/descent)?  
-- **RQ3.** Can the same calibrated twin produce **prospective** constant-HRR race predictions that are plausibly faster than realized race times (upper-bound hard pacing)?
+- **RQ3.** Can the same calibrated twin produce **prospective** constant-\(\mathrm{HRR}_{\mathrm{ref}}\) race predictions (\(E=1\) reference effort) that are plausibly faster than realized race times when observed mean HRR was below \(\mathrm{HRR}_{\mathrm{ref}}\)?
 
 ---
 
@@ -135,7 +135,7 @@ with
 \[
 \mathrm{HRR}=\frac{\mathrm{HR}-\mathrm{HR}_{\mathrm{rest}}}{\mathrm{HR}_{\mathrm{max}}-\mathrm{HR}_{\mathrm{rest}}},
 \quad
-E = \mathrm{clip}\bigl(1+\alpha\,(\mathrm{HRR}-\mathrm{HRR}_{\mathrm{ref}})\bigr),
+E(\mathrm{HRR}) = \mathrm{clip}\!\left(\frac{\mathrm{HRR}}{\mathrm{HRR}_{\mathrm{ref}}},\, h_{\min},\, h_{\max}\right),
 \]
 
 \[
@@ -144,14 +144,14 @@ E = \mathrm{clip}\bigl(1+\alpha\,(\mathrm{HRR}-\mathrm{HRR}_{\mathrm{ref}})\bigr
 F = \max\bigl(F_{\min},\, 1-\kappa\cdot\mathrm{TRIMP}_{\mathrm{cum}}/\mathrm{TRIMP}_{\mathrm{norm}}\bigr).
 \]
 
-**Base equivalent speed** combines flat reference (athlete VMA / `v_flat`), Minetti/GAP grade multiplier, optional **soft-ramped trail GAP scales** on steep climb/descent (`gap_climb_scale≈0.85`, `gap_descent_scale≈1.60`; soft start ~4% → full at ~15%), and altitude VO₂ factor.
+**Base equivalent speed** combines flat reference (athlete VMA / `vma_flat_kmh`), Minetti/GAP grade multiplier, optional **soft-ramped trail GAP scales** on steep climb/descent (`gap_climb_scale≈0.85`, `gap_descent_scale≈1.60`; soft start ~4% → full at ~15%), and altitude VO₂ factor. On fresh flat terrain with \(E=1\), predicted speed is \(v_{\mathrm{VMA}}\cdot\alpha\) (not VMA itself).
 
-**Fitted per athlete / LOO fold:** primarily \(\alpha\) (HRR gain) and \(\kappa\) (TRIMP fatigue). Defaults used in prospective runs: `hrr_reference=0.88`, `hrr_max_factor=1.0`, `decay_lambda=0.20`, `min_fatigue_factor=0.60`.
+**Roles (do not conflate).** \(\mathrm{HRR}_{\mathrm{ref}}\) (`hrr_reference`) is the **normalization point of \(E\)** — the HRR at which \(E=1\). With paper defaults `hrr_max_factor=1.0` it is also the **effort ceiling** (higher HRR cannot raise speed; it only adds TRIMP). It is **not** “HRR at VMA”: VMA is a separate flat-speed anchor (`vma_flat_kmh`). Fitted per athlete / LOO fold: primarily \(\alpha\) (**fraction of VMA at \(E=1\)**) and \(\kappa\) (TRIMP fatigue). Prospective defaults: `hrr_reference=0.88`, `hrr_max_factor=1.0`, `decay_lambda=0.20`, `min_fatigue_factor=0.60`.
 
 **Prediction modes.**
 
 1. **Reconstruction** with observed HR (diagnostic fit).  
-2. **Prospective race** with **constant HRR** on a pre-race profile (race_pacing D+ + GPX altitude)—no target-race HR/times in the fit.
+2. **Prospective race** with **constant HRR = \(\mathrm{HRR}_{\mathrm{ref}}\)** on a pre-race profile (race_pacing D+ + GPX altitude, or executed GPS geometry)—no target-race HR/times in the fit. This is a **reference-effort scenario** (\(E=1\) when fresh), not a free “effort modulator” sweep and not a claim that 0.88 equals lab VMA heart rate.
 
 ### 3.3 Experimental protocol
 
@@ -215,7 +215,7 @@ Prior to asymmetric trail GAP correction, hard-trail segment residuals showed op
 
 ### 4.5 Prospective constant-HRR predictions (E3)
 
-Holding out target races from estimation and simulating course profiles at constant HRR = 0.88 produced predictions at or faster than observed moving times (Table 5): LUT By Night **−4.1 min**; Trail des Passerelles / Côte Rouge **−8.0 min**; Trail du Grésivaudan **−17.0 min**; Échappée Belle (parcours des crêtes) **−164 min**. LUT/Grésivaudan use planned `race_pacing` + GPX altitude; Échappée Belle and Passerelles use **executed activity GPS geometry** (no separate race_pacing file). Observed mean race HRR was submaximal (≈0.80, 0.76, 0.74, and 0.65 respectively), so these forecasts are **upper-bound sustained-effort** scenarios—especially Échappée Belle, where realized pacing was far below HRR = 0.88. Adding a non-fitted aid-time budget (8–12 min) moves LUT slightly slow and Grésivaudan to ≈−5 min (robustness R4)—aid explains part of the optimism without new physiology. A road marathon hold-out (Rome, **−79.2 min**) is treated as **out of scope** for the trail GAP twin (R5).
+Holding out target races from estimation and simulating course profiles at constant \(\mathrm{HRR}=\mathrm{HRR}_{\mathrm{ref}}=0.88\) (so \(E=1\) when fresh under `hrr_max_factor=1.0`) produced predictions at or faster than observed moving times (Table 5): LUT By Night **−4.1 min**; Trail des Passerelles / Côte Rouge **−8.0 min**; Trail du Grésivaudan **−17.0 min**; Échappée Belle (parcours des crêtes) **−164 min**. LUT/Grésivaudan use planned `race_pacing` + GPX altitude; Échappée Belle and Passerelles use **executed activity GPS geometry** (no separate race_pacing file). Observed mean race HRR was below reference (≈0.80, 0.76, 0.74, and 0.65 respectively), so these forecasts are **reference-effort (\(E=1\)) scenarios**—not “HRR at VMA,” and not expected finish times under the athlete’s actual sub-reference pacing—especially Échappée Belle. Adding a non-fitted aid-time budget (8–12 min) moves LUT slightly slow and Grésivaudan to ≈−5 min (robustness R4)—aid explains part of the optimism without new physiology. A road marathon hold-out (Rome, **−79.2 min**) is treated as **out of scope** for the trail GAP twin (R5).
 
 Finish-time bands (R9) now satisfy P05 < P50 < P95 with multi-minute spread (α/κ jitter + LOO residual noise). Race- vs segment-objective choice was frozen from mixed hard LOO without peeking at hold-outs (**activity** preferred; R2).
 
@@ -250,10 +250,10 @@ Two segment-level optimisations refine the twin beyond activity-level (α, κ) s
 | **Moving time + slight rejection cleans dwell** | §7 pipeline: **4** unfit segments (0.17%); slight alone on clock time can worsen LOO. |
 | **Trail GAP scales fix steep physics** | Combined steep MAE **3.05 → 1.64 min (−46%)**; race LOO only ~0.25 min better on mixed hard—terrain consistency, not finish-time chasing. |
 | **Fit objective matters on race dates** | Activity vs segment LOO MAE **11.8 vs 7.7 min** on selected races; nearly tied on mixed hard (~9.1 vs 9.3). |
-| **Prospective = upper bound when HRR submaximal** | LUT **−4.1** (HRR≈0.80); Passerelles **−8.0** (≈0.76); Grésivaudan **−17.0** (≈0.74); Échappée **−164** (≈0.65); Rome **−79.2** (road, out of scope). |
+| **Prospective = reference effort (\(E=1\))** | Constant \(\mathrm{HRR}=\mathrm{HRR}_{\mathrm{ref}}=0.88\): LUT **−4.1** (obs≈0.80); Passerelles **−8.0** (≈0.76); Grésivaudan **−17.0** (≈0.74); Échappée **−164** (≈0.65); Rome **−79.2** (road, out of scope). Not “HRR at VMA.” |
 | **Prospective uncertainty bands** | R9 bands use α/κ jitter + LOO residual noise (P05 < P50 < P95). |
 
-**Interpretation.** On this athlete, continuous HRR is the principal incremental predictor beyond a matched physics twin; acute TRIMP is the complementary fatigue channel; asymmetric trail GAP scales restore local climb/descent behaviour; prospective constant-HRR forecasts are coherent as hard-effort envelopes on trail courses but must not be over-claimed as expected finish times or road-ready predictions.
+**Interpretation.** On this athlete, continuous HRR is the principal incremental predictor beyond a matched physics twin; acute TRIMP is the complementary fatigue channel; asymmetric trail GAP scales restore local climb/descent behaviour; prospective forecasts at \(\mathrm{HRR}=\mathrm{HRR}_{\mathrm{ref}}\) (\(E=1\) reference effort) are coherent trail envelopes when observed race HRR was below reference, but must not be over-claimed as expected finish times, “HRR at VMA,” or road-ready predictions.
 
 ---
 
@@ -265,17 +265,17 @@ We retain the digital-twin structure (route physics + athlete state → time) wh
 
 ### 5.2 Limitations
 
-Evidence remains a **single-athlete case study**. Additional limits: HR artifacts; barometric elevation (no DEM); sparse temperature coverage; constant-HRR abstraction of race tactics; incomplete road transfer (Rome); LOO activity caps on large cohorts; hard-trail κ at the grid floor; ultra courses (Échappée Belle) where observed HRR ≪ target yield very wide upper-bound gaps. Multi-athlete replication is required before population claims.
+Evidence remains a **single-athlete case study**. Additional limits: HR artifacts; barometric elevation (no DEM); sparse temperature coverage; constant-\(\mathrm{HRR}_{\mathrm{ref}}\) abstraction of race tactics; incomplete road transfer (Rome); LOO activity caps on large cohorts; hard-trail κ at the grid floor; ultra courses (Échappée Belle) where observed HRR ≪ \(\mathrm{HRR}_{\mathrm{ref}}\) yield very wide gaps versus the \(E=1\) reference scenario. Multi-athlete replication is required before population claims.
 
 ### 5.3 Practical implication
 
-Within coaching software, the twin supports (i) retrospective effort-normalized race explanation, (ii) prospective finish-time *envelopes* at a target HRR (not point forecasts of realized pacing), and (iii) identification of terrain regimes where grade-cost assumptions fail.
+Within coaching software, the twin supports (i) retrospective effort-normalized race explanation, (ii) prospective finish-time *envelopes* at \(\mathrm{HRR}=\mathrm{HRR}_{\mathrm{ref}}\) (reference effort \(E=1\), not point forecasts of realized pacing or lab VMA heart rate), and (iii) identification of terrain regimes where grade-cost assumptions fail.
 
 ---
 
 ## 6. Conclusion
 
-For one recreational/competitive trail runner, a HRR+TRIMP digital twin reduced leave-one-out finish-time error from a physics baseline of ~30 min MAE to ~9 min MAE on mixed hard run/trail activities (MAPE ≈ 6.5%), with parallel gains on broader >20 min and race-date cohorts. Component ablation attributes most of that gain to continuous HRR and acute TRIMP. Soft-ramped trail GAP scales improve steep-terrain residuals, and prospective constant-HRR simulations provide interpretable upper-bound race times. Publication assets are collected in `docs/science/paper/`. Multi-athlete validation remains the primary next step for journal submission.
+For one recreational/competitive trail runner, a HRR+TRIMP digital twin reduced leave-one-out finish-time error from a physics baseline of ~30 min MAE to ~9 min MAE on mixed hard run/trail activities (MAPE ≈ 6.5%), with parallel gains on broader >20 min and race-date cohorts. Component ablation attributes most of that gain to continuous HRR and acute TRIMP. Soft-ramped trail GAP scales improve steep-terrain residuals, and prospective simulations at \(\mathrm{HRR}=\mathrm{HRR}_{\mathrm{ref}}\) provide interpretable reference-effort (\(E=1\)) race times. Publication assets are collected in `docs/science/paper/`. Multi-athlete validation remains the primary next step for journal submission.
 
 ---
 
@@ -411,8 +411,9 @@ See `bibliography_hr_digital_twin.md` for extended notes and venue links.
 
 | Param | Role | Athlete-specific? |
 |-------|------|-------------------|
-| \(v_{\mathrm{flat}}\) / VMA | Flat reference speed | Yes |
-| \(\alpha\) | HRR gain | Yes (fitted) |
+| \(v_{\mathrm{flat}}\) / VMA | Flat speed anchor (`vma_flat_kmh`) | Yes |
+| \(\mathrm{HRR}_{\mathrm{ref}}\) | HRR where \(E=1\) (effort ceiling if \(h_{\max}=1\)) | Modeling choice (paper: 0.88) |
+| \(\alpha\) | Fraction of VMA at \(E=1\) | Yes (fitted) |
 | \(\kappa\) | TRIMP fatigue | Yes (fitted) |
 | HR rest / max | HRR denominator | Yes |
 | Minetti / GAP base | Grade cost | Shared prior |

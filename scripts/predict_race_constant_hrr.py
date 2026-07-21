@@ -4,7 +4,7 @@ SPDX-License-Identifier: GPL-3.0-or-later
 Prospective constant-HRR race prediction from a planned profile.
 
 Fits Stage 3 alpha/fatigue on other activities only (hold-out races excluded),
-then predicts GPX / race_pacing courses at constant hard HRR.
+then predicts courses at HRR = hrr_reference (E=1 reference effort; not HRR at VMA).
 """
 
 from __future__ import annotations

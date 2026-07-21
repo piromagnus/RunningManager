@@ -57,9 +57,9 @@ These change when the athlete changes (fitness, aging, device HR).
 
 ---
 
-## Prospective race prediction (constant hard HRR)
+## Prospective race prediction (constant \(\mathrm{HRR}_{\mathrm{ref}}\))
 
-**Idea:** Before the race, assume the athlete holds a **constant hard HRR** (effort near the reference so \(E\approx 1\)), accumulate predicted TRIMP along the **planned profile**, and sum segment times.
+**Idea:** Before the race, hold **HRR = `hrr_reference`** so the effort multiplier \(E=1\) when fresh (with paper `hrr_max_factor=1.0`), accumulate predicted TRIMP along the **planned profile**, and sum segment times. This is a **reference-effort scenario**, not “HRR at VMA” and not a free effort-modulator sweep.
 
 | Allowed as input | Forbidden for estimation |
 |------------------|--------------------------|
@@ -67,6 +67,6 @@ These change when the athlete changes (fitness, aging, device HR).
 | Athlete HR limits, VMA, \(\alpha,\kappa\) fitted on **other** activities | Observed race segment times / moving time |
 | Readiness if known a priori | Fitting \(\alpha\) on the race itself |
 
-**Constant hard** (v1): HRR = `hrr_reference` (effort multiplier = 1). Optional: sweep HRR and pick fastest *historically feasible* from an envelope that also excludes the target races.
+**Constant reference effort** (v1): HRR = `hrr_reference` ⇒ \(E=1\). Raising HRR above ref cannot increase speed under `hrr_max_factor=1.0`; it only adds TRIMP. Optional: sweep HRR and pick fastest *historically feasible* from an envelope that also excludes the target races.
 
 Prediction should usually be **slightly faster** than a near-max executed race (small pacing/aid inefficiencies remain in reality).

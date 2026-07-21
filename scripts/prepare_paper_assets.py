@@ -487,8 +487,10 @@ def write_tables(src: Path, out_dir: Path) -> dict[str, Path]:
             "Table 5. Prospective constant-HRR race predictions with finish-time uncertainty bands.",
             "Hold-out races were excluded from parameter estimation. Profiles are planned "
             "race_pacing+GPX altitude or executed activity GPS geometry (activity_timeseries). "
-            "Predictions use constant HRR = 0.88. Δ is predicted − observed moving time; "
-            "large negative Δ with submaximal observed mean HRR is an upper-bound hard-effort envelope.",
+            "Predictions hold HRR = hrr_reference = 0.88 so E=1 when fresh "
+            "(reference effort / effort ceiling under hrr_max_factor=1.0 — not 'HRR at VMA'). "
+            "Δ is predicted − observed moving time; large negative Δ when observed mean HRR "
+            "was below HRR_ref is a reference-effort scenario, not an expected finish time.",
         ),
         "table06_speed_vs_hrr_flat": (
             table_speed_hrr_excerpt(src),
