@@ -321,6 +321,7 @@ Shipped artifacts: `docs/science/section7_implementation_status.md`.
 
 | Priority | Item |
 |----------|------|
+| High | **B1** — multi-athlete replication |
 | Medium | B3 DEM altitude (Grésivaudan); B5 structured aid logs |
 | High (validity) | **B1** multi-athlete replication |
 | Low | D1 grade×HRR interaction |
