@@ -14,9 +14,10 @@ Focus: modeling, LOO/error reporting, HR–TRIMP effort, trail grade cost.
    - GAP/Minetti + altitude + Banister TRIMP + pacing decay; VT2 fraction α, decay μ.  
    - **Use as structural baseline; do not submit our HR paper to Sensors.**
 
-2. **Boillet A, et al.** (Margaria–Morton / cycling digital twin). *Scientific Reports*. 2024.  
-   https://doi.org/10.1038/s41598-024-71772-x  
-   - Precedent for mechanistic digital twin + performance outside pure ML.
+2. **Boillet A, et al.** Individualized physiology-based digital twin model for sports performance prediction: a reinterpretation of the Margaria–Morton model. *Scientific Reports*. 2024;14:5470.  
+   https://doi.org/10.1038/s41598-024-56042-0  
+   - Precedent for mechanistic digital twin + performance outside pure ML (cycling, short–medium efforts).  
+   - **Note:** do not use DOI `10.1038/s41598-024-71772-x` (unrelated article).
 
 3. **Genitrini M, et al.** Spatiotemporal parameters and kinematics differ between race stages in trail running—a field study. *Frontiers in Sports and Active Living*. 2024.  
    https://doi.org/10.3389/fspor.2024.1406824  

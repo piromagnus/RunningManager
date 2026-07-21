@@ -2,6 +2,8 @@
 
 Ce document est un support de compréhension et de décision pour les auteurs. Il n'est pas destiné à être inséré tel quel dans l'article. Il synthétise la [bibliographie GitHub fournie](https://github.com/piromagnus/RunningManager/blob/cursor%2Fsegment-outlier-optimization-7aaf/docs%2Fscience%2Fbibliography_hr_digital_twin.md), la met en regard du [brouillon v0.5](https://github.com/piromagnus/RunningManager/blob/cursor%2Fsegment-outlier-optimization-7aaf/docs%2Fscience%2Ftrail_digital_twin_hr_performance_paper_draft.md), ajoute les travaux les plus proches trouvés dans la littérature, puis explicite les lacunes et leurs conséquences méthodologiques. Recherche mise à jour au 21 juillet 2026.
 
+**Complément :** développement idée-par-idée des travaux récents → [`idees_travaux_recents_detaillees_fr.md`](idees_travaux_recents_detaillees_fr.md).
+
 ## 1. Carte rapide du champ
 
 | Famille | Question principale | Forces | Limites par rapport au manuscrit |
