@@ -422,11 +422,11 @@ See `bibliography_hr_digital_twin.md` for extended notes and venue links.
 
 ## Appendix B — Results postcard
 
-- **Model:** HRR + acute TRIMP + soft-ramped trail GAP (0.85 / 1.60); moving-time fit + slight near-flat immobile rejection.  
-- **Primary LOO:** hard run/trail **MAE 9.09 min**, MAPE **6.5%**, *R*² **0.982** (physics M0 **30.2 min**).  
-- **Ablations (reoptimize):** −HRR **+14.4 min**; −TRIMP **+16.4 min**; −GAP **+10.5 min**.  
-- **Steep terrain:** combined MAE **3.05 → 1.64 min (−46%)**.  
-- **Prospective (HRR = 0.88):** LUT **−4.1 min**; Grésivaudan **−17.0 min**; Rome **−79.2 min** (road fail).  
-- **Still needed for robust claims:** R1–R11 runnable checks; B1 multi-athlete (or explicit case-study framing); DEM/weather/aid logs blocked.  
-- **Submit toward:** IJSPP / JSS / EJSS / ECSS — **not Sensors**.  
-- **Checklist:** `docs/science/remaining_experiments.md`.
+- **Model:** HRR + acute TRIMP + soft-ramped trail GAP (0.85 / 1.60); moving-time fit + slight rejection.
+- **Primary LOO:** hard run/trail **MAE 9.09 min**, MAPE **6.5%**, *R*² **0.982** (physics M0 **30.2 min**).
+- **Ablations (reoptimize, R1-aligned):** −HRR **+13.5**; −TRIMP **+15.6**; −GAP **+9.6** min.
+- **Steep terrain:** combined MAE **3.05 → 1.64 min (−46%)**.
+- **Prospective:** LUT **−4.1** (≈+3.9 with 8 min aid); Grésivaudan **−17** (≈**−5** with 12 min aid); Rome **out of scope**.
+- **Robustness R1–R11:** `robustness_experiments_report.md` (10 pass; R3 partial).
+- **Next:** more trail hold-outs (R3); multi-athlete (B1); DEM/aid logs (B3/B5).
+- **Submit toward:** IJSPP / JSS / EJSS / ECSS — **not Sensors**.
