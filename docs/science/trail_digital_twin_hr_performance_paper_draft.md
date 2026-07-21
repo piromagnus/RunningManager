@@ -101,8 +101,17 @@ Full citations: **§9** and `bibliography_hr_digital_twin.md`.
 **Preprocessing.**
 
 - Segment activities (~1 km equivalent or route-based bins).  
-- Exclude near-flat **immobile** segments using altitude-over-time flatness (`|Δelev|/hour`) plus low moving speed / high stationary share—not grade-from-distance alone.  
-- Fit on **moving time** (`actualTime − stationaryTime`) so aid stops do not inflate physiology residuals; report full clock time separately when needed.
+- Apply a **slight near-flat immobile rejection** for physiology fitting (§3.1.1).  
+- Fit on **moving time** (`actualTime − stationaryTime`) so aid-station dwell does not inflate residuals; report full clock time separately when needed.
+
+#### 3.1.1 Slight segment rejection
+
+Aid stops, traffic lights, and device-open dwell contaminate grade–speed physiology if treated as locomotion. We therefore mark a segment as unfit for parameter estimation when it is simultaneously:
+
+1. **Near-flat in altitude–time**, defined as gross elevation change rate `|Δelev|/hour ≤ 120 m·h⁻¹` (not distance grade, so steep hikes remain eligible); and  
+2. **Immobile**, defined as grade-adjusted speed `meanSpeedEqKmh < 3 km·h⁻¹` **or** stationary time share `> 0.40`.
+
+Rejected segments retain their observed times for full-race evaluation but are withheld from the Stage-3 fit mask (`isFitEligible = false`). The paper pipeline pairs this **slight** gate with moving-time fitting, so only a few residual near-flat dwells remain after stationary scrubbing. A stricter moderate gate (`speedEq < 4`, share `> 0.30`) is reported as a sensitivity analysis (Table 7).
 
 ### 3.2 Model (single family)
 
@@ -146,9 +155,11 @@ F = \max\bigl(F_{\min},\, 1-\kappa\cdot\mathrm{TRIMP}_{\mathrm{cum}}/\mathrm{TRI
 | ID | Design | Metrics |
 |----|--------|---------|
 | **E1** | LOO on activity cohorts | MAE, MAPE, bias, R² (minutes) |
-| **E2** | Segment residuals by terrain class | MAE, bias (min / km/h) |
-| **E3** | Prospective constant-HRR (LUT, Grésivaudan) | Pred vs actual moving time; Δ min |
-| **E4** | Ablations: ± moving-time fit; ± trail GAP soft-ramp; segment vs race objective | ΔMAE |
+| **E2** | Segment residuals by terrain class | MAE, bias (min) |
+| **E3** | Prospective constant-HRR (LUT, Grésivaudan, Rome) | Pred vs actual moving time; Δ min |
+| **E4** | Ablations: ± HRR / TRIMP / trail GAP scales | ΔMAE |
+| **E5** | Slight segment rejection A/B | Rejected share; LOO MAE |
+| **E6** | Segment optimisation: trail GAP scales; segment vs race objective | Terrain MAE/bias; LOO Δ |
 
 **“Diverse datasets”** in this draft = diverse **activities and terrains for one athlete**. Multi-athlete extension is planned (§7).
 
@@ -203,12 +214,28 @@ Holding out target races from estimation and simulating planned profiles at cons
 
 On a synthetic 1 km flat segment under fresh conditions (TRIMP = 0), predicted ground speed increased approximately linearly with HRR until the effort ceiling at HRR_ref = 0.88 (Table 6; Fig. `fig_speed_vs_hrr.png`). Parallel curves at ±10% grade illustrate the interaction of HRR effort with grade cost, providing an interpretable physiological transfer function for coaching “what-if” simulations.
 
-### 4.7 Summary of quantitative findings
+### 4.7 Slight segment rejection
+
+Near-flat immobile rejection is intentionally **slight**. In the dedicated A/B experiment (Table 7; Fig. `fig_segment_rejection_policies.png`), disabling exclusion left all 2364 segments in the fit set (mean Stage-3 LOO MAE 10.87 min). The slight policy (`speedEq < 3 km·h⁻¹` or stationary share `> 0.40`, with altitude–time flatness) removed on the order of 2% of segments. A moderate policy (`speedEq < 4`, share `> 0.30`) rejected 101 segments (4.3%, ≈32 h of dwell) and lowered mean LOO MAE to 10.30 min.
+
+When slight exclusion is combined with moving-time fitting in the paper §7 pipeline, only **4 segments (0.17%, 84 min)** remain rejected—stationary scrubbing already removes most aid-station dwell from the fit target, and the slight gate catches residual near-flat immobility. Illustrative rejects include long dwells on Echappée Belle and related near-flat stops (Table 7b). Importantly, flatness is judged on altitude-over-time so that slow steep climbs are not mistaken for idle flats.
+
+### 4.8 Segment optimisation
+
+Two segment-level optimisations refine the twin beyond activity-level (α, κ) search.
+
+**Trail GAP scales (terrain objective).** Soft-ramped asymmetric scales (`gap_climb_scale = 0.85`, `gap_descent_scale = 1.60`) were calibrated on hard-trail moving-time segment residuals (Table 8; Figs. `fig_segment_gap_optimisation_mae.png`, `fig_segment_gap_optimisation_bias.png`). Combined steep-terrain MAE fell from 3.05 to 1.64 min (−46%), with steep-descent bias corrected from −3.65 to ≈0 and steep-climb bias from +1.69 to ≈0, while flat MAE remained ≤ 0.9 min. Race-level LOO MAE changed only modestly (hard run/trail 9.82 → 9.57 min), indicating that segment optimisation primarily restores physically consistent terrain behaviour rather than chasing finish-time alone.
+
+**Segment versus activity fit objective.** Optimising (α, κ) under a segment residual objective versus an activity finish-time objective yields nearly identical LOO MAE on mixed hard efforts (≈9.1 vs 9.3 min) but diverges on selected race dates (11.8 vs 7.7 min; Table 9; Fig. `fig_segment_vs_race_objective.png`). Segment-objective calibration is therefore preferable for local physiology diagnostics, whereas race-objective calibration better supports prospective finish-time envelopes (cf. LUT / Grésivaudan constant-HRR forecasts).
+
+### 4.9 Summary of quantitative findings
 
 1. Continuous HRR is the principal incremental predictor beyond the physics baseline on this athlete.  
 2. Acute TRIMP improves mixed hard-effort cohorts; REDI readiness yields limited additional LOO gain here.  
-3. Asymmetric trail GAP scales correct steep climb/descent bias with small race-level MAE impact but healthier terrain residuals.  
-4. Prospective constant-HRR forecasts are coherent upper bounds when race HRR is submaximal; road transfer remains an open limitation.
+3. Slight near-flat immobile rejection plus moving-time fitting removes aid-station dwell from the physiology fit with negligible segment loss in the paper pipeline.  
+4. Asymmetric trail GAP scales correct steep climb/descent bias at the segment level.  
+5. Segment versus race objectives agree on mixed hard efforts but can diverge on race-date cohorts.  
+6. Prospective constant-HRR forecasts are coherent upper bounds when race HRR is submaximal; road transfer remains an open limitation.
 
 ---
 

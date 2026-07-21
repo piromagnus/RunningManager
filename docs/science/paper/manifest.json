@@ -11,6 +11,10 @@
     "fig_pred_vs_actual_hardTrailRun.png",
     "fig_pred_vs_actual_runTrailOver20Min.png",
     "fig_pred_vs_actual_selectedDateRaces.png",
+    "fig_segment_gap_optimisation_bias.png",
+    "fig_segment_gap_optimisation_mae.png",
+    "fig_segment_rejection_policies.png",
+    "fig_segment_vs_race_objective.png",
     "fig_speed_vs_hrr.png",
     "fig_speed_vs_hrr_climb10pct.png",
     "fig_speed_vs_hrr_descent10pct.png",
@@ -30,6 +34,10 @@
     "table03_component_ablation",
     "table04_bootstrap_uncertainty",
     "table05_prospective_predictions",
-    "table06_speed_vs_hrr_flat"
+    "table06_speed_vs_hrr_flat",
+    "table07_segment_rejection_summary",
+    "table07b_segment_rejection_examples",
+    "table08_segment_gap_optimisation",
+    "table09_segment_vs_race_objective"
   ]
 }

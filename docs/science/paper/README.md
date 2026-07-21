@@ -23,6 +23,10 @@ PNG exports (2× scale) are stored under `figures/`. Scientific captions: `figur
 - `fig_pred_vs_actual_hardTrailRun.png`
 - `fig_pred_vs_actual_runTrailOver20Min.png`
 - `fig_pred_vs_actual_selectedDateRaces.png`
+- `fig_segment_gap_optimisation_bias.png`
+- `fig_segment_gap_optimisation_mae.png`
+- `fig_segment_rejection_policies.png`
+- `fig_segment_vs_race_objective.png`
 - `fig_speed_vs_hrr.png`
 - `fig_speed_vs_hrr_climb10pct.png`
 - `fig_speed_vs_hrr_descent10pct.png`
@@ -46,6 +50,10 @@ CSV + Markdown under `tables/`.
 - `table04_bootstrap_uncertainty.csv` / `table04_bootstrap_uncertainty.md`
 - `table05_prospective_predictions.csv` / `table05_prospective_predictions.md`
 - `table06_speed_vs_hrr_flat.csv` / `table06_speed_vs_hrr_flat.md`
+- `table07_segment_rejection_summary.csv` / `table07_segment_rejection_summary.md`
+- `table07b_segment_rejection_examples.csv` / `table07b_segment_rejection_examples.md`
+- `table08_segment_gap_optimisation.csv` / `table08_segment_gap_optimisation.md`
+- `table09_segment_vs_race_objective.csv` / `table09_segment_vs_race_objective.md`
 
 ## Model ladder (for Table 2)
 

@@ -43,3 +43,19 @@ Figure. Leave-one-out mean absolute error across successive model additions (M0 
 ## `fig_component_ablation_delta_mae.png`
 
 Figure. Increase in mean absolute error after ablating individual components of the full Stage-3 specification (positive values indicate loss of accuracy).
+
+## `fig_segment_rejection_policies.png`
+
+Figure. Extent of near-flat immobile segment rejection (bars) and associated mean Stage-3 leave-one-out MAE (line) across exclusion policies. The paper pipeline uses a slight policy combined with moving-time fitting.
+
+## `fig_segment_gap_optimisation_mae.png`
+
+Figure. Segment-level MAE by terrain family before and after soft-ramped asymmetric trail GAP scale optimisation (climb 0.85, descent 1.60).
+
+## `fig_segment_gap_optimisation_bias.png`
+
+Figure. Segment bias on flat and steep terrain before and after trail GAP scale optimisation. Soft-ramped scales remove the opposing climb/descent bias pattern.
+
+## `fig_segment_vs_race_objective.png`
+
+Figure. Leave-one-out MAE when (α, κ) are optimised under a segment residual objective versus an activity finish-time objective.

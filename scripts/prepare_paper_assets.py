@@ -238,6 +238,198 @@ def table_speed_hrr_excerpt(src: Path) -> pd.DataFrame:
     )
 
 
+def _qc_exclusion_summary(qc_path: Path, label: str, thresholds: str) -> dict[str, object]:
+    qc = pd.read_csv(qc_path)
+    n_seg = int(pd.to_numeric(qc["segmentCount"], errors="coerce").fillna(0).sum())
+    n_ex = int(pd.to_numeric(qc["excludedSegmentCount"], errors="coerce").fillna(0).sum())
+    t_ex = float(pd.to_numeric(qc["excludedTimeSec"], errors="coerce").fillna(0).sum())
+    return {
+        "Policy": label,
+        "Thresholds": thresholds,
+        "Segments total": n_seg,
+        "Segments rejected": n_ex,
+        "Rejected share (%)": round(100.0 * n_ex / n_seg, 2) if n_seg else np.nan,
+        "Rejected time (min)": round(t_ex / 60.0, 1),
+    }
+
+
+def table_segment_rejection_summary(src: Path) -> pd.DataFrame:
+    """Slight near-flat immobile rejection policies and LOO impact."""
+    excl_root = REPO_ROOT / "data" / "exp_perf_predictions" / "trail_digital_twin_segment_exclusion"
+    rows: list[dict[str, object]] = []
+    run_map = [
+        (
+            "None (baseline)",
+            "exclusion disabled",
+            excl_root / "runs" / "000_segment_exclusion_ab_baseline_no_exclusion" / "segment_qc.csv",
+            "000_segment_exclusion_ab_baseline_no_exclusion",
+        ),
+        (
+            "Slight (paper default)",
+            "speedEq < 3 km·h⁻¹ or stationary share > 0.40; |Δelev|/h ≤ 120 m·h⁻¹",
+            excl_root / "runs" / "001_segment_exclusion_ab_exclude_speed_eq_3kmh_share_040" / "segment_qc.csv",
+            "001_segment_exclusion_ab_exclude_speed_eq_3kmh_share_040",
+        ),
+        (
+            "Moderate",
+            "speedEq < 4 km·h⁻¹ or stationary share > 0.30; |Δelev|/h ≤ 120 m·h⁻¹",
+            excl_root / "runs" / "002_segment_exclusion_ab_exclude_speed_eq_4kmh_share_030" / "segment_qc.csv",
+            "002_segment_exclusion_ab_exclude_speed_eq_4kmh_share_030",
+        ),
+    ]
+    # Prefer paper §7 QC for the slight policy actually used in the manuscript pipeline
+    # (moving-time fit + slight exclusion → very few residual rejects).
+    paper_qc = src / "segment_qc.csv"
+    leaderboard = (
+        pd.read_csv(excl_root / "benchmark_leaderboard.csv")
+        if (excl_root / "benchmark_leaderboard.csv").exists()
+        else pd.DataFrame()
+    )
+    mae_by_run = {}
+    if not leaderboard.empty and "runId" in leaderboard.columns:
+        for _, row in leaderboard.iterrows():
+            mae_by_run[str(row["runId"])] = float(row["meanStage3MaeMin"])
+
+    for label, thresholds, qc_path, run_id in run_map:
+        if not qc_path.exists():
+            continue
+        row = _qc_exclusion_summary(qc_path, label, thresholds)
+        row["Mean Stage-3 LOO MAE (min)"] = (
+            round(mae_by_run[run_id], 2) if run_id in mae_by_run else np.nan
+        )
+        rows.append(row)
+
+    if paper_qc.exists():
+        paper_row = _qc_exclusion_summary(
+            paper_qc,
+            "Slight + moving-time fit (paper §7)",
+            "speedEq < 3 km·h⁻¹ or share > 0.40; fit on moving time",
+        )
+        # Paper §7 LOO MAE on hardRunOrTrailRun from stage metrics if available.
+        stage = src / "table_stage_metrics.csv"
+        if stage.exists():
+            m = pd.read_csv(stage)
+            hit = m[
+                m["stage"].astype(str).eq("Stage 3 HRR speed ratio LOO")
+                & m["cohort"].astype(str).eq("hardRunOrTrailRun")
+                & m["fitObjective"].astype(str).eq("activity")
+            ]
+            if not hit.empty:
+                paper_row["Mean Stage-3 LOO MAE (min)"] = round(float(hit.iloc[0]["maeMin"]), 2)
+        rows.append(paper_row)
+    return pd.DataFrame(rows)
+
+
+def table_segment_rejection_examples(src: Path) -> pd.DataFrame:
+    path = (
+        REPO_ROOT
+        / "data"
+        / "exp_perf_predictions"
+        / "trail_digital_twin_segment_exclusion"
+        / "rejected_near_flat_immobile_segments.csv"
+    )
+    if not path.exists():
+        return pd.DataFrame()
+    raw = pd.read_csv(path)
+    raw = raw.sort_values("actualTimeSec", ascending=False).head(8)
+    return pd.DataFrame(
+        {
+            "Activity": raw["name"].astype(str),
+            "km": raw["startKm"].round(1),
+            "SpeedEq (km·h⁻¹)": pd.to_numeric(raw["meanSpeedEqKmh"], errors="coerce").round(2),
+            "|Δelev|/h (m·h⁻¹)": pd.to_numeric(raw["absAltitudeRateMph"], errors="coerce").round(1),
+            "Stationary share": pd.to_numeric(raw["stationaryTimeShare"], errors="coerce").round(2),
+            "Duration (min)": (pd.to_numeric(raw["actualTimeSec"], errors="coerce") / 60.0).round(1),
+            "Reason": raw["exclusionReason"]
+            .astype(str)
+            .str.replace("near_flat_altitude_time|", "", regex=False)
+            .str.replace("|", " + ", regex=False),
+        }
+    )
+
+
+def table_segment_gap_optimisation() -> pd.DataFrame:
+    path = (
+        REPO_ROOT
+        / "data"
+        / "exp_perf_predictions"
+        / "trail_digital_twin_steep_gap"
+        / "steep_gap_baseline_vs_winner_terrain.csv"
+    )
+    if not path.exists():
+        return pd.DataFrame()
+    raw = pd.read_csv(path)
+    order = ["flat", "climb", "steep_climb", "descent", "steep_descent", "mixed_climb_descent"]
+    raw["terrainFamily"] = pd.Categorical(raw["terrainFamily"], categories=order, ordered=True)
+    raw = raw.sort_values("terrainFamily")
+    labels = {
+        "flat": "Flat",
+        "climb": "Climb",
+        "steep_climb": "Steep climb",
+        "descent": "Descent",
+        "steep_descent": "Steep descent",
+        "mixed_climb_descent": "Mixed",
+    }
+    return pd.DataFrame(
+        {
+            "Terrain": raw["terrainFamily"].astype(str).map(labels).fillna(raw["terrainFamily"]),
+            "n segments": raw["segmentCount_base"].astype(int),
+            "MAE before (min)": raw["maeMin_base"].round(2),
+            "Bias before (min)": raw["biasMin_base"].round(2),
+            "MAE after (min)": raw["maeMin_win"].round(2),
+            "Bias after (min)": raw["biasMin_win"].round(2),
+            "ΔMAE (min)": (raw["maeMin_win"] - raw["maeMin_base"]).round(2),
+        }
+    )
+
+
+def table_segment_vs_race_objective(src: Path) -> pd.DataFrame:
+    path = src / "table_segment_vs_race_objective.csv"
+    if not path.exists():
+        path = src / "table_objective_comparison.csv"
+    if not path.exists():
+        return pd.DataFrame()
+    raw = pd.read_csv(path)
+    if "activity" in raw.columns and "segment" in raw.columns:
+        data = raw[raw["stage"].astype(str).str.contains("LOO", regex=False)].copy()
+        rows = []
+        for _, row in data.iterrows():
+            rows.append(
+                {
+                    "Cohort": COHORT_LABELS.get(str(row["cohort"]), row["cohort"]),
+                    "Stage": "Stage 3 LOO",
+                    "MAE activity objective (min)": round(float(row["activity"]), 2),
+                    "MAE segment objective (min)": round(float(row["segment"]), 2),
+                    "Δ (activity − segment) (min)": round(float(row["deltaMaeMin_activityMinusSegment"]), 2),
+                    "Interpretation": str(row.get("note", "")),
+                }
+            )
+        return pd.DataFrame(rows)
+    # Fallback from objective comparison
+    data = raw[
+        raw["stage"].astype(str).eq("Stage 3 HRR speed ratio LOO")
+        & raw["fitObjective"].isin(["activity", "segment"])
+    ].copy()
+    pivot = data.pivot_table(index="cohort", columns="fitObjective", values="maeMin", aggfunc="first")
+    rows = []
+    for cohort, row in pivot.iterrows():
+        act = float(row.get("activity", np.nan))
+        seg = float(row.get("segment", np.nan))
+        rows.append(
+            {
+                "Cohort": COHORT_LABELS.get(str(cohort), cohort),
+                "Stage": "Stage 3 LOO",
+                "MAE activity objective (min)": round(act, 2) if np.isfinite(act) else np.nan,
+                "MAE segment objective (min)": round(seg, 2) if np.isfinite(seg) else np.nan,
+                "Δ (activity − segment) (min)": round(act - seg, 2)
+                if np.isfinite(act) and np.isfinite(seg)
+                else np.nan,
+                "Interpretation": "",
+            }
+        )
+    return pd.DataFrame(rows)
+
+
 def _markdown_table(df: pd.DataFrame, caption: str, notes: str = "") -> str:
     lines = [f"**{caption}**", ""]
     if df.empty:
@@ -290,6 +482,31 @@ def write_tables(src: Path, out_dir: Path) -> dict[str, Path]:
             table_speed_hrr_excerpt(src),
             "Table 6. Model-implied speed–HRR response on a synthetic 1 km flat segment.",
             "Fresh condition (cumulative TRIMP = 0). Effort saturates at HRR_ref under hrr_max_factor = 1.0.",
+        ),
+        "table07_segment_rejection_summary": (
+            table_segment_rejection_summary(src),
+            "Table 7. Slight near-flat immobile segment rejection policies and LOO impact.",
+            "Rejection requires altitude–time flatness (|Δelev|/h ≤ 120 m·h⁻¹) and immobility "
+            "(low grade-adjusted speed or high stationary share). Rejected segments are withheld "
+            "from parameter fitting but retained for full-race evaluation. The paper §7 pipeline "
+            "combines slight exclusion with moving-time fitting, leaving only a few residual rejects.",
+        ),
+        "table07b_segment_rejection_examples": (
+            table_segment_rejection_examples(src),
+            "Table 7b. Illustrative rejected near-flat immobile segments.",
+            "Durations are segment clock times dominated by dwell (aid stations, traffic, device open).",
+        ),
+        "table08_segment_gap_optimisation": (
+            table_segment_gap_optimisation(),
+            "Table 8. Segment-level terrain optimisation via asymmetric trail GAP scales.",
+            "Before/after soft-ramped climb scale 0.85 and descent scale 1.60 (hardTrailRun, "
+            "segment objective, moving-time residuals). Positive bias = model too slow.",
+        ),
+        "table09_segment_vs_race_objective": (
+            table_segment_vs_race_objective(src),
+            "Table 9. Segment versus activity (race) fit-objective optimisation of (α, κ).",
+            "Both objectives use the same Stage-3 family; only the LOO scoring target differs. "
+            "Large positive Δ indicates finish-time calibration is worse than local segment fit.",
         ),
     }
     written: dict[str, Path] = {}
@@ -466,6 +683,113 @@ def fig_ablation_delta(ablation: pd.DataFrame) -> go.Figure:
     return fig
 
 
+def fig_segment_rejection_policies(summary: pd.DataFrame) -> go.Figure:
+    data = summary.copy()
+    fig = go.Figure()
+    fig.add_trace(
+        go.Bar(
+            x=data["Policy"],
+            y=data["Rejected share (%)"],
+            name="Rejected segment share (%)",
+            marker_color="#4C78A8",
+        )
+    )
+    if "Mean Stage-3 LOO MAE (min)" in data.columns:
+        fig.add_trace(
+            go.Scatter(
+                x=data["Policy"],
+                y=data["Mean Stage-3 LOO MAE (min)"],
+                mode="lines+markers",
+                name="Mean Stage-3 LOO MAE (min)",
+                yaxis="y2",
+                line={"width": 2.5, "color": "#F58518"},
+                marker={"size": 9},
+            )
+        )
+    fig.update_layout(
+        title="Near-flat immobile segment rejection: extent versus LOO error",
+        xaxis_title="Rejection policy",
+        yaxis_title="Rejected segments (%)",
+        yaxis2={
+            "title": "Mean Stage-3 LOO MAE (min)",
+            "overlaying": "y",
+            "side": "right",
+        },
+        legend={"orientation": "h", "y": 1.14},
+        barmode="group",
+    )
+    fig.update_xaxes(tickangle=-20)
+    return fig
+
+
+def fig_steep_gap_optimisation(gap_table: pd.DataFrame) -> go.Figure:
+    if gap_table.empty:
+        return go.Figure()
+    terrains = gap_table["Terrain"].tolist()
+    fig = go.Figure()
+    fig.add_trace(go.Bar(name="MAE before", x=terrains, y=gap_table["MAE before (min)"]))
+    fig.add_trace(go.Bar(name="MAE after", x=terrains, y=gap_table["MAE after (min)"]))
+    fig.update_layout(
+        barmode="group",
+        title="Segment terrain residuals before and after trail GAP scale optimisation",
+        xaxis_title="Terrain family",
+        yaxis_title="Segment MAE (min)",
+        legend={"orientation": "h", "y": 1.12},
+    )
+    return fig
+
+
+def fig_steep_gap_bias(gap_table: pd.DataFrame) -> go.Figure:
+    if gap_table.empty:
+        return go.Figure()
+    focus = gap_table[gap_table["Terrain"].isin(["Steep climb", "Steep descent", "Flat"])]
+    fig = go.Figure()
+    fig.add_trace(
+        go.Bar(name="Bias before", x=focus["Terrain"], y=focus["Bias before (min)"])
+    )
+    fig.add_trace(
+        go.Bar(name="Bias after", x=focus["Terrain"], y=focus["Bias after (min)"])
+    )
+    fig.add_hline(y=0.0, line_dash="dash", line_color="black")
+    fig.update_layout(
+        barmode="group",
+        title="Segment bias correction on steep terrain after GAP scale optimisation",
+        xaxis_title="Terrain family",
+        yaxis_title="Bias (predicted − observed, min)",
+        legend={"orientation": "h", "y": 1.12},
+    )
+    return fig
+
+
+def fig_segment_vs_race_objective(obj_table: pd.DataFrame) -> go.Figure:
+    if obj_table.empty:
+        return go.Figure()
+    fig = go.Figure()
+    fig.add_trace(
+        go.Bar(
+            name="Activity (race) objective",
+            x=obj_table["Cohort"],
+            y=obj_table["MAE activity objective (min)"],
+        )
+    )
+    fig.add_trace(
+        go.Bar(
+            name="Segment objective",
+            x=obj_table["Cohort"],
+            y=obj_table["MAE segment objective (min)"],
+        )
+    )
+    fig.update_layout(
+        barmode="group",
+        title="Leave-one-out MAE under segment versus activity fit objectives",
+        xaxis_title="Cohort",
+        yaxis_title="MAE (min)",
+        legend={"orientation": "h", "y": 1.12},
+    )
+    fig.update_xaxes(tickangle=-15)
+    return fig
+
+
 def write_figures(src: Path, out_dir: Path, incremental: pd.DataFrame, ablation: pd.DataFrame) -> dict[str, Path]:
     out_dir.mkdir(parents=True, exist_ok=True)
     written: dict[str, Path] = {}
@@ -518,6 +842,27 @@ def write_figures(src: Path, out_dir: Path, incremental: pd.DataFrame, ablation:
     path_abl = out_dir / "fig_component_ablation_delta_mae.png"
     _write_png(fig_ablation_delta(ablation), path_abl, width=1050, height=640)
     written[path_abl.name] = path_abl
+
+    rejection = table_segment_rejection_summary(src)
+    if not rejection.empty:
+        path_rej = out_dir / "fig_segment_rejection_policies.png"
+        _write_png(fig_segment_rejection_policies(rejection), path_rej, width=1000, height=620)
+        written[path_rej.name] = path_rej
+
+    gap_table = table_segment_gap_optimisation()
+    if not gap_table.empty:
+        path_gap = out_dir / "fig_segment_gap_optimisation_mae.png"
+        _write_png(fig_steep_gap_optimisation(gap_table), path_gap, width=1000, height=620)
+        written[path_gap.name] = path_gap
+        path_bias = out_dir / "fig_segment_gap_optimisation_bias.png"
+        _write_png(fig_steep_gap_bias(gap_table), path_bias, width=900, height=600)
+        written[path_bias.name] = path_bias
+
+    obj_table = table_segment_vs_race_objective(src)
+    if not obj_table.empty:
+        path_obj = out_dir / "fig_segment_vs_race_objective.png"
+        _write_png(fig_segment_vs_race_objective(obj_table), path_obj, width=1000, height=620)
+        written[path_obj.name] = path_obj
 
     # Copy prior paper_assets PNGs that remain relevant.
     legacy = REPO_ROOT / "docs" / "science" / "paper_assets"
@@ -579,6 +924,23 @@ def write_captions(figures: dict[str, Path], out_dir: Path) -> Path:
         "fig_component_ablation_delta_mae.png": (
             "Figure. Increase in mean absolute error after ablating individual components of the "
             "full Stage-3 specification (positive values indicate loss of accuracy)."
+        ),
+        "fig_segment_rejection_policies.png": (
+            "Figure. Extent of near-flat immobile segment rejection (bars) and associated mean "
+            "Stage-3 leave-one-out MAE (line) across exclusion policies. The paper pipeline uses "
+            "a slight policy combined with moving-time fitting."
+        ),
+        "fig_segment_gap_optimisation_mae.png": (
+            "Figure. Segment-level MAE by terrain family before and after soft-ramped asymmetric "
+            "trail GAP scale optimisation (climb 0.85, descent 1.60)."
+        ),
+        "fig_segment_gap_optimisation_bias.png": (
+            "Figure. Segment bias on flat and steep terrain before and after trail GAP scale "
+            "optimisation. Soft-ramped scales remove the opposing climb/descent bias pattern."
+        ),
+        "fig_segment_vs_race_objective.png": (
+            "Figure. Leave-one-out MAE when (α, κ) are optimised under a segment residual objective "
+            "versus an activity finish-time objective."
         ),
     }
     path = out_dir / "figure_captions.md"
