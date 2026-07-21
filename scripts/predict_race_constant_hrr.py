@@ -562,6 +562,8 @@ def main() -> None:
                 physiology=physiology,
             )
             ref_sec = float(ref_pred["predictedTimeSec"].sum())
+            obs_pred = predict_route(segments, hrr=float(observed_hrr), fit=fit, physiology=physiology)
+            obs_pred_sec = float(obs_pred["predictedTimeSec"].sum())
             row = {
                 "raceKey": race_key,
                 "label": meta["label"],
@@ -574,6 +576,9 @@ def main() -> None:
                 "sustainabilityMarginMin": margin_min,
                 "referenceHrr": float(physiology["hrr_reference"]),
                 "referencePredictedSec": ref_sec,
+                "referenceDeltaMin": (ref_sec - actual_moving) / 60.0,
+                "observedMeanHrrPredictedSec": obs_pred_sec,
+                "observedMeanHrrDeltaMin": (obs_pred_sec - actual_moving) / 60.0,
                 "fitObjective": fit["fitObjective"],
                 "alpha": fit["alpha"],
                 "fatigueCoef": fit["fatigueCoef"],
@@ -604,6 +609,8 @@ def main() -> None:
                 f"pred={row['predictedHms']} "
                 f"actual_moving={row['actualMovingHms']} "
                 f"delta={row['deltaPredMinusActualMin']:+.1f} min "
+                f"obsHrr={observed_hrr:.3f} Δ_obs={row['observedMeanHrrDeltaMin']:+.1f} "
+                f"Δ_ref={row['referenceDeltaMin']:+.1f} "
                 f"(D+ profile={row['profileElevGainM']:.0f}m)"
             )
 

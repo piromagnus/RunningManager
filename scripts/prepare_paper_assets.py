@@ -214,21 +214,35 @@ def table_prospective(src: Path) -> pd.DataFrame:
             else np.nan
         )
         hrr_mode = str(row["hrrMode"]) if "hrrMode" in raw.columns else ""
+        ref_delta = (
+            round(float(row["referenceDeltaMin"]), 1)
+            if "referenceDeltaMin" in raw.columns and pd.notna(row["referenceDeltaMin"])
+            else (
+                round((float(row["referencePredictedSec"]) - float(row["actualMovingSec"])) / 60.0, 1)
+                if "referencePredictedSec" in raw.columns
+                and pd.notna(row.get("referencePredictedSec"))
+                and pd.notna(row.get("actualMovingSec"))
+                else np.nan
+            )
+        )
+        obs_delta = (
+            round(float(row["observedMeanHrrDeltaMin"]), 1)
+            if "observedMeanHrrDeltaMin" in raw.columns and pd.notna(row["observedMeanHrrDeltaMin"])
+            else np.nan
+        )
         rows.append(
             {
                 "Race": row["label"],
                 "Profile": profile,
-                "HRR mode": hrr_mode,
-                "Constant HRR": round(float(row["hrr"]), 2),
-                "Predicted moving time": _fmt_hms(float(row["predictedSec"])),
-                "Observed moving time": _fmt_hms(float(row["actualMovingSec"])),
-                "Δ (min)": round(float(row["deltaMin"]), 1),
-                "Observed mean HRR": obs_hrr,
-                "P05 finish": _fmt_hms(float(row["finishSecP05"])),
+                "Obs. mean HRR": obs_hrr,
+                "Δ @ obs. mean HRR (min)": obs_delta,
+                "Feasible HRR": round(float(row["hrr"]), 2),
+                "Δ @ feasible HRR (min)": round(float(row["deltaMin"]), 1),
+                "Δ @ HRR_ref=0.88 (min)": ref_delta,
+                "Predicted (feasible)": _fmt_hms(float(row["predictedSec"])),
+                "Observed moving": _fmt_hms(float(row["actualMovingSec"])),
                 "P50 finish": _fmt_hms(float(row["finishSecP50"])),
-                "P95 finish": _fmt_hms(float(row["finishSecP95"])),
-                "α": round(float(row["alpha"]), 2),
-                "κ": round(float(row["fatigueCoef"]), 2),
+                "HRR mode": hrr_mode,
             }
         )
     return pd.DataFrame(rows)
@@ -488,11 +502,10 @@ def write_tables(src: Path, out_dir: Path) -> dict[str, Path]:
             table_prospective(src),
             "Table 5. Prospective constant-HRR race predictions with finish-time uncertainty bands.",
             "Hold-out races were excluded from parameter estimation and from the "
-            "HRR–duration power-law envelope. Primary predictions use the fastest "
-            "constant HRR historically sustainable for the predicted finish time "
-            "(duration_feasible). HRR_ref=0.88 remains the E=1 normalization/ceiling "
-            "(not HRR at VMA); referencePredictedSec is kept for comparison. "
-            "Δ is predicted − observed moving time.",
+            "HRR–duration power-law envelope. Primary column is duration_feasible HRR. "
+            "Δ @ obs. mean HRR is an evaluation-only constant-HRR reconstruction using "
+            "the race's realized average HRR (not available prospectively). "
+            "Δ @ HRR_ref=0.88 is the E=1 ceiling companion. Δ = predicted − observed moving time.",
         ),
         "table06_speed_vs_hrr_flat": (
             table_speed_hrr_excerpt(src),

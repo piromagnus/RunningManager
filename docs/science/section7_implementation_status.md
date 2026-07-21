@@ -13,8 +13,8 @@ Paper draft: [`trail_digital_twin_hr_performance_paper_draft.md`](trail_digital_
 | Hard trail M3 LOO MAE | **17.39 min** |
 | Ablation ΔMAE (−HRR / −TRIMP / −GAP), R1-aligned | **+13.5 / +15.6 / +9.6 min** |
 | Steep terrain MAE (before → after GAP scales) | **3.05 → 1.64 min (−46%)** |
-| Prospective Δ duration-feasible (LUT / Passerelles / Grésivaudan / Échappée / Rome) | **+16.7 / +13.7 / +6.7 / −73 / −62 min** (HRR ≈0.78 / 0.78 / 0.78 / 0.75 / 0.79) |
-| Reference \(E=1\) companions (HRR_ref=0.88) | **−4.1 / −8.0 / −17.0 / −164 / −79 min** |
+| Prospective Δ (trail): obs. mean / feasible / HRR_ref | **~+13–19 / mixed / systematically fast**; Échappée obs. **+16.8** vs feasible **−73** |
+| Rome (road) | out of scope |
 | Grésivaudan with 12 min aid budget | **≈ −5 min** |
 | §7 slight rejects | **4 segments (0.17%, 84 min)** |
 

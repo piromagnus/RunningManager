@@ -215,7 +215,17 @@ Prior to asymmetric trail GAP correction, hard-trail segment residuals showed op
 
 ### 4.5 Prospective constant-HRR predictions (E3)
 
-Holding out target races from estimation and selecting the **fastest constant HRR sustainable for the predicted duration** (power-law HRR–duration envelope fit excluding hold-outs) produced Table 5: LUT By Night **HRR=0.78, +16.7 min**; Trail des Passerelles **0.78, +13.7 min**; Trail du Grésivaudan **0.78, +6.7 min**; Échappée Belle **0.75, −73.2 min**. Profiles: LUT/Grésivaudan = `race_pacing`+GPX altitude; Échappée/Passerelles = executed activity GPS. Companion **reference-effort** predictions at \(\mathrm{HRR}_{\mathrm{ref}}=0.88\) (\(E=1\)) remain faster (LUT −4.1; Passerelles −8.0; Grésivaudan −17.0; Échappée −164) and illustrate the gap between the effort ceiling and duration-feasible pacing. Observed mean HRR (≈0.80 / 0.76 / 0.74 / 0.65) is evaluation-only. Rome (**HRR=0.79, −62 min**) stays **out of scope** for the trail GAP twin (R5). Aid budgets (R4) still apply as non-fitted post-hoc adjustments.
+Holding out target races from estimation and selecting the **fastest constant HRR sustainable for the predicted duration** (power-law HRR–duration envelope fit excluding hold-outs) produced Table 5. As an **evaluation-only** quality check, we also reconstruct each race at constant HRR = observed mean race HRR (available only after the race).
+
+| Race | Obs. mean HRR | Δ @ obs. mean | Feasible HRR | Δ @ feasible | Δ @ HRR_ref=0.88 |
+|------|---------------|---------------|--------------|--------------|------------------|
+| LUT | 0.80 | **+13.2** | 0.78 | +16.7 | −4.1 |
+| Passerelles | 0.76 | **+18.7** | 0.78 | +13.7 | −8.0 |
+| Grésivaudan | 0.73 | **+17.6** | 0.78 | +6.7 | −17.0 |
+| Échappée Belle | 0.65 | **+16.8** | 0.75 | −73.2 | −164 |
+| Rome (road) | 0.73 | −48.1 | 0.79 | −62.4 | −79.2 |
+
+On the four trail races, constant observed-mean HRR yields a consistent ~13–19 min slow bias (|Δ| MAE ≈ 16.6 min) and is the only mode that stays well-behaved on Échappée Belle. Duration-feasible prospective is closer on Grésivaudan (+6.7) but still optimistic on the ultra (−73). Reference \(E=1\) at 0.88 is a ceiling scenario (systematically fast). Rome remains **out of scope** (R5). Profiles: LUT/Grésivaudan = `race_pacing`+GPX altitude; Échappée/Passerelles = executed activity GPS. Aid budgets (R4) still apply as non-fitted post-hoc adjustments.
 
 Finish-time bands (R9) now satisfy P05 < P50 < P95 with multi-minute spread (α/κ jitter + LOO residual noise). Race- vs segment-objective choice was frozen from mixed hard LOO without peeking at hold-outs (**activity** preferred; R2).
 

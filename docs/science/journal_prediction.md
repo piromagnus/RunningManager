@@ -161,3 +161,24 @@ HRR (hold-outs excluded from envelope), pick fastest feasible.
 | Rome | 0.79 | −62.4 | −79 (out of scope) |
 
 `--hrr-mode reference` restores the previous E=1 ceiling scenario.
+
+
+---
+
+## Addendum — observed-mean HRR comparison (2026-07-21)
+
+Evaluation-only: re-simulate each hold-out at **constant HRR = observed mean race HRR**
+and compare to duration-feasible prospective and HRR_ref ceiling.
+
+| Race | Obs. HRR | Δ_obs | Feasible HRR | Δ_feas | Δ_ref (0.88) |
+|------|----------|-------|--------------|--------|--------------|
+| LUT | 0.795 | +13.2 | 0.78 | +16.7 | −4.1 |
+| Passerelles | 0.760 | +18.7 | 0.78 | +13.7 | −8.0 |
+| Grésivaudan | 0.735 | +17.6 | 0.78 | +6.7 | −17.0 |
+| Échappée | 0.654 | +16.8 | 0.75 | −73.2 | −164 |
+| Rome | 0.727 | −48.1 | 0.79 | −62.4 | −79.2 |
+
+Trail |Δ| MAE: obs-mean **16.6** min; feasible **27.6** (Échappée-dominated);
+without Échappée feasible **12.4** vs obs **16.5**. Constant obs-mean HRR is the
+cleanest reconstruction check; remaining ~15 min slow bias suggests variable pacing
+/ aid / model conservatism beyond mean HRR.

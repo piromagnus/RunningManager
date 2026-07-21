@@ -476,6 +476,20 @@ def run_prospective_with_bands(
                     avg_hr = float(pd.to_numeric(hit.iloc[0]["avgHr"], errors="coerce"))
                     if np.isfinite(avg_hr) and hr_max > hr_rest:
                         observed_hrr = (avg_hr - hr_rest) / (hr_max - hr_rest)
+
+        # Evaluation-only: constant HRR = observed race mean HRR (quality check).
+        observed_pred_sec = np.nan
+        observed_delta_min = np.nan
+        if np.isfinite(observed_hrr):
+            obs_sim = predict_route(route, hrr=float(observed_hrr), fit=best, physiology=physiology)
+            observed_pred_sec = float(obs_sim["predictedTimeSec"].sum())
+            if np.isfinite(actual_sec):
+                observed_delta_min = (observed_pred_sec - actual_sec) / 60.0
+            _write_csv(obs_sim, output_dir / f"prospective_{race_key}_observed_mean_hrr_segments.csv")
+
+        ref_delta_min = (
+            (ref_sec - actual_sec) / 60.0 if np.isfinite(actual_sec) and np.isfinite(ref_sec) else np.nan
+        )
         row = {
             "raceKey": race_key,
             "label": race["label"],
@@ -486,6 +500,8 @@ def run_prospective_with_bands(
             "actualMovingSec": actual_sec,
             "deltaMin": (pred_sec - actual_sec) / 60.0 if np.isfinite(actual_sec) else np.nan,
             "observedMeanHrr": observed_hrr,
+            "observedMeanHrrPredictedSec": observed_pred_sec,
+            "observedMeanHrrDeltaMin": observed_delta_min,
             "alpha": best["alpha"],
             "fatigueCoef": best["fatigueCoef"],
             "fatigueModel": best["fatigueModel"],
@@ -495,6 +511,7 @@ def run_prospective_with_bands(
             "sustainabilityMarginMin": margin_min,
             "referenceHrr": float(physiology.get("hrr_reference", 0.88)),
             "referencePredictedSec": ref_sec,
+            "referenceDeltaMin": ref_delta_min,
             **bands,
         }
         rows.append(row)
