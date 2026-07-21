@@ -12,7 +12,7 @@
 
 ## Abstract (draft)
 
-Accurate prediction of trail-running finish times remains difficult because grade, altitude, and fatigue interact nonlinearly with athlete physiology. Building on the physics-informed digital-twin framework of Jaén-Carrillo and Pattis (2026), we evaluate a **single athlete-specific** model that uses continuous heart-rate reserve (HRR) as instantaneous effort and Banister-style TRIMP as intra-activity fatigue, with soft-ramped trail-grade cost corrections. Using leave-one-out (LOO) validation across hard-run, hard-trail, and run/trail (>20 min) cohorts—with moving-time fitting and slight near-flat immobile segment rejection—a physics baseline (M0) yielded substantially larger errors than the full HRR+TRIMP specification (M3): for mixed hard run/trail activities, MAE decreased from **30.2 to 9.1 min** (MAPE 26.5% → 6.5%). Re-optimized component ablations attribute most of this gain to HRR and acute TRIMP. Soft-ramped trail GAP scales reduced steep-terrain segment MAE by ≈46%. Prospective simulations select the fastest constant HRR historically sustainable for the predicted duration (power-law HRR–duration envelope; hold-outs excluded)—e.g. LUT/Passerelles/Grésivaudan at HRR≈0.78, Échappée Belle at 0.75—yielding finish times near observed when race effort matched the envelope (Grésivaudan +6.7 min; Échappée −73 min vs −164 at HRR_ref), while a road marathon (Rome) still failed to transfer. Publication assets: `docs/science/paper/`.
+Accurate prediction of trail-running finish times remains difficult because grade, altitude, and fatigue interact nonlinearly with athlete physiology. Building on the physics-informed digital-twin framework of Jaén-Carrillo and Pattis (2026), we evaluate a **single athlete-specific** model that uses continuous heart-rate reserve (HRR) as instantaneous effort and Banister-style TRIMP as intra-activity fatigue, with soft-ramped trail-grade cost corrections. Using leave-one-out (LOO) validation across hard-run, hard-trail, and run/trail (>20 min) cohorts—with moving-time fitting and slight near-flat immobile segment rejection—a physics baseline (M0) yielded substantially larger errors than the full HRR+TRIMP specification (M3): for mixed hard run/trail activities, MAE decreased from **25.7 to 8.3 min** (MAPE 24.3% → 7.3%). Re-optimized component ablations attribute most of this gain to HRR and acute TRIMP. Soft-ramped trail GAP scales reduced steep-terrain segment MAE by ≈46%. Prospective simulations select the fastest constant HRR historically sustainable for the predicted duration (power-law HRR–duration envelope; hold-outs excluded)—e.g. LUT/Passerelles/Grésivaudan at HRR≈0.78, Échappée Belle at 0.75—yielding finish times near observed when race effort matched the envelope (Grésivaudan +6.7 min; Échappée −73 min vs −164 at HRR_ref), while a road marathon (Rome) still failed to transfer. Publication assets: `docs/science/paper/`.
 
 **Keywords:** trail running; digital twin; heart-rate reserve; TRIMP; performance prediction; leave-one-out; grade-adjusted pace
 
@@ -193,21 +193,21 @@ We report LOO finish-time error for a nested model ladder (Table 2 / `table02_in
 | **M2** | M1 with REDI readiness replacing CTL |
 | **M3** | M2 with continuous HRR effort (full Stage-3 twin) |
 
-On the hard run/trail cohort, M0 yielded MAE = 30.2 min (MAPE = 26.5%). Adding acute TRIMP (M1) reduced MAE to 23.9 min, whereas replacing CTL by REDI (M2) left error essentially unchanged (24.2 min). Introducing continuous HRR effort (M3) produced the dominant improvement: MAE = 9.1 min, MAPE = 6.5%, *R*² = 0.982 (ΔMAE vs M0 = −21.1 min). M3 includes the paper physiology defaults (trail GAP soft-ramp scales 0.85 / 1.60).
+On the hard run/trail cohort, M0 yielded MAE = 25.7 min (MAPE = 24.3%). Adding acute TRIMP (M1) reduced MAE to 21.6 min, whereas replacing CTL by REDI (M2) left error essentially unchanged (21.8 min). Introducing continuous HRR effort (M3) produced the dominant improvement: MAE = 8.25 min, MAPE = 7.3%, *R*² = 0.986 (ΔMAE vs M0 = −17.4 min). M3 includes the paper physiology defaults (trail GAP soft-ramp scales 0.85 / 1.60).
 
-The same M0→M3 ordering held on selected race dates (36.4 → 11.8 min) and on run/trail >20 min (9.4 → 5.1 min). On **hard trail alone**, M1/M2 temporarily *worsened* error relative to M0 (44.5 → 47.2–47.7 min) before M3 recovered to 17.4 min: acute TRIMP without continuous HRR mis-fits heterogeneous submaximal trail efforts. Agreement plots: Figs. `fig_pred_vs_actual_*.png`; Bland–Altman: Figs. `fig_bland_altman_*.png`.
+The same M0→M3 ordering held on selected race dates (36.4 → 11.8 min) and on run/trail >20 min (17.6 → 5.9 min). On **hard trail alone**, M1/M2 temporarily *worsened* error relative to M0 (44.5 → 47.2–47.7 min) before M3 recovered to 17.4 min: acute TRIMP without continuous HRR mis-fits heterogeneous submaximal trail efforts. Agreement plots: Figs. `fig_pred_vs_actual_*.png`; Bland–Altman: Figs. `fig_bland_altman_*.png`.
 
 For reference, Jaén-Carrillo and Pattis (2026) reported LOO MAE = 18.2 min and MAPE = 11.1% (*n* = 13 races) without continuous HR effort. Our hard-trail M3 MAE (17.4 min) is of similar absolute magnitude on a different athlete and race set; mixed hard-run/trail and >20 min cohorts achieve substantially lower absolute error. Direct numerical comparison remains indicative.
 
-Bootstrap percentile intervals on M3 LOO folds (Table 4) place hard run/trail MAE at 9.1 min (90% CI 6.6–11.9) with fold-mean α ≈ 0.95 and κ ≈ 0.39. On hard trail, κ sits at the grid floor (0.20)—a sensitivity item for robustness work (§7).
+Bootstrap percentile intervals on M3 LOO folds (Table 4) place hard run/trail MAE at 8.25 min (90% CI 6.2–10.5) with fold-mean α ≈ 0.95 and κ ≈ 0.40. On hard trail, κ sits at the grid floor (0.20)—a sensitivity item for robustness work (§7).
 
 ### 4.3 Component ablation of the full model
 
 For leave-one-component ablations (Table 3 / `table03_component_ablation`; Fig. `fig_component_ablation_delta_mae.png`), we **re-optimize** (α, κ) after each removal under the same grid and LOO protocol as Stage 3, rather than freezing parameters from the full model. This estimates *recoverable* contribution once remaining parameters adapt—the recommended ablation design when fitting is cheap relative to model complexity—whereas a frozen-parameter removal would measure only inference-time dependence of one fitted solution.
 
-On hard run/trail activities, removing the HRR effort term and re-fitting increased LOO MAE by +13.5 min; removing acute TRIMP increased MAE by +15.6 min. Both channels therefore remain necessary after compensation. Removing GAP entirely remained highly detrimental (+9.6 min). Asymmetric trail GAP soft-ramp scales and REDI/altitude contributed little once (α, κ) were re-optimized (ΔMAE ≈ −0.3 to +0.1 min).
+On hard run/trail activities, removing the HRR effort term and re-fitting increased LOO MAE by +14.4 min; removing acute TRIMP increased MAE by +16.4 min. Both channels therefore remain necessary after compensation. Removing GAP entirely remained highly detrimental (+10.5 min). Asymmetric trail GAP soft-ramp scales and REDI/altitude contributed little once (α, κ) were re-optimized (ΔMAE ≈ +0.6 to +1.0 min).
 
-**Note on baselines.** Table 3’s ``full`` row now reuses the Stage-3 ladder LOO MAE (Table 2), so absolute levels match (hard run/trail **9.09 min**). Variant rows remain re-optimized LOO; ΔMAE is versus that shared full baseline (robustness experiment R1).
+**Note on baselines.** Table 3’s ``full`` row now reuses the Stage-3 ladder LOO MAE (Table 2), so absolute levels match (hard run/trail **8.25 min**). Variant rows remain re-optimized LOO; ΔMAE is versus that shared full baseline (robustness experiment R1).
 
 ### 4.4 Terrain-resolved residuals and trail GAP scales
 
@@ -225,7 +225,7 @@ Holding out target races from estimation and selecting the **fastest constant HR
 | Échappée Belle | 0.65 | **+16.8** | 0.75 | −73.2 | −164 |
 | Rome (road) | 0.73 | −48.1 | 0.79 | −62.4 | −79.2 |
 
-\(\mathrm{HRR}_{\mathrm{ref}}=0.88\) is the modeled **HRR at flat VMA effort** (\(E=1\)); `hrr_max_factor=1.20` allows \(E>1\) when HRR exceeds ref (short supra-VMA intervals). For these races, selected and observed mean HRR are all ≤0.88, so opening the ceiling does **not** change Table 5 point predictions—it matters for segment reconstruction when HRR spikes above ref. On the four trail races, constant observed-mean HRR yields a consistent ~13–19 min slow bias (|Δ| MAE ≈ 16.6 min) and is the only mode that stays well-behaved on Échappée Belle. Duration-feasible prospective is closer on Grésivaudan (+6.7) but still optimistic on the ultra (−73). Rome remains **out of scope** (R5). Profiles: LUT/Grésivaudan = `race_pacing`+GPX altitude; Échappée/Passerelles = executed activity GPS.
+\(\mathrm{HRR}_{\mathrm{ref}}=0.88\) is the modeled **HRR at flat VMA effort** (\(E=1\)); `hrr_max_factor=1.20` allows \(E>1\) when HRR exceeds ref (short supra-VMA intervals). For these races, selected and observed mean HRR are all ≤0.88, so opening the ceiling does **not** change Table 5 point predictions—it matters for segment reconstruction when HRR spikes above ref. On the four trail races, constant observed-mean HRR yields a consistent ~13–19 min slow bias (|Δ| MAE ≈ 16.6 min) and is the only mode that stays well-behaved on Échappée Belle under **constant** HRR. Duration-feasible prospective is closer on Grésivaudan (+6.7) but still optimistic on the ultra (−73). A follow-on **segment-family adaptive** recipe (empirical duration-window blend \(w_{\max}=0.70\) + hardTrailRun mean modulators; journal `journal_segment_hrr_adaptive.md`) cuts trail |Δ| MAE from ≈27.6 to ≈10.9 min and brings Échappée to ≈+8 min without using race HR. Rome remains **out of scope** (R5). Profiles: LUT/Grésivaudan = `race_pacing`+GPX altitude; Échappée/Passerelles = executed activity GPS.
 
 Finish-time bands (R9) now satisfy P05 < P50 < P95 with multi-minute spread (α/κ jitter + LOO residual noise). Race- vs segment-objective choice was frozen from mixed hard LOO without peeking at hold-outs (**activity** preferred; R2).
 
@@ -239,7 +239,7 @@ Near-flat immobile rejection is intentionally **slight**. Table 7 reports two de
 
 In the clock-time A/B (Fig. `fig_segment_rejection_policies.png`), disabling exclusion left all segments in the fit set (mean Stage-3 LOO MAE 10.87 min). Slight exclusion alone removed ~2% of segments but raised mean LOO MAE to 11.85 min; a moderate policy rejected 4.3% and lowered MAE to 10.30 min. Thus slight exclusion **without** moving-time scrubbing is not uniformly helpful.
 
-When slight exclusion is combined with moving-time fitting in the paper §7 pipeline, only **4 segments (0.17%, 84 min)** remain rejected—stationary scrubbing already removes most aid-station dwell from the fit target, and the slight gate catches residual near-flat immobility (headline LOO MAE **9.09 min** on hard run/trail). Illustrative rejects include long dwells on Echappée Belle (Table 7b). Flatness is judged on altitude-over-time so that slow steep climbs are not mistaken for idle flats.
+When slight exclusion is combined with moving-time fitting in the paper §7 pipeline, only **4 segments (0.17%, 84 min)** remain rejected—stationary scrubbing already removes most aid-station dwell from the fit target, and the slight gate catches residual near-flat immobility (headline LOO MAE **8.25 min** on hard run/trail). Illustrative rejects include long dwells on Echappée Belle (Table 7b). Flatness is judged on altitude-over-time so that slow steep climbs are not mistaken for idle flats.
 
 ### 4.8 Segment optimisation
 
@@ -253,7 +253,7 @@ Two segment-level optimisations refine the twin beyond activity-level (α, κ) s
 
 | Finding | Evidence |
 |---------|----------|
-| **Physics → HRR+TRIMP is the main gain** | Hard run/trail LOO MAE **30.2 → 9.1 min** (MAPE 26.5% → 6.5%; *R*² 0.982). Hard trail **44.5 → 17.4**; races **36.4 → 11.8**; >20 min **9.4 → 5.1**. |
+| **Physics → HRR+TRIMP is the main gain** | Hard run/trail LOO MAE **25.7 → 8.25 min** (MAPE 24.3% → 7.3%; *R*² 0.986). Hard trail **44.5 → 17.4**; races **36.4 → 11.8**; >20 min **17.6 → 5.9**. |
 | **HRR and acute TRIMP are both necessary** | Re-optimized ablations (Table 3, R1-aligned): −HRR **+13.5 min**, −TRIMP **+15.6 min** on hard run/trail; −GAP **+9.6 min**. |
 | **REDI / altitude are secondary here** | Ablation ΔMAE ≈ 0–1 min on mixed hard efforts; REDI can even improve some race-date LOO after re-fit. |
 | **M1/M2 without HRR can hurt trail-only** | Hard trail M1/M2 MAE rises above M0 until M3 restores accuracy. |
@@ -285,7 +285,7 @@ Within coaching software, the twin supports (i) retrospective effort-normalized 
 
 ## 6. Conclusion
 
-For one recreational/competitive trail runner, a HRR+TRIMP digital twin reduced leave-one-out finish-time error from a physics baseline of ~30 min MAE to ~9 min MAE on mixed hard run/trail activities (MAPE ≈ 6.5%), with parallel gains on broader >20 min and race-date cohorts. Component ablation attributes most of that gain to continuous HRR and acute TRIMP. Soft-ramped trail GAP scales improve steep-terrain residuals, and prospective simulations use a **duration-feasible** constant HRR (with \(\mathrm{HRR}_{\mathrm{ref}}\) as flat-VMA effort and `hrr_max_factor=1.20` for supra-VMA bursts). Publication assets are collected in `docs/science/paper/`. Multi-athlete validation remains the primary next step for journal submission.
+For one recreational/competitive trail runner, a HRR+TRIMP digital twin reduced leave-one-out finish-time error from a physics baseline of ~26 min MAE to ~8.3 min MAE on mixed hard run/trail activities (MAPE ≈ 7.3%), with parallel gains on broader >20 min and race-date cohorts. Component ablation attributes most of that gain to continuous HRR and acute TRIMP. Soft-ramped trail GAP scales improve steep-terrain residuals, and prospective simulations use a **duration-feasible** constant HRR (with \(\mathrm{HRR}_{\mathrm{ref}}\) as flat-VMA effort and `hrr_max_factor=1.20` for supra-VMA bursts). Publication assets are collected in `docs/science/paper/`. Multi-athlete validation remains the primary next step for journal submission.
 
 ---
 
@@ -315,7 +315,7 @@ Shipped artifacts: `docs/science/section7_implementation_status.md`.
 
 | ID | Result |
 |----|--------|
-| **R1** | PASS — Table 2/3 full MAE identical (9.09 min) |
+| **R1** | PASS — Table 2/3 full MAE identical (8.25 min) |
 | **R2** | PASS — freeze **activity** objective without hold-out peeking |
 | **R3** | PASS — 4 trail hold-outs (LUT, Grésivaudan, Échappée, Passerelles) + Rome |
 | **R4** | PASS — aid budget cuts Grésivaudan Δ from −17 to ≈−5 min |
@@ -324,7 +324,7 @@ Shipped artifacts: `docs/science/section7_implementation_status.md`.
 | **R7** | PASS — HR QC unused (all shares = 1.0) |
 | **R8** | PASS — steep outliers named (e.g. 7 Laux, KV reco) |
 | **R9** | PASS — non-degenerate finish bands |
-| **R10** | PASS — §7 headline ≈9.09 min under shipped GAP |
+| **R10** | PASS — §7 headline ≈8.25 min under shipped GAP (`hrr_max_factor=1.20`) |
 | **R11** | PASS — κ floor 0.20 binding but protective on hard trail |
 
 ### 7.3 Still open (next)
@@ -435,7 +435,7 @@ See `bibliography_hr_digital_twin.md` for extended notes and venue links.
 ## Appendix B — Results postcard
 
 - **Model:** HRR + acute TRIMP + soft-ramped trail GAP (0.85 / 1.60); moving-time fit + slight rejection.
-- **Primary LOO:** hard run/trail **MAE 9.09 min**, MAPE **6.5%**, *R*² **0.982** (physics M0 **30.2 min**).
+- **Primary LOO:** hard run/trail **MAE 8.25 min**, MAPE **7.3%**, *R*² **0.986** (physics M0 **25.7 min**).
 - **Ablations (reoptimize, R1-aligned):** −HRR **+13.5**; −TRIMP **+15.6**; −GAP **+9.6** min.
 - **Steep terrain:** combined MAE **3.05 → 1.64 min (−46%)**.
 - **Prospective:** duration-feasible primary; obs.-mean-HRR reconstruction (eval-only) |Δ|≈16.6 min on trail; HRR_ref ceiling companions −4.1/−8/−17/−164. Rome out of scope.

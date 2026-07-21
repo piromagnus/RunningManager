@@ -2339,13 +2339,17 @@ def simulate_observed_hrr_segments(
     fallback_hrr: float = 0.70,
     hrr_col: str = "meanHrReserve",
     fatigue_input_col: str = "cumTrimpBefore",
+    gap_steep_threshold: float = DEFAULT_GAP_STEEP_THRESHOLD,
+    gap_soft_start: float = DEFAULT_GAP_SOFT_START,
+    gap_climb_scale: float = DEFAULT_GAP_CLIMB_SCALE,
+    gap_descent_scale: float = DEFAULT_GAP_DESCENT_SCALE,
 ) -> pd.DataFrame:
-    """Predict segments sequentially using observed per-segment HRR.
+    """Predict segments sequentially using per-segment HRR (observed or planned).
 
-    Segment HRR is observed, but acute TRIMP is accumulated from predicted segment time
-    to avoid using actual segment duration inside the prediction. By default, the speed
-    penalty uses cumulative predicted TRIMP so that a fixed HRR maps to a decreasing
-    acute performance state over time.
+    Segment HRR comes from ``hrr_col``, but acute TRIMP is accumulated from predicted
+    segment time to avoid using actual segment duration inside the prediction. By
+    default, the speed penalty uses cumulative predicted TRIMP so that a fixed HRR
+    maps to a decreasing acute performance state over time.
     """
     if segments_df.empty:
         return segments_df.copy()
@@ -2391,6 +2395,10 @@ def simulate_observed_hrr_segments(
                 acute_trimp_col=fatigue_input_col,
                 load_factor_col="_activityLoadFactor",
                 use_hrr_effort=True,
+                gap_steep_threshold=gap_steep_threshold,
+                gap_soft_start=gap_soft_start,
+                gap_climb_scale=gap_climb_scale,
+                gap_descent_scale=gap_descent_scale,
             ).iloc[0]
         )
         actual_time = _to_float(segment.get("actualTimeSec"), np.nan)

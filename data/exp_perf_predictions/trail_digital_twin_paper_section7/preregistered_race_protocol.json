@@ -85,7 +85,5 @@
     "gap_climb_scale": 0.85,
     "gap_descent_scale": 1.6
   },
-  "gitSha": "45a982a0043e490851687133cc22d690c27b8540",
-  "prospective_hrr_mode": "duration-feasible",
-  "note_hrr_ref": "HRR at flat VMA effort (E=1); hrr_max_factor>1 allows supra-VMA"
+  "gitSha": "5e5d62033cd5d7a509f6c3b06e4db82ec4980848"
 }

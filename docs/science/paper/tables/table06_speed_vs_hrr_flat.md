@@ -7,6 +7,6 @@
 | 0.7 | 13.6 | 4.41 | 1 km flat, fresh (TRIMP = 0) |
 | 0.8 | 15.55 | 3.86 | 1 km flat, fresh (TRIMP = 0) |
 | 0.88 | 17.1 | 3.51 | 1 km flat, fresh (TRIMP = 0) |
-| 1.0 | 17.1 | 3.51 | 1 km flat, fresh (TRIMP = 0) |
+| 1.0 | 19.43 | 3.09 | 1 km flat, fresh (TRIMP = 0) |
 
 *Fresh condition (cumulative TRIMP = 0). Effort saturates at HRR_ref under hrr_max_factor = 1.0.*

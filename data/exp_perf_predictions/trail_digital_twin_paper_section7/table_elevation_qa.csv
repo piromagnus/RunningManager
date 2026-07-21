@@ -1,7 +1,7 @@
 metric,value
 segmentCount,10454.0
-meanAltitudeM_median,255.54090863877855
-gradeStd_median,0.0535328158804201
-gradeStd_p95,0.1627730267780729
+meanAltitudeM_median,255.54090863877857
+gradeStd_median,0.053532815880420144
+gradeStd_p95,0.16277302677807295
 absAltitudeRateMph_median,419.1643454038997
 note,Barometric/GPS only; DEM correction not available in-repo

@@ -5,18 +5,18 @@
 | Hard trail runs | M0 | Baseline physics digital twin (GAP, altitude, CTL, progress fatigue) | GAP + altitude + CTL readiness + progress decay | 44.5 | 20.86 | -23.76 | 0.778 | 0.0 |
 | Hard trail runs | M1 | M0 with acute TRIMP fatigue (CTL readiness retained) | M0 − progress + acute TRIMP | 47.22 | 17.9 | -40.8 | 0.722 | 2.72 |
 | Hard trail runs | M2 | M1 with REDI readiness replacing CTL | M1 − CTL + REDI | 47.66 | 17.91 | -41.87 | 0.714 | 3.15 |
-| Hard trail runs | M3 | Full HRR + TRIMP digital twin | M2 + continuous HRR effort | 17.39 | 9.65 | -9.8 | 0.969 | -27.12 |
-| Hard run or trail runs | M0 | Baseline physics digital twin (GAP, altitude, CTL, progress fatigue) | GAP + altitude + CTL readiness + progress decay | 30.22 | 26.5 | -0.24 | 0.841 | 0.0 |
-| Hard run or trail runs | M1 | M0 with acute TRIMP fatigue (CTL readiness retained) | M0 − progress + acute TRIMP | 23.88 | 11.72 | -17.38 | 0.813 | -6.34 |
-| Hard run or trail runs | M2 | M1 with REDI readiness replacing CTL | M1 − CTL + REDI | 24.17 | 11.85 | -17.79 | 0.807 | -6.05 |
-| Hard run or trail runs | M3 | Full HRR + TRIMP digital twin | M2 + continuous HRR effort | 9.09 | 6.52 | -5.51 | 0.982 | -21.13 |
-| Run/trail > 20 min | M0 | Baseline physics digital twin (GAP, altitude, CTL, progress fatigue) | GAP + altitude + CTL readiness + progress decay | 9.41 | 14.19 | -0.08 | 0.905 | 0.0 |
-| Run/trail > 20 min | M1 | M0 with acute TRIMP fatigue (CTL readiness retained) | M0 − progress + acute TRIMP | 9.12 | 13.66 | -5.87 | 0.907 | -0.29 |
-| Run/trail > 20 min | M2 | M1 with REDI readiness replacing CTL | M1 − CTL + REDI | 9.01 | 13.46 | -5.84 | 0.906 | -0.4 |
-| Run/trail > 20 min | M3 | Full HRR + TRIMP digital twin | M2 + continuous HRR effort | 5.09 | 8.09 | -2.31 | 0.971 | -4.32 |
+| Hard trail runs | M3 | Full HRR + TRIMP digital twin | M2 + continuous HRR effort | 17.4 | 9.67 | -9.82 | 0.969 | -27.11 |
+| Hard run or trail runs | M0 | Baseline physics digital twin (GAP, altitude, CTL, progress fatigue) | GAP + altitude + CTL readiness + progress decay | 25.65 | 24.34 | 0.37 | 0.882 | 0.0 |
+| Hard run or trail runs | M1 | M0 with acute TRIMP fatigue (CTL readiness retained) | M0 − progress + acute TRIMP | 21.55 | 12.48 | -16.72 | 0.857 | -4.1 |
+| Hard run or trail runs | M2 | M1 with REDI readiness replacing CTL | M1 − CTL + REDI | 21.76 | 12.52 | -17.01 | 0.852 | -3.89 |
+| Hard run or trail runs | M3 | Full HRR + TRIMP digital twin | M2 + continuous HRR effort | 8.25 | 7.33 | -4.2 | 0.986 | -17.4 |
+| Run/trail > 20 min | M0 | Baseline physics digital twin (GAP, altitude, CTL, progress fatigue) | GAP + altitude + CTL readiness + progress decay | 17.64 | 27.74 | 6.68 | 0.902 | 0.0 |
+| Run/trail > 20 min | M1 | M0 with acute TRIMP fatigue (CTL readiness retained) | M0 − progress + acute TRIMP | 11.93 | 14.44 | -8.42 | 0.901 | -5.71 |
+| Run/trail > 20 min | M2 | M1 with REDI readiness replacing CTL | M1 − CTL + REDI | 11.99 | 14.35 | -8.59 | 0.896 | -5.65 |
+| Run/trail > 20 min | M3 | Full HRR + TRIMP digital twin | M2 + continuous HRR effort | 5.91 | 8.57 | -2.05 | 0.983 | -11.73 |
 | Selected race dates | M0 | Baseline physics digital twin (GAP, altitude, CTL, progress fatigue) | GAP + altitude + CTL readiness + progress decay | 36.42 | 27.8 | 10.18 | 0.92 | 0.0 |
 | Selected race dates | M1 | M0 with acute TRIMP fatigue (CTL readiness retained) | M0 − progress + acute TRIMP | 26.92 | 11.39 | -9.56 | 0.912 | -9.5 |
 | Selected race dates | M2 | M1 with REDI readiness replacing CTL | M1 − CTL + REDI | 26.48 | 10.81 | -10.74 | 0.91 | -9.94 |
-| Selected race dates | M3 | Full HRR + TRIMP digital twin | M2 + continuous HRR effort | 11.84 | 5.93 | 4.1 | 0.987 | -24.58 |
+| Selected race dates | M3 | Full HRR + TRIMP digital twin | M2 + continuous HRR effort | 11.82 | 5.89 | 4.07 | 0.987 | -24.6 |
 
 *M0 is the physics-informed baseline (grade-adjusted pace, altitude, CTL readiness, progress fatigue). M1 replaces progress fatigue with acute TRIMP; M2 replaces CTL with REDI; M3 adds continuous HRR effort. Metrics use the activity fit objective.*

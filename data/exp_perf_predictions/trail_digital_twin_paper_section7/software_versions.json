@@ -3,7 +3,7 @@
   "platform": "Linux-6.12.94+-x86_64-with-glibc2.39",
   "numpyVersion": "2.5.1",
   "pandasVersion": "3.0.3",
-  "gitSha": "45a982a0043e490851687133cc22d690c27b8540",
+  "gitSha": "5e5d62033cd5d7a509f6c3b06e4db82ec4980848",
   "bootstrapSeedDefault": 20260623,
   "looActivityCapSeed": 20260721,
   "configPath": "configs/trail_digital_twin_paper_section7.yaml"
