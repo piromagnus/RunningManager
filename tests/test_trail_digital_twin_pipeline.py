@@ -280,6 +280,32 @@ def test_build_cohorts_includes_hard_run_or_trail_run() -> None:
     assert cohorts["hardRunOrTrailRun"]["activityId"].tolist() == ["trail", "run"]
 
 
+def test_build_cohorts_includes_run_trail_over_20_min() -> None:
+    config = pipeline.normalise_config(_valid_minimal_config())
+    config["cohorts"]["include"] = ["runTrailOver20Min", "hardRunOrTrailRun"]
+    activity_df = pd.DataFrame(
+        {
+            "activityId": ["long_easy", "short", "hard"],
+            "category": ["RUN", "RUN", "TRAIL_RUN"],
+            "movingSec": [25 * 60.0, 15 * 60.0, 40 * 60.0],
+            "distanceKm": [5.0, 3.0, 12.0],
+            "ascentM": [50.0, 20.0, 600.0],
+            "hrReserveRatio": [0.55, 0.50, 0.75],
+            "hasTimeseries": [True, True, True],
+        }
+    )
+    segments_by_activity = {
+        "long_easy": pd.DataFrame({"distanceKm": [1.0], "actualTimeSec": [300.0]}),
+        "short": pd.DataFrame({"distanceKm": [1.0], "actualTimeSec": [300.0]}),
+        "hard": pd.DataFrame({"distanceKm": [1.0], "actualTimeSec": [300.0]}),
+    }
+
+    cohorts = pipeline._build_cohorts(activity_df, segments_by_activity, config)
+
+    assert set(cohorts["runTrailOver20Min"]["activityId"]) == {"long_easy", "hard"}
+    assert cohorts["hardRunOrTrailRun"]["activityId"].tolist() == ["hard"]
+
+
 def test_html_renderer_is_self_contained_and_has_expected_sections() -> None:
     result = pipeline.PipelineResult(
         tables={

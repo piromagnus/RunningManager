@@ -628,3 +628,39 @@ def test_read_benchmark_output_tables_and_write_html(tmp_path: Path) -> None:
     assert tables["benchmark_segment_type_metrics"].iloc[0]["terrainLabel"] == "Descent"
     assert html_path.exists()
     assert "Trail Digital Twin Benchmark Report" in html_path.read_text()
+
+
+def test_bootstrap_parameter_uncertainty_table() -> None:
+    loo = pd.DataFrame(
+        {
+            "cohort": ["hardRunOrTrailRun"] * 6,
+            "fitObjective": ["activity"] * 6,
+            "stage": ["Stage 3 HRR speed ratio LOO"] * 6,
+            "alpha": [0.90, 0.95, 1.00, 0.90, 0.95, 1.05],
+            "fatigueCoef": [0.2, 0.3, 0.4, 0.3, 0.4, 0.2],
+        }
+    )
+    out = benchmark.bootstrap_parameter_uncertainty_table(loo, iterations=50, seed=1)
+    assert len(out) == 1
+    assert out.iloc[0]["alphaP05"] <= out.iloc[0]["alphaMean"] <= out.iloc[0]["alphaP95"]
+    assert out.iloc[0]["fatigueCoefP05"] <= out.iloc[0]["fatigueCoefMean"] <= out.iloc[0]["fatigueCoefP95"]
+
+
+def test_frozen_physics_vs_hrr_table_filters_stages() -> None:
+    metrics = pd.DataFrame(
+        {
+            "cohort": ["c", "c", "c"],
+            "fitObjective": ["activity", "activity", "activity"],
+            "stage": [
+                "Stage 0 reproduction Stage 3 LOO",
+                "Stage 3 HRR speed ratio LOO",
+                "ignored stage",
+            ],
+            "maeMin": [20.0, 10.0, 99.0],
+        }
+    )
+    out = benchmark.frozen_physics_vs_hrr_table(metrics)
+    assert set(out["stage"]) == {
+        "Stage 0 reproduction Stage 3 LOO",
+        "Stage 3 HRR speed ratio LOO",
+    }

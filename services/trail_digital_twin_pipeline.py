@@ -10,6 +10,9 @@ import html
 import json
 import logging
 import math
+import platform
+import subprocess
+import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -87,6 +90,12 @@ DEFAULT_CONFIG: dict[str, Any] = {
     },
     "cohorts": {
         "include": ["hardTrailRun", "hardRunOrTrailRun", "top10HardTrailByHRR", "selectedDateRaces"],
+        # Empty = LOO on every included cohort. Non-empty restricts LOO to these names.
+        "loo_include": [],
+        # Optional cap for large cohorts (deterministic subsample); 0 = no cap.
+        "loo_activity_cap": 0,
+        "loo_activity_cap_seed": 20260721,
+        "run_trail_over_20min_sec": 1200.0,
         "top_hrr_count": 10,
         "selected_race_dates": [],
     },
@@ -586,6 +595,17 @@ def _build_segments(
             excluded_time = float(
                 segments.loc[~segments["isFitEligible"].fillna(False).astype(bool), "actualTimeSec"].sum()
             )
+        hr_sample_count = (
+            int(pd.to_numeric(segments.get("hrSampleCount"), errors="coerce").fillna(0).sum()) if usable else 0
+        )
+        hr_valid_sample_count = (
+            int(pd.to_numeric(segments.get("hrValidSampleCount"), errors="coerce").fillna(0).sum())
+            if usable
+            else 0
+        )
+        hr_valid_share = (
+            float(hr_valid_sample_count) / float(hr_sample_count) if hr_sample_count > 0 else float("nan")
+        )
         qc_rows.append(
             {
                 "activityId": activity_id,
@@ -598,6 +618,9 @@ def _build_segments(
                 "excludedTimeSec": excluded_time,
                 "segmentDistanceKm": float(segments["distanceKm"].sum()) if usable else 0.0,
                 "segmentTimeSec": float(segments["actualTimeSec"].sum()) if usable else 0.0,
+                "hrSampleCount": hr_sample_count,
+                "hrValidSampleCount": hr_valid_sample_count,
+                "hrValidShare": hr_valid_share,
             }
         )
         if usable:
@@ -670,9 +693,14 @@ def _build_cohorts(
     activity_df["hardRunOrTrailRun"] = (
         category.isin(["RUN", "TRAIL_RUN"]) & activity_df["usableSegmentActivity"] & (moving >= 1800.0) & hard_activity
     )
+    over20_sec = float(config["cohorts"].get("run_trail_over_20min_sec", 1200.0))
+    activity_df["runTrailOver20Min"] = (
+        category.isin(["RUN", "TRAIL_RUN"]) & activity_df["usableSegmentActivity"] & (moving >= over20_sec)
+    )
 
     hard_activity_df = activity_df[activity_df["hardTrailRun"]].copy()
     hard_run_or_trail_df = activity_df[activity_df["hardRunOrTrailRun"]].copy()
+    run_trail_over20_df = activity_df[activity_df["runTrailOver20Min"]].copy()
     top_ids = tpm.top_hrr_hard_trailrun_ids(activity_df, n=int(config["cohorts"]["top_hrr_count"]))
     top_activity_df = activity_df[activity_df["activityId"].astype(str).isin(top_ids)].copy()
     selected_activity_df = tpm.select_best_activity_by_dates(activity_df, config["cohorts"]["selected_race_dates"])
@@ -682,6 +710,7 @@ def _build_cohorts(
     all_cohorts = {
         "hardTrailRun": hard_activity_df,
         "hardRunOrTrailRun": hard_run_or_trail_df,
+        "runTrailOver20Min": run_trail_over20_df,
         "top10HardTrailByHRR": top_activity_df,
         "selectedDateRaces": selected_activity_df,
     }
@@ -1127,6 +1156,14 @@ def _run_paper_stage_models_for_objective(task: tuple[object, ...]) -> dict[str,
     fitting = config["fitting"]
     physiology = config["physiology"]
     run_loo = "loo" in set(fitting.get("validation_modes", ["in_sample", "loo"]))
+    loo_include = [str(name) for name in config.get("cohorts", {}).get("loo_include", []) or []]
+    if loo_include and cohort_name not in set(loo_include):
+        logger.info(
+            "Skipping LOO for cohort=%s (not in cohorts.loo_include=%s)",
+            cohort_name,
+            loo_include,
+        )
+        run_loo = False
     fit_mask_col = _fit_mask_col(config)
     fit_actual_time_col = _fit_actual_time_col(config)
     rows: list[dict[str, object]] = []
@@ -1139,10 +1176,31 @@ def _run_paper_stage_models_for_objective(task: tuple[object, ...]) -> dict[str,
     ids, segments, actual, ctl_factors = _cohort_inputs(cohort_df, segments_by_activity)
     if not ids:
         return _empty_stage_worker_result(order, cohort_name, objective)
+    loo_ids = list(ids)
+    loo_cap = int(config.get("cohorts", {}).get("loo_activity_cap", 0) or 0)
+    if run_loo and loo_cap > 0 and len(loo_ids) > loo_cap:
+        seed = int(config.get("cohorts", {}).get("loo_activity_cap_seed", 20260721))
+        # Stable per-cohort seed so caps are reproducible across runs.
+        cohort_seed = seed + (abs(hash(cohort_name)) % 10_000)
+        rng = np.random.default_rng(cohort_seed)
+        loo_ids = sorted(rng.choice(np.array(loo_ids, dtype=object), size=loo_cap, replace=False).tolist())
+        logger.warning(
+            "LOO activity cap applied for cohort=%s: using %d/%d activities (seed=%d)",
+            cohort_name,
+            len(loo_ids),
+            len(ids),
+            cohort_seed,
+        )
     observed = actual.to_dict()
     cohort_segments = segment_features[segment_features["activityId"].isin(ids)].copy()
     if cohort_segments.empty:
         return _empty_stage_worker_result(order, cohort_name, objective)
+    loo_segments = {
+        activity_id: segments[activity_id] for activity_id in loo_ids if activity_id in segments
+    }
+    loo_observed = {activity_id: observed[activity_id] for activity_id in loo_ids if activity_id in observed}
+    loo_ctl = {activity_id: ctl_factors[activity_id] for activity_id in loo_ids if activity_id in ctl_factors}
+    loo_cohort_segments = cohort_segments[cohort_segments["activityId"].astype(str).isin(loo_ids)].copy()
 
     best_stage0, _grid_stage0 = tpm.grid_search_model(
         segments,
@@ -1163,13 +1221,13 @@ def _run_paper_stage_models_for_objective(task: tuple[object, ...]) -> dict[str,
     ).reindex(ids)
     loo_stage0 = (
         tpm.leave_one_out_grid_search(
-            segments,
-            observed,
+            loo_segments,
+            loo_observed,
             v_vt2_kmh=float(v_vt2_kmh),
             alpha_grid=fitting["stage0_alpha_grid"],
             mu_grid=fitting["stage0_mu_grid"],
             fatigue_model="linear",
-            ctl_factors=ctl_factors,
+            ctl_factors=loo_ctl,
         )
         if run_loo
         else pd.DataFrame()
@@ -1237,7 +1295,7 @@ def _run_paper_stage_models_for_objective(task: tuple[object, ...]) -> dict[str,
 
         loo = (
             tpm.leave_one_out_hrr_trimp_grid_search(
-                cohort_segments,
+                loo_cohort_segments,
                 v_anchor_kmh=float(physiology["vma_flat_kmh"]),
                 alpha_grid=fitting["hrr_trimp_alpha_grid"],
                 fatigue_coef_grid=fitting["hrr_trimp_kappa_grid"],
@@ -1253,7 +1311,7 @@ def _run_paper_stage_models_for_objective(task: tuple[object, ...]) -> dict[str,
                 load_factor_col=spec["loadFactorCol"],
                 use_hrr_effort=bool(spec["useHrrEffort"]),
                 acute_trimp_col=spec["acuteTrimpCol"],
-                observed_activity_times_sec=observed,
+                observed_activity_times_sec=loo_observed,
                 objective=_model_objective(objective),
                 fit_mask_col=fit_mask_col,
             actual_time_col=fit_actual_time_col,
@@ -1344,7 +1402,7 @@ def _run_paper_stage_models_for_objective(task: tuple[object, ...]) -> dict[str,
 
             loo = (
                 tpm.leave_one_out_hrr_trimp_grid_search(
-                    cohort_segments,
+                    loo_cohort_segments,
                     v_anchor_kmh=float(physiology["vma_flat_kmh"]),
                     alpha_grid=fitting["hrr_trimp_alpha_grid"],
                     fatigue_coef_grid=fitting["hrr_trimp_kappa_grid"],
@@ -1363,7 +1421,7 @@ def _run_paper_stage_models_for_objective(task: tuple[object, ...]) -> dict[str,
                     acute_trimp_col=state_spec["acute_trimp_col"],
                     secondary_acute_trimp_col=secondary_col or None,
                     secondary_fatigue_model=secondary_model or None,
-                    observed_activity_times_sec=observed,
+                    observed_activity_times_sec=loo_observed,
                     objective=_model_objective(objective),
                     fit_mask_col=fit_mask_col,
             actual_time_col=fit_actual_time_col,
@@ -1586,6 +1644,8 @@ def run_stage3_ablation(
             fatigue_coef: float | None = None,
             load_factor_col: str | None = "rediReadinessFactor",
             use_hrr_effort: bool = True,
+            gap_climb_scale: float | None = None,
+            gap_descent_scale: float | None = None,
         ) -> dict[str, object]:
             predicted_segments = tpm.predict_hrr_trimp_segment_times(
                 variant_segments,
@@ -1599,8 +1659,12 @@ def run_stage3_ablation(
                 min_fatigue_factor=float(physiology["min_fatigue_factor"]),
             gap_steep_threshold=float(physiology.get("gap_steep_threshold", 0.15)),
             gap_soft_start=float(physiology.get("gap_soft_start", 0.04)),
-            gap_climb_scale=float(physiology.get("gap_climb_scale", 1.0)),
-            gap_descent_scale=float(physiology.get("gap_descent_scale", 1.0)),
+            gap_climb_scale=float(
+                physiology.get("gap_climb_scale", 1.0) if gap_climb_scale is None else gap_climb_scale
+            ),
+            gap_descent_scale=float(
+                physiology.get("gap_descent_scale", 1.0) if gap_descent_scale is None else gap_descent_scale
+            ),
                 load_factor_col=load_factor_col,
                 use_hrr_effort=use_hrr_effort,
                 acute_trimp_col=acute_col,
@@ -1641,6 +1705,12 @@ def run_stage3_ablation(
             predict_variant("no REDI readiness", cohort_segments.assign(rediReadinessFactor=1.0)),
             predict_variant("no HRR speed ratio", cohort_segments, use_hrr_effort=False),
             predict_variant("no acute fatigue", cohort_segments, fatigue_coef=0.0),
+            predict_variant(
+                "no trail GAP scales",
+                cohort_segments,
+                gap_climb_scale=1.0,
+                gap_descent_scale=1.0,
+            ),
         ]
         for row in variants:
             row["deltaMaeMinVsFull"] = float(row["maeMin"]) - full_mae
@@ -3146,6 +3216,30 @@ def write_outputs(result: PipelineResult, output_dir: Path) -> dict[str, Path]:
     manifest_path = output_dir / "run_manifest.csv"
     manifest.to_csv(manifest_path, index=False)
     written["run_manifest"] = manifest_path
+
+    try:
+        git_sha = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],
+            cwd=Path.cwd(),
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+    except Exception:
+        logger.warning("Could not resolve git SHA for software_versions.json; leaving blank")
+        git_sha = ""
+    versions = {
+        "pythonVersion": sys.version,
+        "platform": platform.platform(),
+        "numpyVersion": getattr(np, "__version__", ""),
+        "pandasVersion": getattr(pd, "__version__", ""),
+        "gitSha": git_sha,
+        "bootstrapSeedDefault": 20260623,
+        "looActivityCapSeed": int(config.get("cohorts", {}).get("loo_activity_cap_seed", 20260721) or 20260721),
+        "configPath": str(result.metadata.get("configPath", "")),
+    }
+    versions_path = output_dir / "software_versions.json"
+    versions_path.write_text(json.dumps(versions, indent=2) + "\n")
+    written["software_versions"] = versions_path
 
     if bool(config.get("outputs", {}).get("write_html", True)):
         html_path = output_dir / str(config.get("outputs", {}).get("html_filename", "trail_digital_twin_report.html"))

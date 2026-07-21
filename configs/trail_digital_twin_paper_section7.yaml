@@ -1,0 +1,132 @@
+# Frozen paper §7 config: one modeling family, measured LOO errors, new >20 min cohort.
+# Tuned for reproducibility over exhaustive search (narrow grids, activity objective).
+
+paths:
+  data_dir: data
+  timeseries_dir: data/timeseries
+  metrics_ts_dir: data/metrics_ts
+  raw_strava_dir: data/raw/strava
+  output_dir: data/exp_perf_predictions/trail_digital_twin_paper_section7
+
+execution:
+  jobs: 6
+
+cohorts:
+  include:
+    - hardTrailRun
+    - hardRunOrTrailRun
+    - runTrailOver20Min
+    - top10HardTrailByHRR
+    - selectedDateRaces
+  loo_include:
+    - hardTrailRun
+    - hardRunOrTrailRun
+    - runTrailOver20Min
+    - selectedDateRaces
+  # Cap LOO folds for the large >20 min cohort (full set still used in-sample).
+  loo_activity_cap: 80
+  loo_activity_cap_seed: 20260721
+  run_trail_over_20min_sec: 1200
+  top_hrr_count: 10
+  selected_race_dates:
+    - "2025-10-18"
+    - "2026-04-12"
+    - "2025-08-06"
+    - "2025-09-28"
+    - "2025-06-23"
+    - "2025-07-27"
+    - "2025-07-24"
+    - "2025-08-01"
+    - "2024-08-18"
+    - "2025-11-01"
+    - "2025-04-27"
+    - "2025-07-12"
+    - "2026-02-22"
+    - "2026-04-18"
+    - "2024-07-28"
+    - "2025-08-03"
+    - "2025-06-29"
+    - "2025-08-23"
+
+physiology:
+  segment_km: 1.0
+  vma_flat_kmh: 18.0
+  vt2_threshold_name: Threshold 30
+  vt2_fallback_kmh: 15.0
+  hrr_reference: 0.88
+  hrr_min_factor: 0.30
+  hrr_max_factor: 1.0
+  decay_lambda: 0.2
+  min_fatigue_factor: 0.60
+  gap_steep_threshold: 0.15
+  gap_soft_start: 0.04
+  gap_climb_scale: 0.85
+  gap_descent_scale: 1.60
+
+readiness:
+  ctl_weight: 0.05
+  tsb_weight: 0.10
+  ctl_factor_min: 0.90
+  ctl_factor_max: 1.10
+
+fitting:
+  enabled_objectives:
+    - activity
+    - segment
+  validation_modes:
+    - in_sample
+    - loo
+  stage0_alpha_grid:
+    - 0.70
+    - 0.80
+    - 0.90
+    - 1.00
+  stage0_mu_grid:
+    - -0.40
+    - -0.20
+    - 0.00
+  hrr_trimp_alpha_grid:
+    - 0.85
+    - 0.90
+    - 0.95
+    - 1.00
+    - 1.05
+  hrr_trimp_kappa_grid:
+    - 0.20
+    - 0.30
+    - 0.40
+    - 0.60
+  hrr_trimp_secondary_kappa_grid:
+    - 0.0
+    - 0.1
+  fatigue_models:
+    - linear
+    - exponential
+  stage3_fatigue_states:
+    - fatigue_state: cumulative
+      acute_trimp_col: cumTrimpBefore
+      label: cumulative TRIMP
+    - fatigue_state: decayed
+      acute_trimp_col: decayedTrimpBefore
+      label: decayed TRIMP
+
+segment_grid:
+  enabled: false
+
+robustness:
+  enabled: false
+
+segment_exclusion:
+  enabled: true
+  min_mean_speed_eq_kmh: 3.0
+  max_stationary_time_share: 0.40
+  stationary_speed_kmh: 1.0
+  max_abs_altitude_rate_mph: 120.0
+  use_moving_time_for_fit: true
+  exclude_from_fit: true
+  report_full_race_eval: true
+
+outputs:
+  write_csv: true
+  write_html: true
+  html_filename: trail_digital_twin_paper_section7_report.html

@@ -1251,3 +1251,43 @@ def test_hrr_trimp_grid_search_fits_on_moving_time_and_scores_full_clock() -> No
     assert best["raceMaeSecFull"] > best["raceMaeSec"]
     assert "fitErrorSec" in prediction.columns
     assert prediction["fitErrorSec"].abs().max() < prediction["errorSec"].abs().max()
+
+
+def test_segment_timeseries_reports_hr_valid_share() -> None:
+    n = 11
+    hr = np.full(n, 150.0)
+    hr[0] = np.nan
+    hr[1] = np.nan
+    df = pd.DataFrame(
+        {
+            "cumulated_distance": np.linspace(0.0, 1.0, n),
+            "cumulated_duration_seconds": np.linspace(0.0, 360.0, n),
+            "elevationM": np.zeros(n),
+            "hr": hr,
+        }
+    )
+    segments = model.segment_timeseries(df, segment_km=1.0, hr_rest=50.0, hr_max=200.0)
+    assert not segments.empty
+    assert segments.iloc[0]["hrSampleCount"] == n
+    assert segments.iloc[0]["hrValidSampleCount"] == n - 2
+    assert segments.iloc[0]["hrValidShare"] == pytest.approx((n - 2) / n)
+
+
+def test_speed_vs_hrr_curve_increases_until_effort_ceiling() -> None:
+    curve = model.speed_vs_hrr_curve(
+        hrr_values=[0.60, 0.70, 0.80, 0.88, 0.95],
+        v_anchor_kmh=18.0,
+        alpha=0.95,
+        distance_km=1.0,
+        avg_grade=0.0,
+        fatigue_coef=0.0,
+        hrr_reference=0.88,
+        hrr_min_factor=0.30,
+        hrr_max_factor=1.0,
+    )
+    assert len(curve) == 5
+    assert curve.loc[curve["hrr"] == 0.80, "speedKmh"].iloc[0] > curve.loc[curve["hrr"] == 0.60, "speedKmh"].iloc[0]
+    assert curve.loc[curve["hrr"] == 0.95, "speedKmh"].iloc[0] == pytest.approx(
+        curve.loc[curve["hrr"] == 0.88, "speedKmh"].iloc[0],
+        rel=1e-6,
+    )

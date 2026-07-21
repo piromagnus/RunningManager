@@ -527,9 +527,19 @@ def segment_timeseries(
         mean_altitude = (
             _weighted_mean(elev_source[elevation_col], elev_source["delta_km"]) if elevation_col else np.nan
         )
-        mean_hr = _weighted_mean(seg_df["hr"], seg_df["delta_time_sec"]) if "hr" in seg_df else np.nan
-        if pd.isna(mean_hr) and "hr_smooth" in seg_df:
-            mean_hr = _weighted_mean(seg_df["hr_smooth"], seg_df["delta_time_sec"])
+        hr_series = None
+        if "hr" in seg_df.columns:
+            hr_series = pd.to_numeric(seg_df["hr"], errors="coerce")
+        elif "hr_smooth" in seg_df.columns:
+            hr_series = pd.to_numeric(seg_df["hr_smooth"], errors="coerce")
+        hr_sample_count = int(len(seg_df))
+        hr_valid_sample_count = int(hr_series.notna().sum()) if hr_series is not None else 0
+        hr_valid_share = (
+            float(hr_valid_sample_count) / float(hr_sample_count) if hr_sample_count > 0 else np.nan
+        )
+        mean_hr = (
+            _weighted_mean(hr_series, seg_df["delta_time_sec"]) if hr_series is not None else np.nan
+        )
 
         mean_hr_reserve = np.nan
         if hr_rest is not None and hr_max is not None and hr_max > hr_rest and pd.notna(mean_hr):
@@ -604,6 +614,9 @@ def segment_timeseries(
                 "technicalityGps": technicality,
                 "meanHr": mean_hr,
                 "meanHrReserve": mean_hr_reserve,
+                "hrSampleCount": hr_sample_count,
+                "hrValidSampleCount": hr_valid_sample_count,
+                "hrValidShare": hr_valid_share,
                 "meanSpeedKmh": mean_speed,
                 "meanSpeedEqKmh": mean_speed_eq,
                 "stationaryTimeShare": stationary_time_share,
@@ -2014,6 +2027,85 @@ def predict_hrr_trimp_segment_times(
     speed = np.clip(speed, 0.1, None)
     predicted = distance.to_numpy(dtype=float) / speed * 3600.0
     return pd.Series(predicted, index=segments_df.index)
+
+
+def speed_vs_hrr_curve(
+    *,
+    hrr_values: Iterable[float],
+    v_anchor_kmh: float,
+    alpha: float,
+    distance_km: float = 1.0,
+    avg_grade: float = 0.0,
+    mean_altitude_m: float = 0.0,
+    fatigue_coef: float = 0.0,
+    fatigue_model: str = "exponential",
+    cum_trimp_before: float = 0.0,
+    hrr_reference: float = 0.88,
+    hrr_min_factor: float = 0.30,
+    hrr_max_factor: float = 1.0,
+    min_fatigue_factor: float = 0.60,
+    gap_steep_threshold: float = DEFAULT_GAP_STEEP_THRESHOLD,
+    gap_soft_start: float = DEFAULT_GAP_SOFT_START,
+    gap_climb_scale: float = DEFAULT_GAP_CLIMB_SCALE,
+    gap_descent_scale: float = DEFAULT_GAP_DESCENT_SCALE,
+) -> pd.DataFrame:
+    """Predicted equivalent/ground speed vs HRR on a single synthetic segment.
+
+    Fresh-segment default uses ``cum_trimp_before=0``. The returned speed is the
+    model ground speed on the given grade (km/h), not grade-adjusted pace.
+    """
+    rows: list[dict[str, float]] = []
+    base_gap = float(gap_factor(float(avg_grade)))
+    for hrr in hrr_values:
+        segment = pd.DataFrame(
+            [
+                {
+                    "distanceKm": float(distance_km),
+                    "avgGrade": float(avg_grade),
+                    "meanAltitudeM": float(mean_altitude_m),
+                    "gapFactorIntegrated": base_gap,
+                    "meanHrReserve": float(hrr),
+                    "cumTrimpBefore": float(cum_trimp_before),
+                    "decayedTrimpBefore": float(cum_trimp_before),
+                    "rediReadinessFactor": 1.0,
+                }
+            ]
+        )
+        predicted_time = float(
+            predict_hrr_trimp_segment_times(
+                segment,
+                v_anchor_kmh=v_anchor_kmh,
+                alpha=alpha,
+                fatigue_coef=fatigue_coef,
+                fatigue_model=fatigue_model,
+                hrr_reference=hrr_reference,
+                hrr_min_factor=hrr_min_factor,
+                hrr_max_factor=hrr_max_factor,
+                min_fatigue_factor=min_fatigue_factor,
+                hrr_col="meanHrReserve",
+                acute_trimp_col="cumTrimpBefore",
+                load_factor_col="rediReadinessFactor",
+                use_hrr_effort=True,
+                gap_steep_threshold=gap_steep_threshold,
+                gap_soft_start=gap_soft_start,
+                gap_climb_scale=gap_climb_scale,
+                gap_descent_scale=gap_descent_scale,
+            ).iloc[0]
+        )
+        speed_kmh = float(distance_km) / max(predicted_time, 1e-9) * 3600.0
+        rows.append(
+            {
+                "hrr": float(hrr),
+                "distanceKm": float(distance_km),
+                "avgGrade": float(avg_grade),
+                "meanAltitudeM": float(mean_altitude_m),
+                "cumTrimpBefore": float(cum_trimp_before),
+                "predictedTimeSec": predicted_time,
+                "speedKmh": speed_kmh,
+                "paceMinPerKm": (predicted_time / 60.0) / max(float(distance_km), 1e-9),
+            }
+        )
+    return pd.DataFrame(rows)
 
 
 def _segment_trimp_from_prediction(time_sec: float, hrr: float) -> float:
