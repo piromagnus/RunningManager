@@ -260,7 +260,7 @@ Two segment-level optimisations refine the twin beyond activity-level (α, κ) s
 | **Moving time + slight rejection cleans dwell** | §7 pipeline: **4** unfit segments (0.17%); slight alone on clock time can worsen LOO. |
 | **Trail GAP scales fix steep physics** | Combined steep MAE **3.05 → 1.64 min (−46%)**; race LOO only ~0.25 min better on mixed hard—terrain consistency, not finish-time chasing. |
 | **Fit objective matters on race dates** | Activity vs segment LOO MAE **11.8 vs 7.7 min** on selected races; nearly tied on mixed hard (~9.1 vs 9.3). |
-| **Prospective = duration-feasible HRR** | Fastest constant HRR with predicted \(T\) ≤ max sustainable duration: LUT/Passerelles/Grésivaudan **0.78** (Δ +16.7 / +13.7 / +6.7 min); Échappée **0.75** (−73); Rome **0.79** (−62, out of scope). Reference \(E=1\) at 0.88 remains a ceiling companion. |
+| **Prospective HRR modes (trail)** | Obs. mean HRR reconstruction |Δ| MAE ≈ **16.6 min** (eval-only); duration-feasible primary; HRR_ref=0.88 ceiling companion (systematically fast). |
 | **Prospective uncertainty bands** | R9 bands use α/κ jitter + LOO residual noise (P05 < P50 < P95). |
 
 **Interpretation.** On this athlete, continuous HRR is the principal incremental predictor beyond a matched physics twin; acute TRIMP is the complementary fatigue channel; asymmetric trail GAP scales restore local climb/descent behaviour; prospective forecasts should use a **duration-feasible** constant HRR (historical maintainability), with \(\mathrm{HRR}_{\mathrm{ref}}\) as the \(E=1\) ceiling—not as the default race HRR, and not as “HRR at VMA.”
@@ -437,7 +437,7 @@ See `bibliography_hr_digital_twin.md` for extended notes and venue links.
 - **Primary LOO:** hard run/trail **MAE 9.09 min**, MAPE **6.5%**, *R*² **0.982** (physics M0 **30.2 min**).
 - **Ablations (reoptimize, R1-aligned):** −HRR **+13.5**; −TRIMP **+15.6**; −GAP **+9.6** min.
 - **Steep terrain:** combined MAE **3.05 → 1.64 min (−46%)**.
-- **Prospective (duration-feasible):** LUT **+16.7** (HRR 0.78); Passerelles **+13.7** (0.78); Grésivaudan **+6.7** (0.78); Échappée **−73** (0.75); Rome **out of scope**. Reference \(E=1\) companions: −4.1 / −8.0 / −17 / −164.
+- **Prospective:** duration-feasible primary; obs.-mean-HRR reconstruction (eval-only) |Δ|≈16.6 min on trail; HRR_ref ceiling companions −4.1/−8/−17/−164. Rome out of scope.
 - **Robustness R1–R11:** `robustness_experiments_report.md` (11 pass).
 - **Next:** multi-athlete (B1); DEM/aid logs (B3/B5).
 - **Submit toward:** IJSPP / JSS / EJSS / ECSS — **not Sensors**.
