@@ -8,4 +8,4 @@
 | Trail de côte rouge 2025 (Passerelle de Monteynard) | activity_timeseries | 3:04:15 | 3:12:12 | -8.0 | 0.76 | 2:25:03 | 3:13:35 | 3:56:21 | 0.88 | 0.95 | 0.4 |
 | Marathon de Rome 2026 | race_pacing_gpxalt | 2:28:01 | 3:47:14 | -79.2 | 0.73 | 1:56:53 | 2:39:09 | 3:17:14 | 0.88 | 0.95 | 0.4 |
 
-*Hold-out races were excluded from parameter estimation. Profiles are planned race_pacing+GPX altitude or executed activity GPS geometry (activity_timeseries). Predictions use constant HRR = 0.88. Δ is predicted − observed moving time; large negative Δ with submaximal observed mean HRR is an upper-bound hard-effort envelope.*
+*Hold-out races were excluded from parameter estimation. Profiles are planned race_pacing+GPX altitude or executed activity GPS geometry (activity_timeseries). Predictions hold HRR = hrr_reference = 0.88 so E=1 when fresh (reference effort / effort ceiling under hrr_max_factor=1.0 — not 'HRR at VMA'). Δ is predicted − observed moving time; large negative Δ when observed mean HRR was below HRR_ref is a reference-effort scenario, not an expected finish time.*
