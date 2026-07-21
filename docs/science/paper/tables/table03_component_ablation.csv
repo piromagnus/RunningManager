@@ -1,0 +1,36 @@
+Cohort,Variant,MAE (min),MAPE (%),Bias (min),R²,ΔMAE vs full (min)
+Hard trail runs,Full model (M3 + trail GAP scales),17.39,9.65,-9.8,0.969,0.0
+Hard trail runs,Without grade-adjusted pace,46.27,23.04,-44.83,0.768,28.88
+Hard trail runs,Without altitude correction,20.5,10.41,-13.88,0.953,3.11
+Hard trail runs,Without REDI readiness,17.25,9.88,-5.85,0.968,-0.13
+Hard trail runs,Without HRR effort term,65.5,29.77,-65.44,0.568,48.11
+Hard trail runs,Without acute TRIMP fatigue,60.82,28.7,-60.54,0.668,43.43
+Hard trail runs,Without asymmetric trail GAP scales,20.72,10.64,-15.05,0.954,3.33
+Hard run or trail runs,Full model (M3 + trail GAP scales),9.62,7.31,-5.17,0.975,0.0
+Hard run or trail runs,Without grade-adjusted pace,23.1,14.22,-21.41,0.823,13.48
+Hard run or trail runs,Without altitude correction,11.13,7.71,-6.97,0.962,1.51
+Hard run or trail runs,Without REDI readiness,9.66,7.37,-3.11,0.974,0.04
+Hard run or trail runs,Without HRR effort term,36.88,24.88,-36.86,0.666,27.26
+Hard run or trail runs,Without acute TRIMP fatigue,34.38,23.33,-34.18,0.745,24.76
+Hard run or trail runs,Without asymmetric trail GAP scales,10.9,7.83,-7.33,0.964,1.28
+Run/trail > 20 min,Full model (M3 + trail GAP scales),6.55,7.71,-3.23,0.977,0.0
+Run/trail > 20 min,Without grade-adjusted pace,14.11,13.09,-12.35,0.848,7.56
+Run/trail > 20 min,Without altitude correction,7.32,7.94,-4.17,0.966,0.77
+Run/trail > 20 min,Without REDI readiness,6.37,7.29,-2.23,0.977,-0.18
+Run/trail > 20 min,Without HRR effort term,25.15,28.45,-25.14,0.706,18.6
+Run/trail > 20 min,Without acute TRIMP fatigue,20.1,18.56,-19.87,0.782,13.55
+Run/trail > 20 min,Without asymmetric trail GAP scales,7.31,8.28,-4.49,0.967,0.76
+Top-10 hard trail by HRR,Full model (M3 + trail GAP scales),3.82,4.75,-0.6,0.993,0.0
+Top-10 hard trail by HRR,Without grade-adjusted pace,20.23,26.39,-20.23,0.851,16.41
+Top-10 hard trail by HRR,Without altitude correction,3.99,5.34,-1.48,0.992,0.17
+Top-10 hard trail by HRR,Without REDI readiness,4.79,5.8,1.52,0.989,0.97
+Top-10 hard trail by HRR,Without HRR effort term,12.84,12.72,-12.84,0.932,9.03
+Top-10 hard trail by HRR,Without acute TRIMP fatigue,20.96,19.39,-20.96,0.807,17.15
+Top-10 hard trail by HRR,Without asymmetric trail GAP scales,4.9,6.81,-1.9,0.99,1.09
+Selected race dates,Full model (M3 + trail GAP scales),9.11,5.44,6.83,0.995,0.0
+Selected race dates,Without grade-adjusted pace,30.04,13.62,-28.75,0.86,20.93
+Selected race dates,Without altitude correction,10.02,5.61,4.01,0.994,0.91
+Selected race dates,Without REDI readiness,14.64,8.09,14.64,0.984,5.52
+Selected race dates,Without HRR effort term,32.21,12.43,-31.95,0.859,23.1
+Selected race dates,Without acute TRIMP fatigue,53.04,22.96,-53.04,0.74,43.93
+Selected race dates,Without asymmetric trail GAP scales,8.29,5.32,4.41,0.995,-0.82

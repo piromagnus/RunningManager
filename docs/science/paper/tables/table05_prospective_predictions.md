@@ -1,0 +1,9 @@
+**Table 5. Prospective constant-HRR race predictions with finish-time uncertainty bands.**
+
+| Race | Predicted moving time | Observed moving time | Δ (min) | P05 finish | P50 finish | P95 finish | Constant HRR | α | κ |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Lyon Urban Trail By Night 2025 | 2:53:10 | 2:57:18 | -4.1 | 2:53:10 | 3:09:58 | 3:09:58 | 0.88 | 0.95 | 0.4 |
+| Trail du Grésivaudan 2026 : Le Grand V | 3:16:00 | 3:32:59 | -17.0 | 3:16:00 | 3:32:05 | 3:32:05 | 0.88 | 0.95 | 0.4 |
+| Marathon de Rome 2026 | 2:28:01 | 3:47:14 | -79.2 | 2:28:01 | 2:45:26 | 2:45:26 | 0.88 | 0.95 | 0.4 |
+
+*Hold-out races were excluded from parameter estimation. Predictions use a planned course profile at constant HRR = 0.88. Δ is predicted − observed moving time.*

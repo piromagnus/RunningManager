@@ -1,0 +1,6 @@
+Cohort,n activities,Median distance (km),Median ascent (m),Median duration (min),Mean HRR,Median HRR
+Hard trail runs,45,14.8,782.0,128.0,0.657,0.693
+Hard run or trail runs,103,11.5,208.0,64.6,0.689,0.724
+Run/trail > 20 min,208,7.8,88.0,48.3,0.656,0.663
+Top-10 hard trail by HRR,10,11.0,720.0,74.6,0.791,0.768
+Selected race dates,18,24.2,780.0,150.0,0.748,0.752

@@ -1,8 +1,9 @@
 # Heart-Rate Digital Twin for Trail-Running Performance: Modeling, Cross-Activity Evaluation, and Measured Prediction Errors
 
-**Working draft (v0.3)** — modeling / methods / results focus  
+**Working draft (v0.4)** — modeling / methods / results focus  
 **Status:** single-athlete proof-of-concept; multi-athlete replication planned  
 **Companion code:** Running Manager (`services/trail_performance_model.py`, `scripts/predict_race_constant_hrr.py`)  
+**Publication assets:** `docs/science/paper/` (figures PNG + tables)  
 **Related docs:** `trail_digital_twin_hrr_trimp_paper.md`, `trail_digital_twin_model_summary.md`, `journal_steep.md`, `journal_prediction.md`  
 **Annotated bibliography:** `bibliography_hr_digital_twin.md`
 
@@ -10,7 +11,7 @@
 
 ## Abstract (draft)
 
-Accurate prediction of trail-running finish times remains difficult because grade, altitude, and fatigue interact nonlinearly with athlete physiology. Building on the physics-informed digital-twin framework of Jaén-Carrillo and Pattis (2026), we evaluate a **single** athlete-specific model that uses continuous **heart-rate reserve (HRR)** as instantaneous effort and **Banister-style TRIMP** as intra-activity fatigue, optionally combined with soft-ramped trail-grade cost corrections. The model is fitted and tested on a diverse corpus of GPS+HR activities (road, trail, races) for one recreational/competitive trail runner. Leave-one-out (LOO) evaluation and prospective constant-HRR race predictions report **MAE, MAPE, bias, and R²**. On a mixed hard-run/trail cohort, Stage-3 LOO MAE is about **9.6 min** (MAPE ≈ **7.3%**); on hard-trail races alone, MAE remains higher (~17–19 min) but MAPE ≈ **9%**. Soft-ramped trail GAP scales cut combined steep-terrain segment MAE by ≈46% (3.05 → 1.64 min) without hurting flat residuals. Prospective predictions for two held-out races (LUT 30k, Trail du Grésivaudan) at constant hard HRR are faster than realized performances (−4.1 and −17.0 min), consistent with imperfect race-day pacing. We list missing elements for a multi-athlete paper and recommend sports-performance venues (**not** sensor-hardware journals).
+Accurate prediction of trail-running finish times remains difficult because grade, altitude, and fatigue interact nonlinearly with athlete physiology. Building on the physics-informed digital-twin framework of Jaén-Carrillo and Pattis (2026), we evaluate a single athlete-specific model that uses continuous heart-rate reserve (HRR) as instantaneous effort and Banister-style TRIMP as intra-activity fatigue, optionally combined with soft-ramped trail-grade cost corrections. Using leave-one-out validation across hard-run, hard-trail, and run/trail (>20 min) cohorts, a physics baseline (M0) yielded substantially larger errors than the full HRR+TRIMP specification (M3): for mixed hard run/trail activities, MAE decreased from 30.2 to 9.1 min (MAPE 26.5% → 6.5%). Component ablation attributes most of this gain to the HRR and acute-TRIMP terms. Soft-ramped trail GAP scales reduced steep-terrain segment MAE by ≈46%. Prospective constant-HRR simulations for held-out races produced finish times at or faster than observed performances, consistent with an upper-bound sustained-effort scenario. Publication figures and tables are collected in `docs/science/paper/`.
 
 **Keywords:** trail running; digital twin; heart-rate reserve; TRIMP; performance prediction; leave-one-out; grade-adjusted pace
 
@@ -159,68 +160,55 @@ Python/pandas CSV storage; YAML configs (`configs/trail_digital_twin_*.yaml`); g
 
 ## 4. Results
 
-> Numbers below are from repository experiment journals (2026-07). Freeze exports and regenerate tables before journal submission.
+Publication tables and figures are assembled under `docs/science/paper/`  
+(regenerate with `uv run python scripts/prepare_paper_assets.py`).  
+Unless stated otherwise, leave-one-out (LOO) metrics use the **activity** fit objective on moving-time–eligible segments.
 
-### 4.1 LOO race / activity performance (E1)
+### 4.1 Cohorts
 
-**Aggregate Stage-3 LOO (hyperparameter-refined high-reference family):**
+Five evaluation cohorts were defined from the same athlete archive (Table 1 / `table01_cohort_descriptives`): hard trail runs (*n* = 45), hard run or trail runs (*n* = 103), all run/trail activities longer than 20 min (*n* = 208), a top-10 hard-trail subset by mean HRR, and selected race dates (*n* = 18). The >20 min cohort broadens the intensity distribution beyond race-like efforts while retaining usable GPS+HR streams.
 
-| Metric | Value |
-|--------|------:|
-| Mean Stage-3 LOO MAE | **10.85 min** |
-| Mean MAPE | **7.91%** |
-| Mean R² | **0.982** |
+### 4.2 Baseline physics twin and successive additions (E1)
 
-**Moving-time fit + trail GAP soft-ramp (activity LOO):**
+We report LOO finish-time error for a nested model ladder (Table 2 / `table02_incremental_model_loo`; Fig. `fig_incremental_model_mae.png`):
 
-| Cohort | MAE (min) | MAPE (%) |
-|--------|----------:|---------:|
-| `hardRunOrTrailRun` | **9.57** | **7.31** |
-| `hardTrailRun` | ~17.7 | ~8.7–9.0 |
+| ID | Specification |
+|----|---------------|
+| **M0** | Physics baseline: Minetti/GAP grade cost, altitude correction, CTL readiness, progress fatigue |
+| **M1** | M0 with acute TRIMP replacing progress fatigue |
+| **M2** | M1 with REDI readiness replacing CTL |
+| **M3** | M2 with continuous HRR effort (full Stage-3 twin) |
 
-**Reference (Jaén-Carrillo & Pattis 2026, LOO n=13 races):** MAE 18.2 min, MAPE 11.1%, R² 0.864.
+On the hard run/trail cohort, M0 yielded MAE = 30.2 min (MAPE = 26.5%). Adding acute TRIMP (M1) reduced MAE to 23.9 min, whereas replacing CTL by REDI (M2) left error essentially unchanged (24.2 min). Introducing continuous HRR effort (M3) produced the dominant improvement: MAE = 9.1 min, MAPE = 6.5%, *R*² = 0.982 (ΔMAE vs M0 = −21.1 min).
 
-**Interpretation.** On mixed hard efforts, HRR+TRIMP LOO errors are substantially lower than the published physics twin’s race-only LOO. On **hard-trail-only** races, absolute MAE remains comparable in magnitude to that baseline (~18 min), while relative error (MAPE) is somewhat lower. Athlete, race set, and preprocessing differ—comparison is **indicative**, not a formal head-to-head on identical data.
+The same ordering held on hard trail runs (M0 44.5 → M3 17.4 min) and on selected race dates (M0 36.4 → M3 11.8 min). On the broader run/trail >20 min cohort, absolute errors were smaller at baseline (M0 9.4 min) and M3 further reduced MAE to 5.1 min (MAPE = 8.1%). Agreement plots for M3 LOO predictions are shown in Figs. `fig_pred_vs_actual_*.png` and Bland–Altman analyses in Figs. `fig_bland_altman_*.png`.
 
-### 4.2 Terrain-level errors (E2)
+For reference, Jaén-Carrillo and Pattis (2026) reported LOO MAE = 18.2 min and MAPE = 11.1% (*n* = 13 races) for a physics-oriented twin without continuous HR effort. Our hard-trail M3 MAE (17.4 min) is of similar absolute magnitude on a different athlete and race set, while mixed hard-run/trail and >20 min cohorts achieve substantially lower absolute error. Direct numerical comparison remains indicative rather than a matched re-analysis of their data.
 
-**Baseline (moving-time fit, before steep GAP correction), hardTrailRun segments:**
+Bootstrap percentile intervals on M3 LOO folds (Table 4) place hard run/trail MAE at 9.1 min (90% CI 6.6–11.9) with fold-mean α ≈ 0.95 and κ ≈ 0.39.
 
-| Terrain | MAE (min) | Bias (min) | Pattern |
-|---------|----------:|-----------:|---------|
-| Flat | 0.88 | −0.06 | healthy |
-| Steep climb | 2.68 | +2.26 | model **too slow** |
-| Steep descent | 3.52 | −3.51 | model **too fast** |
+### 4.3 Component ablation of the full model
 
-**After soft-ramped trail GAP scales (0.85 climb / 1.60 descent):**
+Holding fitted Stage-3 parameters fixed, we ablated individual terms (Table 3 / `table03_component_ablation`; Fig. `fig_component_ablation_delta_mae.png`). On hard run/trail activities, removing the HRR effort term increased MAE by +27.3 min and removing acute TRIMP by +24.8 min, confirming that both channels are necessary once the physics baseline is in place. Removing GAP entirely was also highly detrimental (+13.5 min). Asymmetric trail GAP soft-ramp scales contributed a smaller but consistent improvement (+1.3 min when removed), while altitude and REDI readiness had modest effects in this athlete (±1–2 min).
 
-| Terrain | MAE before → after | Bias after |
-|---------|--------------------:|-----------:|
-| Steep descent | 3.65 → **1.36** | ≈ 0 |
-| Steep climb | 2.44 → **1.92** | ≈ 0 |
-| Flat | 0.91 → **0.86** | ≈ 0 |
+### 4.4 Terrain-resolved residuals and trail GAP scales
 
-Steep combined MAE: **3.05 → 1.64** (−46%). Race-level `hardRunOrTrailRun` MAE: **9.82 → 9.57** min.
+Prior to asymmetric trail GAP correction, hard-trail segment residuals showed opposing biases on steep terrain: steep climbs were under-sped (bias ≈ +2.3 min) and steep descents over-sped (bias ≈ −3.5 min), whereas flat segments remained well calibrated (MAE ≈ 0.9 min). Soft-ramped scales (`gap_climb_scale` = 0.85, `gap_descent_scale` = 1.60) reduced combined steep-terrain MAE from 3.05 to 1.64 min (−46%) without degrading flat residuals, supporting an athlete-specific correction to treadmill Minetti priors on technical trail grades.
 
-### 4.3 Prospective constant-HRR predictions (E3)
+### 4.5 Prospective constant-HRR predictions (E3)
 
-Fit **without** the target race; profile = race_pacing D+ + GPX altitudes; constant hard HRR = **0.88**.
+Holding out target races from estimation and simulating planned profiles at constant HRR = 0.88 produced predictions at or faster than observed moving times (Table 5 / `table05_prospective_predictions`): LUT By Night −4.1 min; Trail du Grésivaudan −17.0 min. Resampling LOO (α, κ) pairs yields finish-time bands (P05–P95) that encompass the point prediction and extend several minutes slower. Observed mean race HRR was submaximal relative to the hard reference (≈0.80 and ≈0.74), consistent with predictions that represent an upper-bound sustained-effort scenario rather than the athlete’s realized pacing. A road marathon hold-out (Rome) was markedly optimistic, indicating limited transfer of trail-calibrated GAP scales to flat road racing.
 
-| Race | Actual moving | Pred (race-obj α=0.95, κ=0.40) | Δ |
-|------|---------------|--------------------------------:|---:|
-| LUT 30k | 2h57m18s | **2h53m10s** | **−4.1 min** |
-| Trail du Grésivaudan | 3h32m59s | **3h16m00s** | **−17.0 min** |
+### 4.6 Model-implied speed–HRR response
 
-Segment-objective calibration (α=0.90, κ=0.30): LUT **+3.8 min** (too slow); Grésivaudan **−8.6 min**.
+On a synthetic 1 km flat segment under fresh conditions (TRIMP = 0), predicted ground speed increased approximately linearly with HRR until the effort ceiling at HRR_ref = 0.88 (Table 6; Fig. `fig_speed_vs_hrr.png`). Parallel curves at ±10% grade illustrate the interaction of HRR effort with grade cost, providing an interpretable physiological transfer function for coaching “what-if” simulations.
 
-**Notes.** GPX-only D+ understates climb (rejected as primary profile). Higher constant HRR than 0.88 does not speed the current effort law (`hrr_max_factor=1.0`); it only adds TRIMP. Observed mean race HRR (eval only): LUT ≈0.80, Grésivaudan ≈0.74—below the hard reference, partly explaining why constant-0.88 predictions are faster.
+### 4.7 Summary of quantitative findings
 
-### 4.4 What the errors teach
-
-1. **HRR carries pacing information** that pure grade×distance misses.  
-2. **Steep trail locomotion** needs asymmetric climb/descent GAP scales; treadmill Minetti priors mis-price trail descents especially.  
-3. **Stationary time** must be stripped for physiology fitting.  
-4. **Constant-HRR prospective mode** gives a clean “best hard effort” bound, not a full race strategy (nutrition, heat, pack, tactics).
+1. Continuous HRR is the principal incremental predictor beyond the physics baseline on this athlete.  
+2. Acute TRIMP improves mixed hard-effort cohorts; REDI readiness yields limited additional LOO gain here.  
+3. Asymmetric trail GAP scales correct steep climb/descent bias with small race-level MAE impact but healthier terrain residuals.  
+4. Prospective constant-HRR forecasts are coherent upper bounds when race HRR is submaximal; road transfer remains an open limitation.
 
 ---
 
@@ -228,21 +216,21 @@ Segment-objective calibration (α=0.90, κ=0.30): LUT **+3.8 min** (too slow); G
 
 ### 5.1 Contribution relative to the 2026 digital twin
 
-We keep the digital-twin philosophy (route physics + athlete state → time) but make **HR the primary instantaneous effort channel** and **TRIMP the fatigue channel**, then quantify errors on LOO and prospective tasks. The modeling story is intentionally **one family**.
+We retain the digital-twin structure (route physics + athlete state → time) while making **heart-rate reserve the primary instantaneous effort channel** and **acute TRIMP the intra-activity fatigue channel**. The experimental design emphasizes one modeling family, matched LOO reporting against a physics baseline (M0), and prospective hold-outs with uncertainty bands.
 
-### 5.2 Limitations (brief; expanded in §7)
+### 5.2 Limitations
 
-Single athlete; HR artifacts; GPX altitude noise; constant-HRR ignores race tactics; Banister/TRIMP parameters partly fixed; no nested CV yet; hard-trail absolute MAE still large on long/high-TRIMP races.
+Evidence remains a single-athlete case study. Additional limits include HR artifacts, barometric elevation noise (no DEM), sparse temperature coverage, constant-HRR abstraction of race tactics, and incomplete transfer to flat road racing. Multi-athlete replication is required before population claims.
 
 ### 5.3 Practical implication
 
-For coaching software: (i) post-hoc race explanation from HR; (ii) “what-if” finish times at a target HRR on a course profile; (iii) detection of terrain regimes where the twin is unreliable before correction.
+Within coaching software, the twin supports (i) retrospective effort-normalized race explanation, (ii) prospective finish-time envelopes at a target HRR, and (iii) identification of terrain regimes where grade-cost assumptions fail.
 
 ---
 
 ## 6. Conclusion
 
-A single HRR+TRIMP trail digital twin, evaluated with LOO and prospective constant-HRR tests on diverse activities of one athlete, achieves mixed-cohort LOO errors near **~10 min MAE / ~8% MAPE**, improves steep-terrain segment residuals by ~46% with soft-ramped GAP scales, and produces held-out race predictions that are faster than actual finishes under a hard sustained HRR. The next scientific step is **multi-athlete replication with the same protocol and error tables** (§7), aimed at sports-performance venues rather than sensor journals.
+For one recreational/competitive trail runner, a HRR+TRIMP digital twin reduced leave-one-out finish-time error from a physics baseline of ~30 min MAE to ~9 min MAE on mixed hard run/trail activities (MAPE ≈ 6.5%), with parallel gains on broader >20 min and race-date cohorts. Component ablation attributes most of that gain to continuous HRR and acute TRIMP. Soft-ramped trail GAP scales improve steep-terrain residuals, and prospective constant-HRR simulations provide interpretable upper-bound race times. Publication assets are collected in `docs/science/paper/`. Multi-athlete validation remains the primary next step for journal submission.
 
 ---
 

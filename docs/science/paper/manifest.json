@@ -1,0 +1,35 @@
+{
+  "section7Dir": "/workspace/data/exp_perf_predictions/trail_digital_twin_paper_section7",
+  "figures": [
+    "fig_bland_altman_hardRunOrTrailRun.png",
+    "fig_bland_altman_hardTrailRun.png",
+    "fig_bland_altman_runTrailOver20Min.png",
+    "fig_bland_altman_selectedDateRaces.png",
+    "fig_component_ablation_delta_mae.png",
+    "fig_incremental_model_mae.png",
+    "fig_pred_vs_actual_hardRunOrTrailRun.png",
+    "fig_pred_vs_actual_hardTrailRun.png",
+    "fig_pred_vs_actual_runTrailOver20Min.png",
+    "fig_pred_vs_actual_selectedDateRaces.png",
+    "fig_speed_vs_hrr.png",
+    "fig_speed_vs_hrr_climb10pct.png",
+    "fig_speed_vs_hrr_descent10pct.png",
+    "fig_speed_vs_hrr_flat.png",
+    "legacy_fig_hrr_speed_residual.png",
+    "legacy_fig_loo_residuals_drivers.png",
+    "legacy_fig_model_stage_flow.png",
+    "legacy_fig_regression_coefficients.png",
+    "legacy_fig_robustness_heatmaps.png",
+    "legacy_fig_stage3_ablation.png",
+    "legacy_fig_stage3_fatigue_state_comparison.png",
+    "legacy_fig_stage_predicted_vs_actual.png"
+  ],
+  "tables": [
+    "table01_cohort_descriptives",
+    "table02_incremental_model_loo",
+    "table03_component_ablation",
+    "table04_bootstrap_uncertainty",
+    "table05_prospective_predictions",
+    "table06_speed_vs_hrr_flat"
+  ]
+}

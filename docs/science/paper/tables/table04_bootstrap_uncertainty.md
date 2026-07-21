@@ -1,0 +1,10 @@
+**Table 4. Bootstrap uncertainty for Stage-3 LOO MAE/bias and fold-wise (α, κ).**
+
+| Cohort | n (LOO folds) | MAE (min) | MAE 90% CI (min) | Bias (min) | Bias 90% CI (min) | α mean | α 90% CI | κ mean | κ 90% CI |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Hard run or trail runs | 80 | 9.09 | 6.58–11.91 | -5.51 | -8.51–-2.57 | 0.946 | 0.944–0.949 | 0.394 | 0.390–0.397 |
+| Hard trail runs | 45 | 17.39 | 11.93–23.52 | -9.8 | -16.22–-3.47 | 0.95 | 0.950–0.950 | 0.2 | 0.200–0.200 |
+| Run/trail > 20 min | 80 | 5.09 | 3.89–6.35 | -2.31 | -3.71–-0.85 | 0.949 | 0.948–0.950 | 0.399 | 0.396–0.400 |
+| Selected race dates | 18 | 11.84 | 6.52–18.95 | 4.1 | -4.34–11.06 | 0.897 | 0.892–0.900 | 0.294 | 0.283–0.300 |
+
+*Percentile intervals are empirical 5th–95th percentiles over 500 resamples of LOO folds.*
