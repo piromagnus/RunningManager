@@ -8,6 +8,8 @@
 
 **Newer focused draft (2026-07):** `trail_digital_twin_hr_performance_paper_draft.md` + `bibliography_hr_digital_twin.md` — one modeling family, LOO/prospective errors, missing elements, venues **excluding Sensors**.
 
+**§7 implementation status:** `docs/science/section7_implementation_status.md` + run `uv run python scripts/trail_digital_twin_paper_section7.py`.
+
 
 
 ## Point of vigilance
