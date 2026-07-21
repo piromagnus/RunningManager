@@ -3,7 +3,8 @@
 Started: 2026-07-21  
 Updated: 2026-07-21 (MAPE-primary + optimistic-OK reframing)  
 Status: best **principled** = **H13b_short_midref_long_H10** (trail MAPE ≈ **2.07%**)  
-Related: `docs/science/journal_prediction.md`, `docs/science/bibliography_hr_digital_twin.md`
+Related: `docs/science/journal_prediction.md`, `docs/science/bibliography_hr_digital_twin.md`,
+`docs/science/idees_experiences_repo_detaillees_fr.md` (catalogue RQ/E/M/R/H).
 
 ## Goal
 
