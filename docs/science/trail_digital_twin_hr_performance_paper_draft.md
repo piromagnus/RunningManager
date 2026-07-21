@@ -269,13 +269,13 @@ Evidence remains a **single-athlete case study**. Additional limits: HR artifact
 
 ### 5.3 Practical implication
 
-Within coaching software, the twin supports (i) retrospective effort-normalized race explanation, (ii) prospective finish-time *envelopes* at \(\mathrm{HRR}=\mathrm{HRR}_{\mathrm{ref}}\) (reference effort \(E=1\), not point forecasts of realized pacing or lab VMA heart rate), and (iii) identification of terrain regimes where grade-cost assumptions fail.
+Within coaching software, the twin supports (i) retrospective effort-normalized race explanation, (ii) prospective finish-time estimates at a **duration-feasible** constant HRR (plus an optional \(E=1\) ceiling at \(\mathrm{HRR}_{\mathrm{ref}}\)), and (iii) identification of terrain regimes where grade-cost assumptions fail.
 
 ---
 
 ## 6. Conclusion
 
-For one recreational/competitive trail runner, a HRR+TRIMP digital twin reduced leave-one-out finish-time error from a physics baseline of ~30 min MAE to ~9 min MAE on mixed hard run/trail activities (MAPE ≈ 6.5%), with parallel gains on broader >20 min and race-date cohorts. Component ablation attributes most of that gain to continuous HRR and acute TRIMP. Soft-ramped trail GAP scales improve steep-terrain residuals, and prospective simulations at \(\mathrm{HRR}=\mathrm{HRR}_{\mathrm{ref}}\) provide interpretable reference-effort (\(E=1\)) race times. Publication assets are collected in `docs/science/paper/`. Multi-athlete validation remains the primary next step for journal submission.
+For one recreational/competitive trail runner, a HRR+TRIMP digital twin reduced leave-one-out finish-time error from a physics baseline of ~30 min MAE to ~9 min MAE on mixed hard run/trail activities (MAPE ≈ 6.5%), with parallel gains on broader >20 min and race-date cohorts. Component ablation attributes most of that gain to continuous HRR and acute TRIMP. Soft-ramped trail GAP scales improve steep-terrain residuals, and prospective simulations use a **duration-feasible** constant HRR (with \(\mathrm{HRR}_{\mathrm{ref}}\) as the \(E=1\) ceiling companion). Publication assets are collected in `docs/science/paper/`. Multi-athlete validation remains the primary next step for journal submission.
 
 ---
 
