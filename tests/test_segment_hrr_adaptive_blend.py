@@ -61,3 +61,26 @@ def test_blend_pulls_ultra_toward_empirical() -> None:
     assert abs(target - expected) < 1e-9
     # Near observed Échappée mean HRR without using race HR.
     assert 0.65 < target < 0.66
+
+
+def test_short_midref_pushes_toward_vma_effort() -> None:
+    target, weight = _mod.short_race_midref_hrr(
+        powerlaw_hrr=0.78,
+        hrr_reference=0.88,
+        predicted_sec=3.2 * 3600,
+        empirical_hrr=0.76,
+    )
+    assert abs(weight - 0.5) < 1e-12
+    assert abs(target - 0.83) < 1e-12
+
+
+def test_short_midref_defers_to_h10_on_ultra() -> None:
+    target, weight = _mod.short_race_midref_hrr(
+        powerlaw_hrr=0.75,
+        hrr_reference=0.88,
+        predicted_sec=10.5 * 3600,
+        empirical_hrr=0.617333,
+    )
+    assert abs(weight - 0.70) < 1e-12
+    expected = 0.3 * 0.75 + 0.7 * 0.617333
+    assert abs(target - expected) < 1e-9

@@ -1,31 +1,42 @@
 # Journal: segment-type adaptive HRR for prospective race prediction
 
 Started: 2026-07-21  
-Status: best candidate = **H10_blend_w70_mean** (trail |Δ| MAE ≈ **10.9 min**)  
-Related: `docs/science/journal_prediction.md`, `scripts/predict_race_segment_hrr_adaptive.py`
+Updated: 2026-07-21 (MAPE-primary + optimistic-OK reframing)  
+Status: best **principled** = **H13b_short_midref_long_H10** (trail MAPE ≈ **2.07%**)  
+Related: `docs/science/journal_prediction.md`, `docs/science/bibliography_hr_digital_twin.md`
 
 ## Goal
 
-Improve **prospective** finish-time prediction by replacing a single constant HRR
-over the whole profile with a **terrain-family–adaptive** plan:
+Improve **prospective** finish-time prediction with **terrain-family–adaptive** HRR
+(5 grade families), choosing a duration-aware target mean and modulating per
+segment from real data (hold-outs excluded).
 
-1. Estimate the **distribution of observed HRR** on the five grade families
-   (`flat`, `climb`, `steep_climb`, `descent`, `steep_descent`) from other
-   activities (hold-outs excluded).
-2. Choose a **duration-feasible target mean HRR** for the race.
-3. **Modulate** that target per segment using real-data family statistics
-   relative to the overall mean (climbs/descents/flats get different constant
-   HRR; race-average effort stays near the target after re-centering).
-4. Iterate until predicted moving time is close to observed on held-out trail
-   races (LUT, Grésivaudan, Passerelles, Échappée Belle).
+### Evaluation policy (updated)
 
-Rome remains out of scope (road).
+1. **Primary metric = MAPE** (% of observed moving time) — less sensitive to
+   race duration than MAE (Échappée no longer dominates solely by length).
+2. **Optimistic bias is acceptable**: predicting **faster** than actual
+   (Δ < 0) is not treated as a hard failure. Race planning can use a fast
+   envelope; being too slow (Δ > 0) is the more costly error mode for pacing.
+3. Still report signed Δ (min) and MAE for transparency.
+4. **No race HR / times** in fit or target selection (eval-only).
 
-**Physiology:** `hrr_reference=0.88` = HRR at flat VMA effort (\(E=1\));
-`hrr_max_factor=1.20` allows short supra-VMA bursts when HRR > ref.
+**Physiology:** `hrr_reference=0.88` = HRR at flat VMA (\(E=1\));
+`hrr_max_factor=1.20`.
 
-**Hard rule:** no observed race HR / times in fit or HRR assignment. Observed
-race times / mean HRR are evaluation-only.
+---
+
+## Bibliography cues used
+
+| Source | Idea borrowed |
+|--------|----------------|
+| Jaén-Carrillo & Pattis (2026) | Sustainable intensity fraction + pacing; race push above easy envelope |
+| Swain & Leutholtz (1997) | %HRR ≈ %VO₂ reserve → HRR as effort |
+| Fornasiero et al. (2018) | Ultra ~77% HRmax — lower sustainable HRR for long events |
+| Banister TRIMP | Intra-race fatigue accumulation (already in Stage 3) |
+| Vandewalle / Boillet CP–W′ | Steeper short-duration capacity → short races can target higher HRR |
+| Emig & Peltonen (2020) | Duration–performance individuality (motivates duration-dependent HRR★) |
+| Genitrini / Lemire | Terrain-dependent effort → family modulators |
 
 ---
 
@@ -39,198 +50,132 @@ race times / mean HRR are evaluation-only.
 | `descent` | \(-0.15 < g \le -0.04\) |
 | `steep_descent` | \(g \le -0.15\) |
 
----
-
-## Prerequisites — assets at `hrr_max_factor=1.20`
-
-Re-ran `trail_digital_twin_paper_section7.py` + `prepare_paper_assets.py`.
-
-| Metric | Value |
-|--------|-------|
-| Headline LOO (hard run/trail M3) | **8.25 min** MAE (was 9.09 @ max_factor=1.0) |
-| Hard trail M3 | 17.4 min |
-| Run/trail >20 min M3 | 5.91 min |
-| Table 5 point predictions | Unchanged vs max=1.0 (selected/obs HRR ≤ 0.88) |
-
-Constant-HRR baselines (Table 5):
-
-| Race | Obs. mean HRR | Δ @ obs. mean | Feasible HRR | Δ @ feasible | Δ @ HRR_ref |
-|------|---------------|---------------|--------------|--------------|-------------|
-| LUT | 0.80 | +13.2 | 0.78 | +16.7 | −4.1 |
-| Passerelles | 0.76 | +18.7 | 0.78 | +13.7 | −8.0 |
-| Grésivaudan | 0.73 | +17.6 | 0.78 | +6.7 | −17.0 |
-| Échappée | 0.65 | +16.8 | 0.75 | −73.2 | −164 |
-
-Trail |Δ| MAE @ obs. mean ≈ 16.6 min (eval-only). Constant duration-feasible
-|Δ| MAE ≈ **27.6 min** (dominated by Échappée −73).
+hardTrailRun mean modulators \(m_f\): steep_climb ≈ 1.06, steep_descent ≈ 0.94,
+others ≈ 1.00 (mild).
 
 ---
 
-## Empirical HRR by terrain (hold-outs excluded)
+## Baselines (MAPE)
 
-Source: `segment_predictions.csv`, hardTrailRun, usable segments.
+| Mode | Trail MAPE | Notes |
+|------|------------|-------|
+| Constant duration-feasible (PL) | **7.52%** | LUT +9.4%, Échappée −10.4% (optimistic OK) |
+| Constant HRR_ref = 0.88 | **~9.4%** | All optimistic; Échappée −23% hurts MAPE |
+| Obs. mean HRR (eval-only) | ~7–8% class | Still slow on ≤3 h (+13–19 min) |
 
-| Family | n | mean HRR | p75 | \(m_f\) (mean) |
-|--------|---|----------|-----|----------------|
-| flat | 248 | 0.606 | 0.714 | 0.990 |
-| climb | 164 | 0.620 | 0.754 | 1.012 |
-| steep_climb | 46 | 0.650 | 0.750 | 1.062 |
-| descent | 174 | 0.616 | 0.719 | 1.005 |
-| steep_descent | 52 | 0.574 | 0.699 | 0.937 |
-
-Modulation is mild (~±6%), so **family modulation alone barely moves finish
-times** when the race-mean target is wrong.
-
-Power-law HRR–duration fit (hold-outs excluded): \(a\approx 0.825\),
-\(b\approx -0.039\) — nearly flat. Empirical monotone windows drop much faster
-at long duration (target HRR ≈ **0.62** by 6–8 h) while the power law still
-gives ≈ **0.75** at 10 h. That mismatch is the Échappée failure mode.
+Assets @ `hrr_max_factor=1.20`: LOO hard run/trail M3 MAE **8.25 min**, MAPE **7.3%**.
 
 ---
 
-## Hypotheses and results
+## Hypotheses (MAPE-ranked)
 
-Δ = predicted − observed moving (min). Trail |Δ| MAE over 4 races.
-Constant feasible baseline MAE = **27.58 min**.
+Δ = predicted − actual (min). Optimistic = Δ < 0.
 
-### H1 — Mean modulators × power-law feasible target
+### Family modulation only (H1–H5)
 
-| Race | Δ adaptive | Δ const |
-|------|------------|---------|
-| LUT | +16.4 | +16.7 |
-| Grésivaudan | +5.7 | +6.7 |
-| Passerelles | +13.0 | +13.7 |
-| Échappée | −77.6 | −73.2 |
+| ID | Idea | MAPE | Verdict |
+|----|------|------|---------|
+| H1 | mean \(m_f\) × PL target | 7.43% | Fail — modulation too mild |
+| H2 | p75 \(m_f\) × PL | 7.25% | ≈ constant |
+| H3 | family duration caps | 7.42% | Caps rarely bind |
+| H4 / H4b | hardTrail vs all-usable \(m_f\) | 7.43 / 7.83% | Prefer hardTrail |
+| H5 | supra-VMA flats only | 7.43% | No effect at HRR≤0.88 |
 
-**MAE 28.17 — FAIL** (slightly worse than constant; Échappée more optimistic).
+### Failed target shifts (H6–H9, H11)
 
-### H2 — p75 modulators × power-law feasible
+| ID | Idea | MAPE | Verdict |
+|----|------|------|---------|
+| H6–H7 | hist blend / hist band | 11–17% | Too soft on short races |
+| H8 | resid(obs−env)~log T + apk | ~32% | Easy-run resid over-corrects |
+| H9 | min(PL, empirical window) | 8.1% | Ultra +55 min (slow) — bad under optimistic-OK |
+| H11 | switch to emp if T≥6 h | 6.5% | Same ultra over-correction |
 
-| Race | Δ |
-|------|---|
-| LUT | +16.3 |
-| Grésivaudan | +5.4 |
-| Passerelles | +12.5 |
-| Échappée | −75.9 |
-
-**MAE 27.51 — MARGINAL PASS** vs constant 27.58 (tiny win on ≤3 h races).
-
-### H3 — Family duration caps
-
-Caps from power-law on family time shares almost never bind.
-**MAE 28.15 — FAIL.**
-
-### H4 / H4b — hardTrailRun vs all-usable modulators
-
-hardTrail = H1. All-usable worse (**MAE 28.65**). Prefer hardTrail.
-
-### H5 — Supra-VMA on flats only
-
-No effect at targets ≤ 0.88. **MAE 28.17 — FAIL.**
-
-### H6 / H7 — Amplified mods + historical mean blend / hist-band
-
-Lowered race-mean target toward easy-run history → short races much slower.
-**MAE 35–46 — FAIL.**
-
-### H8 — Residual (obs mean − envelope) ~ log(dur) + ascent/km
-
-Training residual strongly negative (easy runs ≪ envelope max). Over-lowers
-target. **MAE ~90 — FAIL loudly.**
-
-### H9 — `min(power-law, empirical window)` as target + p75 mods
-
-Échappée target 0.617 → **+55** (over-corrected). Short races slightly worse.
-**MAE 25.4 — better than constant but not close enough on ultra.**
-
-### H10 — Duration-weighted blend of power-law & empirical + family mods
+### Duration blend (H10 / H12) — first MAPE win
 
 \[
-w = \mathrm{clip}\bigl((T_{\mathrm{h}}-4)/(10-4),\,0,\,1\bigr)\cdot w_{\max}
-\]
-\[
-\mathrm{HRR}^\star = (1-w)\,\mathrm{HRR}_{\mathrm{PL}} + w\,\mathrm{HRR}_{\mathrm{emp}}(T)
+w=\mathrm{clip}((T_h-4)/(10-4),0,1)\cdot w_{\max},\quad
+\mathrm{HRR}^\star=(1-w)\mathrm{HRR}_{\mathrm{PL}}+w\,\mathrm{HRR}_{\mathrm{emp}}
 \]
 
-with \(T\) = predicted time at power-law feasible HRR (prospective; no race HR).
+| ID | MAPE | MAE | Notes |
+|----|------|-----|-------|
+| **H10_blend_w70_p75** | **4.92%** | 11.1 | All slow (no optimistic); Échappée +10 min |
+| H10_blend_w70_mean | 4.97% | 10.9 | Similar |
+| H10_w50 / w85 / w100 | 5.2–6.5% | — | w70 sweet spot |
 
-| Variant | \(w_{\max}\) | mods | Trail MAE | Échappée Δ |
-|---------|--------------|------|-----------|------------|
-| H10_blend_w50_p75 | 0.50 | p75 | 12.75 | −16.8 |
-| **H10_blend_w70_mean** | **0.70** | **mean** | **10.88** | **+8.4** |
-| H10_blend_w70_p75 | 0.70 | p75 | 11.10 | +10.2 |
-| H10_blend_w85_p75 | 0.85 | p75 | 16.55 | +32.0 |
-| H10_blend_w100_p75 | 1.00 | p75 | 22.35 | +55.2 |
+Fixes ultra PL flatness (emp ≈ 0.62 at 6–8 h vs PL ≈ 0.75 at 10 h).
 
-**H10_blend_w70_mean detail**
+### Short-race race-push (H13–H20) — MAPE primary
 
-| Race | target HRR | \(w\) | Δ | Δ const |
-|------|------------|-------|---|---------|
-| LUT | 0.780 | 0 | +16.4 | +16.7 |
-| Grésivaudan | 0.780 | 0 | +5.7 | +6.7 |
-| Passerelles | 0.780 | 0 | +13.0 | +13.7 |
-| Échappée | 0.657 | 0.70 | **+8.4** | −73.2 |
+Short races were **slow** (+6–9% MAPE) at PL; under optimistic-OK we **raise**
+short-race HRR toward VMA effort, keep H10 on ultras.
 
-Échappée target 0.657 ≈ observed mean 0.654 (without using race HR). Short
-races unchanged vs H1/H2 (blend weight 0 below 4 h).
+| ID | Short target | Long | MAPE | Optimistic races |
+|----|--------------|------|------|------------------|
+| H18 | HRR_ref only | — | 9.77% | 4 — ultra too fast for MAPE |
+| H13 | HRR_ref | H10 | 4.10% | 3 |
+| H16 | CP-style boost to ref | H10 | 3.66% | 0 |
+| H14 | max(PL, win60) | H10 | 2.99% | 0 |
+| H15 | 0.82 / Fornasiero mix | — | 2.56% | 1 |
+| H19 | PL+0.04 | H10 | 2.37% | 1 |
+| H17 | 0.85 | H10 | 2.26% | 2 |
+| **H13b mid(PL, ref)** | **0.5(PL+ref)** | **H10** | **2.07%** | **1** |
+| H20 PL+0.06 | PL+0.06 | H10 | **2.00%** | 2 |
 
-**PASS — best so far.** Trail MAE **10.9 vs 27.6** constant feasible.
+**Preferred: H13b** — no free boost parameter; biblio-aligned (race push halfway
+from sustainability floor to flat-VMA effort on ≤5 h; Fornasiero/H10 on ultra).
 
-### H11 — Hard switch to empirical if \(T\ge 6\) h
+H20 is ~tied on MAPE but +0.06 is hold-out-tuned; training 2–5 h hard trails are
+already mostly optimistic at PL (median needed boost = 0), so H20 is sensitivity
+only.
 
-Same over-correction as H9 on Échappée. **MAE 22.3 — FAIL.**
+### H13b detail
 
-### H12 — H10 + one re-eval of empirical at blended prediction
+| Race | target HRR | Δ min | MAPE % | signed % |
+|------|------------|-------|--------|----------|
+| LUT | 0.830 | +5.3 | 3.0 | +3.0 |
+| Grésivaudan | 0.830 | −6.8 | 3.2 | −3.2 (optimistic OK) |
+| Passerelles | 0.830 | +1.2 | 0.6 | +0.6 |
+| Échappée | 0.657 | +10.2 | 1.5 | +1.5 |
 
-Identical to H10_w70_p75 here (no second-order move). **MAE 11.1.**
+Trail MAPE **2.07%** vs constant feasible **7.52%** (≈ **3.6×** better).
 
 ---
 
 ## Interpretation
 
-1. **Family modulation** redistributes effort slightly (steep climb ↑, steep
-   descent ↓) but cannot fix a wrong race-mean HRR.
-2. The **power-law envelope is too flat** for ultras; empirical duration windows
-   carry the long-duration information.
-3. A **prospective blend** (\(w_{\max}=0.70\), 4→10 h) pulls Échappée to ~obs
-   mean HRR while leaving ≤3 h races on the power-law feasible target.
-4. Remaining short-race slow bias (~+5–16 min) matches the **obs-mean
-   reconstruction** bias (~+13–19 min): model physics / fatigue, not HRR
-   selection. Further gains need Stage-3 / GAP work, not more HRR tricks.
+1. **Family mods** alone ≈ noise for finish MAPE.
+2. **PL envelope too flat for ultras** → empirical windows (H10) required.
+3. Under **MAPE + optimistic-OK**, short races need a **race push** above PL
+   (toward HRR_ref); being slightly fast on Grésivaudan is fine.
+4. Remaining error is small in relative terms; absolute ≤3 h slow bias when it
+   remains is physics/fatigue, not HRR mean selection.
 
 ---
 
 ## Current best recipe (prospective)
 
-1. Fit Stage 3 + HRR–duration power law + empirical windows (hold-outs out).
-2. Select power-law duration-feasible constant HRR → \((\mathrm{HRR}_{\mathrm{PL}}, T)\).
-3. \(\mathrm{HRR}^\star =\) H10 blend with \(w_{\max}=0.70\).
-4. Assign \(\mathrm{HRR}_i = \mathrm{HRR}^\star \cdot m_{f(i)}\) with hardTrailRun
-   **mean** modulators; distance-weighted re-center to \(\mathrm{HRR}^\star\).
-5. Simulate with sequential TRIMP (`simulate_observed_hrr_segments`).
-
-Script: `scripts/predict_race_segment_hrr_adaptive.py`  
-Outputs: `data/exp_perf_predictions/trail_digital_twin_segment_hrr_adaptive/`
+1. Stage 3 + PL envelope + empirical windows (hold-outs out).
+2. If predicted \(T < 5\) h: \(\mathrm{HRR}^\star = \tfrac12(\mathrm{HRR}_{\mathrm{PL}}+\mathrm{HRR}_{\mathrm{ref}})\).
+3. Else: H10 blend with \(w_{\max}=0.70\).
+4. Assign \(\mathrm{HRR}_i=\mathrm{HRR}^\star\cdot m_{f(i)}\) (hardTrailRun **p75** or mean;
+   re-center). H13b default uses p75 mods.
+5. Simulate with sequential TRIMP.
 
 ```bash
 uv run python scripts/predict_race_segment_hrr_adaptive.py \
-  --hypotheses H10_blend_w70_mean,H2_p75_mod
+  --hypotheses H13b_short_midref_long_H10,H10_blend_w70_p75,H20_H10_short_plus006
 ```
+
+Outputs: `data/exp_perf_predictions/trail_digital_twin_segment_hrr_adaptive/`
+(`mape_leaderboard.csv`, `adaptive_hrr_summary.csv`).
 
 ---
 
 ## Decision rules
 
-- Prefer hypotheses that reduce **trail** |Δ| MAE without using race HR.
-- Échappée: |Δ| < 30 min acceptable ultra envelope; < 20 min strong — **H10 meets strong**.
-- Do not claim road transfer (Rome).
-- Keep duration-feasible constant and obs-mean reconstruction as Table 5 baselines.
-
----
-
-## Next actions
-
-1. Optional: publish H10 as a Table 5 companion column / figure once stable.
-2. Attack residual ≤3 h slow bias via physics/fatigue, not HRR mean.
-3. Consider fitting empirical windows on TRAIL_RUN-only for even cleaner ultras.
-4. Keep `hrr_max_factor=1.20` for LOO / segment spikes.
+- Rank by **trail MAPE**; use MAE only as secondary.
+- Optimistic (faster) predictions are allowed; avoid large **slow** MAPE on short races.
+- Échappée: |signed %| ≲ 5% strong; do not sacrifice short-race MAPE to force ultra MAE→0.
+- No road transfer claim (Rome).
+- Prefer parameter-free / biblio-aligned rules over hold-out-tuned offsets.

@@ -200,6 +200,38 @@ def blend_powerlaw_empirical_hrr(
     return float((1.0 - w) * pl + w * emp), w
 
 
+def short_race_midref_hrr(
+    *,
+    powerlaw_hrr: float,
+    hrr_reference: float,
+    predicted_sec: float,
+    empirical_hrr: float,
+    short_hours: float = 5.0,
+    w_max: float = 0.70,
+) -> tuple[float, float]:
+    """MAPE-oriented target: race push on short courses, H10 blend on ultras.
+
+    For predicted duration < ``short_hours``, use the midpoint between the
+    duration-feasible floor and flat-VMA effort (``hrr_reference``) — a
+    Jaén-Carrillo / VT2-style race push above the sustainability envelope.
+    Longer races keep the H10 empirical blend (Fornasiero-like ultra intensity).
+
+    Optimistic (faster-than-actual) predictions are acceptable; primary metric
+    is MAPE. Returns ``(target_hrr, blend_or_push_weight)``.
+    """
+    pl = float(powerlaw_hrr)
+    ref = float(hrr_reference)
+    hours = float(predicted_sec) / 3600.0
+    if hours < float(short_hours):
+        return float(0.5 * (pl + ref)), 0.5
+    return blend_powerlaw_empirical_hrr(
+        powerlaw_hrr=pl,
+        empirical_hrr=empirical_hrr,
+        predicted_sec=predicted_sec,
+        w_max=w_max,
+    )
+
+
 def assign_adaptive_hrr(
     route: pd.DataFrame,
     *,
@@ -352,7 +384,26 @@ def run_hypothesis(
         emp_hrr = empirical_hrr_for_duration(pl_pred, windows) if windows is not None else float("nan")
         blend_w = 0.0
         target = pl_hrr
-        if hypothesis.startswith("H10_blend") or hypothesis.startswith("H12_blend"):
+        if hypothesis.startswith("H13b_short_midref") or hypothesis.startswith("H13_short_ref"):
+            if hypothesis.startswith("H13b_short_midref"):
+                target, blend_w = short_race_midref_hrr(
+                    powerlaw_hrr=pl_hrr,
+                    hrr_reference=float(physiology["hrr_reference"]),
+                    predicted_sec=pl_pred,
+                    empirical_hrr=emp_hrr,
+                )
+            else:
+                hours = pl_pred / 3600.0
+                if hours < 5.0:
+                    target, blend_w = float(physiology["hrr_reference"]), 1.0
+                else:
+                    target, blend_w = blend_powerlaw_empirical_hrr(
+                        powerlaw_hrr=pl_hrr,
+                        empirical_hrr=emp_hrr,
+                        predicted_sec=pl_pred,
+                        w_max=0.70,
+                    )
+        elif hypothesis.startswith("H10_blend") or hypothesis.startswith("H12_blend"):
             # Default H10: w_max=0.70 over 4–10 h predicted duration.
             w_max = 0.70
             if "w50" in hypothesis:
@@ -388,6 +439,20 @@ def run_hypothesis(
                 target, blend_w = float(emp_hrr), 1.0
             else:
                 target, blend_w = pl_hrr, 0.0
+        elif hypothesis.startswith("H20_H10_short_plus"):
+            # Sensitivity: fixed short-race boost above PL (MAPE-tuned, not preferred).
+            hours = pl_pred / 3600.0
+            boost = 0.06 if "006" in hypothesis else 0.04
+            if hours < 5.0:
+                cap = min(0.98, float(physiology["hrr_reference"]) * float(physiology["hrr_max_factor"]))
+                target, blend_w = float(min(pl_hrr + boost, cap)), 0.0
+            else:
+                target, blend_w = blend_powerlaw_empirical_hrr(
+                    powerlaw_hrr=pl_hrr,
+                    empirical_hrr=emp_hrr,
+                    predicted_sec=pl_pred,
+                    w_max=0.70,
+                )
 
         planned = assign_adaptive_hrr(route, target_mean_hrr=target, modulators=modulators)
         if hypothesis == "H3_family_caps":
@@ -449,6 +514,12 @@ def run_hypothesis(
             "feasibleHrr": pl_hrr,
             "empiricalHrr": emp_hrr if np.isfinite(emp_hrr) else np.nan,
             "blendWeight": blend_w,
+            "mapePct": (
+                abs(pred_sec - actual) / actual * 100.0 if np.isfinite(actual) and actual > 0 else np.nan
+            ),
+            "signedPct": (
+                (pred_sec - actual) / actual * 100.0 if np.isfinite(actual) and actual > 0 else np.nan
+            ),
         }
         rows.append(row)
         sim.to_csv(output_dir / f"{hypothesis}_{race_key}_segments.csv", index=False)
@@ -482,8 +553,8 @@ def main() -> None:
     parser.add_argument(
         "--hypotheses",
         default=(
-            "H1_mean_mod,H2_p75_mod,H3_family_caps,H4_hardtrail_mod,"
-            "H10_blend_w70_mean,H10_blend_w70_p75"
+            "H1_mean_mod,H2_p75_mod,H10_blend_w70_p75,"
+            "H13b_short_midref_long_H10,H20_H10_short_plus006"
         ),
         help="Comma-separated hypothesis ids",
     )
@@ -533,6 +604,10 @@ def main() -> None:
         "H10_blend_w50_p75": ("H10_blend_w50_p75", mod_p75),
         "H11_switch6h_p75": ("H11_switch6h_p75", mod_p75),
         "H12_blend_iter_p75": ("H12_blend_iter_p75", mod_p75),
+        "H13_short_ref_long_H10": ("H13_short_ref_long_H10", mod_hard),
+        "H13b_short_midref_long_H10": ("H13b_short_midref_long_H10", mod_p75),
+        "H20_H10_short_plus006": ("H20_H10_short_plus006", mod_p75),
+        "H20_H10_short_plus004": ("H20_H10_short_plus004", mod_p75),
     }
     requested = [h.strip() for h in args.hypotheses.split(",") if h.strip()]
     # Always include H4b when H4 requested for comparison
@@ -580,18 +655,42 @@ def main() -> None:
         encoding="utf-8",
     )
     if not summary.empty:
-        print("\n=== Summary (Δ min) ===")
+        if "mapePct" not in summary.columns:
+            summary["mapePct"] = (
+                summary["deltaMin"].abs() * 60.0 / summary["actualMovingSec"] * 100.0
+            )
+        print("\n=== Summary (MAPE %; primary) ===")
+        pivot_m = summary.pivot_table(
+            index="raceKey", columns="hypothesis", values="mapePct", aggfunc="first"
+        )
+        print(pivot_m.round(2).to_string())
+        print("\n=== Summary (Δ min; signed, + = slower) ===")
         pivot = summary.pivot_table(
             index="raceKey", columns="hypothesis", values="deltaMin", aggfunc="first"
         )
         print(pivot.round(1).to_string())
-        print("\n|Δ| MAE by hypothesis:")
+        print("\nMAPE / MAE by hypothesis:")
         for hyp, g in summary.groupby("hypothesis"):
-            print(f"  {hyp}: {g['deltaMin'].abs().mean():.2f} min")
+            print(
+                f"  {hyp}: MAPE {g['mapePct'].mean():.2f}% | "
+                f"|Δ| MAE {g['deltaMin'].abs().mean():.2f} min"
+            )
+        base = summary.groupby("raceKey").first()
+        const_mape = (base["constantFeasibleDeltaMin"].abs() * 60.0 / base["actualMovingSec"] * 100.0).mean()
         print(
             "  constant feasible baseline: "
-            f"{summary.groupby('raceKey')['constantFeasibleDeltaMin'].first().abs().mean():.2f} min"
+            f"MAPE {const_mape:.2f}% | "
+            f"|Δ| MAE {base['constantFeasibleDeltaMin'].abs().mean():.2f} min"
         )
+        summary.sort_values(["hypothesis", "raceKey"]).to_csv(
+            args.output_dir / "adaptive_hrr_summary.csv", index=False
+        )
+        board = (
+            summary.groupby("hypothesis", as_index=False)
+            .agg(mapePct=("mapePct", "mean"), maeMin=("deltaMin", lambda s: s.abs().mean()))
+            .sort_values("mapePct")
+        )
+        board.to_csv(args.output_dir / "mape_leaderboard.csv", index=False)
     print(f"\nWrote {args.output_dir}")
 
 
