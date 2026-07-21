@@ -146,12 +146,12 @@ F = \max\bigl(F_{\min},\, 1-\kappa\cdot\mathrm{TRIMP}_{\mathrm{cum}}/\mathrm{TRI
 
 **Base equivalent speed** combines flat reference (athlete VMA / `vma_flat_kmh`), Minetti/GAP grade multiplier, optional **soft-ramped trail GAP scales** on steep climb/descent (`gap_climb_scale≈0.85`, `gap_descent_scale≈1.60`; soft start ~4% → full at ~15%), and altitude VO₂ factor. On fresh flat terrain with \(E=1\), predicted speed is \(v_{\mathrm{VMA}}\cdot\alpha\) (not VMA itself).
 
-**Roles (do not conflate).** \(\mathrm{HRR}_{\mathrm{ref}}\) (`hrr_reference`) is the **normalization point of \(E\)** — the HRR at which \(E=1\). With paper defaults `hrr_max_factor=1.0` it is also the **effort ceiling** (higher HRR cannot raise speed; it only adds TRIMP). It is **not** “HRR at VMA”: VMA is a separate flat-speed anchor (`vma_flat_kmh`). Fitted per athlete / LOO fold: primarily \(\alpha\) (**fraction of VMA at \(E=1\)**) and \(\kappa\) (TRIMP fatigue). Prospective defaults: `hrr_reference=0.88`, `hrr_max_factor=1.0`, `decay_lambda=0.20`, `min_fatigue_factor=0.60`.
+**Roles (do not conflate).** \(\mathrm{HRR}_{\mathrm{ref}}\) (`hrr_reference`) is the **HRR corresponding to flat VMA effort** — the normalization point where \(E=1\). On fresh flat terrain, predicted speed is then \(v_{\mathrm{VMA}}\cdot\alpha\). It is a modeling definition of “VMA heart-rate,” not a lab measurement and not a hard speed ceiling. With `hrr_max_factor>1` (paper: **1.20**), HRR above \(\mathrm{HRR}_{\mathrm{ref}}\) can raise \(E\) above 1 (short supra-VMA intervals); \(E\) saturates at `hrr_max_factor`. Fitted per athlete / LOO fold: primarily \(\alpha\) (**fraction of VMA at \(E=1\)**) and \(\kappa\) (TRIMP fatigue). Prospective defaults: `hrr_reference=0.88`, `hrr_max_factor=1.20`, `decay_lambda=0.20`, `min_fatigue_factor=0.60`.
 
 **Prediction modes.**
 
 1. **Reconstruction** with observed HR (diagnostic fit).  
-2. **Prospective race** with a **duration-feasible constant HRR**: sweep HRR on the planned profile, keep only values whose predicted finish time is ≤ the athlete’s historically maintainable duration at that HRR (power-law envelope from other activities), and select the fastest feasible. \(\mathrm{HRR}_{\mathrm{ref}}\) still normalizes \(E\) (ceiling under `hrr_max_factor=1.0`); it is not the default race HRR and is not “HRR at VMA.” A companion reference-effort run at \(\mathrm{HRR}=\mathrm{HRR}_{\mathrm{ref}}\) is retained for comparison.
+2. **Prospective race** with a **duration-feasible constant HRR**: sweep HRR on the planned profile (including values above \(\mathrm{HRR}_{\mathrm{ref}}\) when `hrr_max_factor>1`), keep only values whose predicted finish time is ≤ the athlete’s historically maintainable duration at that HRR (power-law envelope from other activities), and select the fastest feasible. A companion run at \(\mathrm{HRR}=\mathrm{HRR}_{\mathrm{ref}}\) (\(E=1\), flat-VMA effort) is retained for comparison.
 
 ### 3.3 Experimental protocol
 
@@ -217,15 +217,15 @@ Prior to asymmetric trail GAP correction, hard-trail segment residuals showed op
 
 Holding out target races from estimation and selecting the **fastest constant HRR sustainable for the predicted duration** (power-law HRR–duration envelope fit excluding hold-outs) produced Table 5. As an **evaluation-only** quality check, we also reconstruct each race at constant HRR = observed mean race HRR (available only after the race).
 
-| Race | Obs. mean HRR | Δ @ obs. mean | Feasible HRR | Δ @ feasible | Δ @ HRR_ref=0.88 |
-|------|---------------|---------------|--------------|--------------|------------------|
+| Race | Obs. mean HRR | Δ @ obs. mean | Feasible HRR | Δ @ feasible | Δ @ HRR_ref (VMA) |
+|------|---------------|---------------|--------------|--------------|-------------------|
 | LUT | 0.80 | **+13.2** | 0.78 | +16.7 | −4.1 |
 | Passerelles | 0.76 | **+18.7** | 0.78 | +13.7 | −8.0 |
 | Grésivaudan | 0.73 | **+17.6** | 0.78 | +6.7 | −17.0 |
 | Échappée Belle | 0.65 | **+16.8** | 0.75 | −73.2 | −164 |
 | Rome (road) | 0.73 | −48.1 | 0.79 | −62.4 | −79.2 |
 
-On the four trail races, constant observed-mean HRR yields a consistent ~13–19 min slow bias (|Δ| MAE ≈ 16.6 min) and is the only mode that stays well-behaved on Échappée Belle. Duration-feasible prospective is closer on Grésivaudan (+6.7) but still optimistic on the ultra (−73). Reference \(E=1\) at 0.88 is a ceiling scenario (systematically fast). Rome remains **out of scope** (R5). Profiles: LUT/Grésivaudan = `race_pacing`+GPX altitude; Échappée/Passerelles = executed activity GPS. Aid budgets (R4) still apply as non-fitted post-hoc adjustments.
+\(\mathrm{HRR}_{\mathrm{ref}}=0.88\) is the modeled **HRR at flat VMA effort** (\(E=1\)); `hrr_max_factor=1.20` allows \(E>1\) when HRR exceeds ref (short supra-VMA intervals). For these races, selected and observed mean HRR are all ≤0.88, so opening the ceiling does **not** change Table 5 point predictions—it matters for segment reconstruction when HRR spikes above ref. On the four trail races, constant observed-mean HRR yields a consistent ~13–19 min slow bias (|Δ| MAE ≈ 16.6 min) and is the only mode that stays well-behaved on Échappée Belle. Duration-feasible prospective is closer on Grésivaudan (+6.7) but still optimistic on the ultra (−73). Rome remains **out of scope** (R5). Profiles: LUT/Grésivaudan = `race_pacing`+GPX altitude; Échappée/Passerelles = executed activity GPS.
 
 Finish-time bands (R9) now satisfy P05 < P50 < P95 with multi-minute spread (α/κ jitter + LOO residual noise). Race- vs segment-objective choice was frozen from mixed hard LOO without peeking at hold-outs (**activity** preferred; R2).
 
@@ -260,10 +260,10 @@ Two segment-level optimisations refine the twin beyond activity-level (α, κ) s
 | **Moving time + slight rejection cleans dwell** | §7 pipeline: **4** unfit segments (0.17%); slight alone on clock time can worsen LOO. |
 | **Trail GAP scales fix steep physics** | Combined steep MAE **3.05 → 1.64 min (−46%)**; race LOO only ~0.25 min better on mixed hard—terrain consistency, not finish-time chasing. |
 | **Fit objective matters on race dates** | Activity vs segment LOO MAE **11.8 vs 7.7 min** on selected races; nearly tied on mixed hard (~9.1 vs 9.3). |
-| **Prospective HRR modes (trail)** | Obs. mean HRR reconstruction |Δ| MAE ≈ **16.6 min** (eval-only); duration-feasible primary; HRR_ref=0.88 ceiling companion (systematically fast). |
+| **Prospective HRR modes (trail)** | Obs. mean HRR reconstruction |Δ| MAE ≈ **16.6 min** (eval-only); duration-feasible primary; HRR_ref=0.88 = flat-VMA effort companion (`hrr_max_factor=1.20`). |
 | **Prospective uncertainty bands** | R9 bands use α/κ jitter + LOO residual noise (P05 < P50 < P95). |
 
-**Interpretation.** On this athlete, continuous HRR is the principal incremental predictor beyond a matched physics twin; acute TRIMP is the complementary fatigue channel; asymmetric trail GAP scales restore local climb/descent behaviour; prospective forecasts should use a **duration-feasible** constant HRR (historical maintainability), with \(\mathrm{HRR}_{\mathrm{ref}}\) as the \(E=1\) ceiling—not as the default race HRR, and not as “HRR at VMA.”
+**Interpretation.** On this athlete, continuous HRR is the principal incremental predictor beyond a matched physics twin; acute TRIMP is the complementary fatigue channel; asymmetric trail GAP scales restore local climb/descent behaviour. Prospective forecasts should use a **duration-feasible** constant HRR, with \(\mathrm{HRR}_{\mathrm{ref}}\) as flat-VMA effort (\(E=1\)) and `hrr_max_factor>1` allowing short supra-VMA bursts when HRR exceeds ref.
 
 ---
 
@@ -279,13 +279,13 @@ Evidence remains a **single-athlete case study**. Additional limits: HR artifact
 
 ### 5.3 Practical implication
 
-Within coaching software, the twin supports (i) retrospective effort-normalized race explanation, (ii) prospective finish-time estimates at a **duration-feasible** constant HRR (plus an optional \(E=1\) ceiling at \(\mathrm{HRR}_{\mathrm{ref}}\)), and (iii) identification of terrain regimes where grade-cost assumptions fail.
+Within coaching software, the twin supports (i) retrospective effort-normalized race explanation, (ii) prospective finish-time estimates at a **duration-feasible** constant HRR (plus a flat-VMA-effort companion at \(\mathrm{HRR}_{\mathrm{ref}}\)), and (iii) identification of terrain regimes where grade-cost assumptions fail.
 
 ---
 
 ## 6. Conclusion
 
-For one recreational/competitive trail runner, a HRR+TRIMP digital twin reduced leave-one-out finish-time error from a physics baseline of ~30 min MAE to ~9 min MAE on mixed hard run/trail activities (MAPE ≈ 6.5%), with parallel gains on broader >20 min and race-date cohorts. Component ablation attributes most of that gain to continuous HRR and acute TRIMP. Soft-ramped trail GAP scales improve steep-terrain residuals, and prospective simulations use a **duration-feasible** constant HRR (with \(\mathrm{HRR}_{\mathrm{ref}}\) as the \(E=1\) ceiling companion). Publication assets are collected in `docs/science/paper/`. Multi-athlete validation remains the primary next step for journal submission.
+For one recreational/competitive trail runner, a HRR+TRIMP digital twin reduced leave-one-out finish-time error from a physics baseline of ~30 min MAE to ~9 min MAE on mixed hard run/trail activities (MAPE ≈ 6.5%), with parallel gains on broader >20 min and race-date cohorts. Component ablation attributes most of that gain to continuous HRR and acute TRIMP. Soft-ramped trail GAP scales improve steep-terrain residuals, and prospective simulations use a **duration-feasible** constant HRR (with \(\mathrm{HRR}_{\mathrm{ref}}\) as flat-VMA effort and `hrr_max_factor=1.20` for supra-VMA bursts). Publication assets are collected in `docs/science/paper/`. Multi-athlete validation remains the primary next step for journal submission.
 
 ---
 
@@ -422,7 +422,8 @@ See `bibliography_hr_digital_twin.md` for extended notes and venue links.
 | Param | Role | Athlete-specific? |
 |-------|------|-------------------|
 | \(v_{\mathrm{flat}}\) / VMA | Flat speed anchor (`vma_flat_kmh`) | Yes |
-| \(\mathrm{HRR}_{\mathrm{ref}}\) | HRR where \(E=1\) (effort ceiling if \(h_{\max}=1\)) | Modeling choice (paper: 0.88) |
+| \(\mathrm{HRR}_{\mathrm{ref}}\) | HRR at flat VMA effort (\(E=1\)) | Modeling choice (paper: 0.88) |
+| `hrr_max_factor` | Cap on \(E\) (supra-VMA if >1) | Paper: 1.20 |
 | \(\alpha\) | Fraction of VMA at \(E=1\) | Yes (fitted) |
 | \(\kappa\) | TRIMP fatigue | Yes (fitted) |
 | HR rest / max | HRR denominator | Yes |

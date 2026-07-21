@@ -238,7 +238,7 @@ def table_prospective(src: Path) -> pd.DataFrame:
                 "Δ @ obs. mean HRR (min)": obs_delta,
                 "Feasible HRR": round(float(row["hrr"]), 2),
                 "Δ @ feasible HRR (min)": round(float(row["deltaMin"]), 1),
-                "Δ @ HRR_ref=0.88 (min)": ref_delta,
+                "Δ @ HRR_ref (VMA, min)": ref_delta,
                 "Predicted (feasible)": _fmt_hms(float(row["predictedSec"])),
                 "Observed moving": _fmt_hms(float(row["actualMovingSec"])),
                 "P50 finish": _fmt_hms(float(row["finishSecP50"])),
@@ -505,7 +505,8 @@ def write_tables(src: Path, out_dir: Path) -> dict[str, Path]:
             "HRR–duration power-law envelope. Primary column is duration_feasible HRR. "
             "Δ @ obs. mean HRR is an evaluation-only constant-HRR reconstruction using "
             "the race's realized average HRR (not available prospectively). "
-            "Δ @ HRR_ref=0.88 is the E=1 ceiling companion. Δ = predicted − observed moving time.",
+            "Δ @ HRR_ref is flat-VMA effort (E=1); hrr_max_factor>1 allows supra-VMA "
+            "when HRR > HRR_ref. Δ = predicted − observed moving time.",
         ),
         "table06_speed_vs_hrr_flat": (
             table_speed_hrr_excerpt(src),

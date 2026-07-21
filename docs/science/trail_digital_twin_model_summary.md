@@ -59,7 +59,9 @@ These change when the athlete changes (fitness, aging, device HR).
 
 ## Prospective race prediction (duration-feasible constant HRR)
 
-**Idea:** Before the race, sweep constant HRR on the planned profile. For each candidate \(x\), predict finish time \(T(x)\) and keep \(x\) only if \(T(x)\) ≤ the athlete’s historically maintainable duration at HRR \(x\) (power-law envelope from other activities). Select the **fastest feasible** HRR. \(\mathrm{HRR}_{\mathrm{ref}}\) remains the \(E=1\) normalization/ceiling—not the default race HRR and not “HRR at VMA.”
+**Idea:** Before the race, sweep constant HRR on the planned profile. For each candidate \(x\), predict finish time \(T(x)\) and keep \(x\) only if \(T(x)\) ≤ the athlete’s historically maintainable duration at HRR \(x\) (power-law envelope from other activities). Select the **fastest feasible** HRR.
+
+\(\mathrm{HRR}_{\mathrm{ref}}\) is the **HRR at flat VMA effort** (\(E=1\)). With `hrr_max_factor>1`, short efforts at HRR > \(\mathrm{HRR}_{\mathrm{ref}}\) can exceed VMA speed (supra-VMA bursts). VMA itself remains the flat speed anchor (`vma_flat_kmh`); at \(E=1\), speed is \(v_{\mathrm{VMA}}\cdot\alpha\).
 
 | Allowed as input | Forbidden for estimation |
 |------------------|--------------------------|
@@ -68,6 +70,6 @@ These change when the athlete changes (fitness, aging, device HR).
 | HRR–duration envelope from **other** activities | Hold-out races in the envelope fit |
 | Readiness if known a priori | Fitting \(\alpha\) on the race itself |
 
-**Modes:** `duration-feasible` (default prospective) vs `reference` (hold HRR = `hrr_reference` for \(E=1\) ceiling comparison). Optional: `--hard-hrr` fixed override.
+**Modes:** `duration-feasible` (default prospective) vs `reference` (hold HRR = `hrr_reference` for flat-VMA effort). Optional: `--hard-hrr` fixed override.
 
 Prediction should usually be **slightly faster** than a near-max executed race (small pacing/aid inefficiencies remain in reality).

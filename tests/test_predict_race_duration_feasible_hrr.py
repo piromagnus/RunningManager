@@ -54,7 +54,7 @@ def test_select_duration_feasible_picks_sustainable_not_reference() -> None:
         "vma_flat_kmh": 18.0,
         "hrr_reference": 0.88,
         "hrr_min_factor": 0.30,
-        "hrr_max_factor": 1.00,
+        "hrr_max_factor": 1.20,
         "decay_lambda": 0.20,
         "min_fatigue_factor": 0.60,
         "gap_steep_threshold": 0.15,

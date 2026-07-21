@@ -7,7 +7,7 @@ Runnable analysis and maintenance tools.
 | File | Purpose |
 |------|---------|
 | `estimate_prerace_hrr.py` | GPX pre-race estimate by constant HRR sweep using binned or power-law HRR-duration feasibility |
-| `predict_race_constant_hrr.py` | Hold-out Stage 3 fit + constant-HRR prediction; default **duration-feasible** HRR from power-law envelope (LUT, Grésivaudan, Échappée Belle, Passerelles) |
+| `predict_race_constant_hrr.py` | Hold-out Stage 3 fit + constant-HRR prediction; `hrr_reference` = flat-VMA effort; `hrr_max_factor=1.20`; default duration-feasible envelope |
 | `trail_digital_twin_extensions.py` | YAML-configured trail digital-twin fitting, CSV export, and HTML report |
 | `trail_digital_twin_benchmark.py` | Large benchmark sweep runner for trail digital-twin config variants |
 | `generate_trail_digital_twin_hypothesis_refined.py` | Generate Stage 2 hypothesis benchmark YAML from Stage 1 CSV winners |

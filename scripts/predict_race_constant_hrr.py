@@ -6,8 +6,11 @@ Prospective constant-HRR race prediction from a planned profile.
 Fits Stage 3 alpha/fatigue on other activities only (hold-out races excluded),
 then predicts courses at a constant HRR. Default mode selects the fastest HRR
 that is historically sustainable for the predicted duration (power-law
-HRR–duration envelope). Optional ``--hrr-mode reference`` holds HRR =
-hrr_reference (E=1 when fresh; not HRR at VMA).
+HRR–duration envelope).
+
+``hrr_reference`` is the HRR corresponding to flat VMA effort (E=1). With
+``hrr_max_factor>1``, short intervals at HRR > hrr_reference can exceed VMA
+speed. Optional ``--hrr-mode reference`` holds HRR = hrr_reference.
 """
 
 from __future__ import annotations
@@ -359,8 +362,10 @@ def select_duration_feasible_constant_hrr(
     feasible row (``select_best_constant_hrr``).
     """
     hrr_ref = float(physiology["hrr_reference"])
-    # Above HRR_ref, E cannot rise under hrr_max_factor=1.0; only TRIMP grows.
-    hrr_max_grid = min(hrr_ref, 0.98)
+    hrr_max_factor = float(physiology["hrr_max_factor"])
+    # With hrr_max_factor>1, E can exceed 1 for HRR > HRR_ref (supra-VMA bursts).
+    # Sweep up to the HRR where E saturates, capped at 0.98.
+    hrr_max_grid = min(0.98, hrr_ref * max(hrr_max_factor, 1.0))
     hrr_values = np.round(np.arange(hrr_min, hrr_max_grid + 0.5 * hrr_step, hrr_step), 4)
     sweep = tpm.sweep_constant_hrr_route(
         segments,
@@ -448,9 +453,9 @@ def main() -> None:
 
     physiology = {
         "vma_flat_kmh": 18.0,
-        "hrr_reference": 0.88,
+        "hrr_reference": 0.88,  # HRR at flat VMA effort (E=1)
         "hrr_min_factor": 0.30,
-        "hrr_max_factor": 1.00,
+        "hrr_max_factor": 1.20,  # supra-VMA bursts when HRR > hrr_reference
         "decay_lambda": 0.20,
         "min_fatigue_factor": 0.60,
         "gap_steep_threshold": 0.15,

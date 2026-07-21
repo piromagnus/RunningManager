@@ -9,11 +9,11 @@ lower is better. Aggregate scores average configured cohorts
 
 ## Definitions
 
-- **HRR_ref (`hrr_reference`)**: HRR at which the effort multiplier \(E=1\)
-  (\(E=\mathrm{clip}(\mathrm{HRR}/\mathrm{HRR}_{\mathrm{ref}},\,h_{\min},\,h_{\max})\)).
-  With `hrr_max_factor=1.0` it is also the effort ceiling. It is **not** “HRR at
-  VMA”; VMA (`vma_flat_kmh`) is a separate flat-speed anchor, and flat fresh
-  speed at \(E=1\) is \(v_{\mathrm{VMA}}\cdot\alpha\).
+- **HRR_ref (`hrr_reference`)**: HRR corresponding to **flat VMA effort**
+  (\(E=\mathrm{clip}(\mathrm{HRR}/\mathrm{HRR}_{\mathrm{ref}},\,h_{\min},\,h_{\max})\);
+  \(E=1\) at \(\mathrm{HRR}=\mathrm{HRR}_{\mathrm{ref}}\)). VMA (`vma_flat_kmh`) is
+  the flat speed anchor; at \(E=1\), speed is \(v_{\mathrm{VMA}}\cdot\alpha\).
+  With `hrr_max_factor>1`, HRR above ref can raise \(E\) above 1 (supra-VMA).
 - **Decay λ (`decay_lambda`)**: exponential decay rate for in-race TRIMP used
   by Stage 3 fatigue states.
 - **Min fatigue factor**: floor on the fatigue multiplier so long races cannot

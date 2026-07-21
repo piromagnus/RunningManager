@@ -182,3 +182,14 @@ Trail |Δ| MAE: obs-mean **16.6** min; feasible **27.6** (Échappée-dominated);
 without Échappée feasible **12.4** vs obs **16.5**. Constant obs-mean HRR is the
 cleanest reconstruction check; remaining ~15 min slow bias suggests variable pacing
 / aid / model conservatism beyond mean HRR.
+
+
+---
+
+## Addendum — HRR_ref as flat VMA; hrr_max_factor=1.20 (2026-07-21)
+
+Conceptual update: ``hrr_reference=0.88`` is the **HRR at flat VMA effort** (E=1).
+``hrr_max_factor`` raised from 1.0 → **1.20** so HRR > 0.88 can produce \(E>1\)
+(short supra-VMA intervals). Duration-feasible race selections for LUT/Passerelles/
+Grésivaudan/Échappée remain at HRR ≤ 0.88, so Table 5 point predictions are unchanged;
+the open ceiling matters for segment-level spikes and future short-course sweeps.

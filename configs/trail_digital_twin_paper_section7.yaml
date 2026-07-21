@@ -53,9 +53,9 @@ physiology:
   vma_flat_kmh: 18.0
   vt2_threshold_name: Threshold 30
   vt2_fallback_kmh: 15.0
-  hrr_reference: 0.88
+  hrr_reference: 0.88  # HRR at flat VMA effort (E=1); not a hard ceiling
   hrr_min_factor: 0.30
-  hrr_max_factor: 1.0
+  hrr_max_factor: 1.20  # allow E>1 for short supra-VMA intervals (HRR > hrr_reference)
   decay_lambda: 0.2
   min_fatigue_factor: 0.60
   gap_steep_threshold: 0.15
