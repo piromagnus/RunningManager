@@ -12,7 +12,7 @@
 
 ## Abstract (draft)
 
-Accurate prediction of trail-running finish times remains difficult because grade, altitude, and fatigue interact nonlinearly with athlete physiology. Building on the physics-informed digital-twin framework of Jaén-Carrillo and Pattis (2026), we evaluate a **single athlete-specific** model that uses continuous heart-rate reserve (HRR) as instantaneous effort and Banister-style TRIMP as intra-activity fatigue, with soft-ramped trail-grade cost corrections. Using leave-one-out (LOO) validation across hard-run, hard-trail, and run/trail (>20 min) cohorts—with moving-time fitting and slight near-flat immobile segment rejection—a physics baseline (M0) yielded substantially larger errors than the full HRR+TRIMP specification (M3): for mixed hard run/trail activities, MAE decreased from **30.2 to 9.1 min** (MAPE 26.5% → 6.5%). Re-optimized component ablations attribute most of this gain to HRR and acute TRIMP. Soft-ramped trail GAP scales reduced steep-terrain segment MAE by ≈46%. Prospective simulations hold \(\mathrm{HRR}=\mathrm{HRR}_{\mathrm{ref}}=0.88\) (\(E=1\) reference effort, not “HRR at VMA”) and finish at or faster than observed races when mean race HRR was below reference (LUT −4.1 min; Passerelles −8.0 min; Grésivaudan −17.0 min; Échappée Belle −164 min at observed mean HRR ≈0.65), while a road marathon (Rome) failed to transfer (−79 min). Publication assets: `docs/science/paper/`.
+Accurate prediction of trail-running finish times remains difficult because grade, altitude, and fatigue interact nonlinearly with athlete physiology. Building on the physics-informed digital-twin framework of Jaén-Carrillo and Pattis (2026), we evaluate a **single athlete-specific** model that uses continuous heart-rate reserve (HRR) as instantaneous effort and Banister-style TRIMP as intra-activity fatigue, with soft-ramped trail-grade cost corrections. Using leave-one-out (LOO) validation across hard-run, hard-trail, and run/trail (>20 min) cohorts—with moving-time fitting and slight near-flat immobile segment rejection—a physics baseline (M0) yielded substantially larger errors than the full HRR+TRIMP specification (M3): for mixed hard run/trail activities, MAE decreased from **30.2 to 9.1 min** (MAPE 26.5% → 6.5%). Re-optimized component ablations attribute most of this gain to HRR and acute TRIMP. Soft-ramped trail GAP scales reduced steep-terrain segment MAE by ≈46%. Prospective simulations select the fastest constant HRR historically sustainable for the predicted duration (power-law HRR–duration envelope; hold-outs excluded)—e.g. LUT/Passerelles/Grésivaudan at HRR≈0.78, Échappée Belle at 0.75—yielding finish times near observed when race effort matched the envelope (Grésivaudan +6.7 min; Échappée −73 min vs −164 at HRR_ref), while a road marathon (Rome) still failed to transfer. Publication assets: `docs/science/paper/`.
 
 **Keywords:** trail running; digital twin; heart-rate reserve; TRIMP; performance prediction; leave-one-out; grade-adjusted pace
 
@@ -41,7 +41,7 @@ We deliberately defer multi-athlete transfer, sensor fusion, and product UX to a
 
 - **RQ1.** Does an athlete-specific HRR+TRIMP digital twin reduce LOO race-time error relative to physics-only references on diverse trail/road hard efforts?  
 - **RQ2.** How do errors distribute across terrain classes (flat, climb, steep climb/descent)?  
-- **RQ3.** Can the same calibrated twin produce **prospective** constant-\(\mathrm{HRR}_{\mathrm{ref}}\) race predictions (\(E=1\) reference effort) that are plausibly faster than realized race times when observed mean HRR was below \(\mathrm{HRR}_{\mathrm{ref}}\)?
+- **RQ3.** Can the same calibrated twin produce **prospective** constant-HRR race predictions using an **HRR–duration sustainability envelope** (fastest historically feasible constant HRR for the predicted finish time)?
 
 ---
 
@@ -151,7 +151,7 @@ F = \max\bigl(F_{\min},\, 1-\kappa\cdot\mathrm{TRIMP}_{\mathrm{cum}}/\mathrm{TRI
 **Prediction modes.**
 
 1. **Reconstruction** with observed HR (diagnostic fit).  
-2. **Prospective race** with **constant HRR = \(\mathrm{HRR}_{\mathrm{ref}}\)** on a pre-race profile (race_pacing D+ + GPX altitude, or executed GPS geometry)—no target-race HR/times in the fit. This is a **reference-effort scenario** (\(E=1\) when fresh), not a free “effort modulator” sweep and not a claim that 0.88 equals lab VMA heart rate.
+2. **Prospective race** with a **duration-feasible constant HRR**: sweep HRR on the planned profile, keep only values whose predicted finish time is ≤ the athlete’s historically maintainable duration at that HRR (power-law envelope from other activities), and select the fastest feasible. \(\mathrm{HRR}_{\mathrm{ref}}\) still normalizes \(E\) (ceiling under `hrr_max_factor=1.0`); it is not the default race HRR and is not “HRR at VMA.” A companion reference-effort run at \(\mathrm{HRR}=\mathrm{HRR}_{\mathrm{ref}}\) is retained for comparison.
 
 ### 3.3 Experimental protocol
 
@@ -215,7 +215,7 @@ Prior to asymmetric trail GAP correction, hard-trail segment residuals showed op
 
 ### 4.5 Prospective constant-HRR predictions (E3)
 
-Holding out target races from estimation and simulating course profiles at constant \(\mathrm{HRR}=\mathrm{HRR}_{\mathrm{ref}}=0.88\) (so \(E=1\) when fresh under `hrr_max_factor=1.0`) produced predictions at or faster than observed moving times (Table 5): LUT By Night **−4.1 min**; Trail des Passerelles / Côte Rouge **−8.0 min**; Trail du Grésivaudan **−17.0 min**; Échappée Belle (parcours des crêtes) **−164 min**. LUT/Grésivaudan use planned `race_pacing` + GPX altitude; Échappée Belle and Passerelles use **executed activity GPS geometry** (no separate race_pacing file). Observed mean race HRR was below reference (≈0.80, 0.76, 0.74, and 0.65 respectively), so these forecasts are **reference-effort (\(E=1\)) scenarios**—not “HRR at VMA,” and not expected finish times under the athlete’s actual sub-reference pacing—especially Échappée Belle. Adding a non-fitted aid-time budget (8–12 min) moves LUT slightly slow and Grésivaudan to ≈−5 min (robustness R4)—aid explains part of the optimism without new physiology. A road marathon hold-out (Rome, **−79.2 min**) is treated as **out of scope** for the trail GAP twin (R5).
+Holding out target races from estimation and selecting the **fastest constant HRR sustainable for the predicted duration** (power-law HRR–duration envelope fit excluding hold-outs) produced Table 5: LUT By Night **HRR=0.78, +16.7 min**; Trail des Passerelles **0.78, +13.7 min**; Trail du Grésivaudan **0.78, +6.7 min**; Échappée Belle **0.75, −73.2 min**. Profiles: LUT/Grésivaudan = `race_pacing`+GPX altitude; Échappée/Passerelles = executed activity GPS. Companion **reference-effort** predictions at \(\mathrm{HRR}_{\mathrm{ref}}=0.88\) (\(E=1\)) remain faster (LUT −4.1; Passerelles −8.0; Grésivaudan −17.0; Échappée −164) and illustrate the gap between the effort ceiling and duration-feasible pacing. Observed mean HRR (≈0.80 / 0.76 / 0.74 / 0.65) is evaluation-only. Rome (**HRR=0.79, −62 min**) stays **out of scope** for the trail GAP twin (R5). Aid budgets (R4) still apply as non-fitted post-hoc adjustments.
 
 Finish-time bands (R9) now satisfy P05 < P50 < P95 with multi-minute spread (α/κ jitter + LOO residual noise). Race- vs segment-objective choice was frozen from mixed hard LOO without peeking at hold-outs (**activity** preferred; R2).
 
@@ -250,10 +250,10 @@ Two segment-level optimisations refine the twin beyond activity-level (α, κ) s
 | **Moving time + slight rejection cleans dwell** | §7 pipeline: **4** unfit segments (0.17%); slight alone on clock time can worsen LOO. |
 | **Trail GAP scales fix steep physics** | Combined steep MAE **3.05 → 1.64 min (−46%)**; race LOO only ~0.25 min better on mixed hard—terrain consistency, not finish-time chasing. |
 | **Fit objective matters on race dates** | Activity vs segment LOO MAE **11.8 vs 7.7 min** on selected races; nearly tied on mixed hard (~9.1 vs 9.3). |
-| **Prospective = reference effort (\(E=1\))** | Constant \(\mathrm{HRR}=\mathrm{HRR}_{\mathrm{ref}}=0.88\): LUT **−4.1** (obs≈0.80); Passerelles **−8.0** (≈0.76); Grésivaudan **−17.0** (≈0.74); Échappée **−164** (≈0.65); Rome **−79.2** (road, out of scope). Not “HRR at VMA.” |
+| **Prospective = duration-feasible HRR** | Fastest constant HRR with predicted \(T\) ≤ max sustainable duration: LUT/Passerelles/Grésivaudan **0.78** (Δ +16.7 / +13.7 / +6.7 min); Échappée **0.75** (−73); Rome **0.79** (−62, out of scope). Reference \(E=1\) at 0.88 remains a ceiling companion. |
 | **Prospective uncertainty bands** | R9 bands use α/κ jitter + LOO residual noise (P05 < P50 < P95). |
 
-**Interpretation.** On this athlete, continuous HRR is the principal incremental predictor beyond a matched physics twin; acute TRIMP is the complementary fatigue channel; asymmetric trail GAP scales restore local climb/descent behaviour; prospective forecasts at \(\mathrm{HRR}=\mathrm{HRR}_{\mathrm{ref}}\) (\(E=1\) reference effort) are coherent trail envelopes when observed race HRR was below reference, but must not be over-claimed as expected finish times, “HRR at VMA,” or road-ready predictions.
+**Interpretation.** On this athlete, continuous HRR is the principal incremental predictor beyond a matched physics twin; acute TRIMP is the complementary fatigue channel; asymmetric trail GAP scales restore local climb/descent behaviour; prospective forecasts should use a **duration-feasible** constant HRR (historical maintainability), with \(\mathrm{HRR}_{\mathrm{ref}}\) as the \(E=1\) ceiling—not as the default race HRR, and not as “HRR at VMA.”
 
 ---
 
@@ -427,7 +427,7 @@ See `bibliography_hr_digital_twin.md` for extended notes and venue links.
 - **Primary LOO:** hard run/trail **MAE 9.09 min**, MAPE **6.5%**, *R*² **0.982** (physics M0 **30.2 min**).
 - **Ablations (reoptimize, R1-aligned):** −HRR **+13.5**; −TRIMP **+15.6**; −GAP **+9.6** min.
 - **Steep terrain:** combined MAE **3.05 → 1.64 min (−46%)**.
-- **Prospective:** LUT **−4.1**; Passerelles **−8.0**; Grésivaudan **−17** (≈**−5** with 12 min aid); Échappée **−164** (obs HRR≈0.65); Rome **out of scope**.
+- **Prospective (duration-feasible):** LUT **+16.7** (HRR 0.78); Passerelles **+13.7** (0.78); Grésivaudan **+6.7** (0.78); Échappée **−73** (0.75); Rome **out of scope**. Reference \(E=1\) companions: −4.1 / −8.0 / −17 / −164.
 - **Robustness R1–R11:** `robustness_experiments_report.md` (11 pass).
 - **Next:** multi-athlete (B1); DEM/aid logs (B3/B5).
 - **Submit toward:** IJSPP / JSS / EJSS / ECSS — **not Sensors**.

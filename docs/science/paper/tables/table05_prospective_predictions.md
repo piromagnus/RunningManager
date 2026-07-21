@@ -1,11 +1,11 @@
-**Table 5. Prospective constant-HRR race predictions with finish-time uncertainty bands.**
+**Table 5. Prospective duration-feasible constant-HRR race predictions with finish-time uncertainty bands.**
 
-| Race | Profile | Predicted moving time | Observed moving time | Δ (min) | Observed mean HRR | P05 finish | P50 finish | P95 finish | Constant HRR | α | κ |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Lyon Urban Trail By Night 2025 | race_pacing_gpxalt | 2:53:10 | 2:57:18 | -4.1 | 0.8 | 2:14:49 | 3:02:35 | 3:44:33 | 0.88 | 0.95 | 0.4 |
-| Trail du Grésivaudan 2026 : Le Grand V | race_pacing_gpxalt | 3:16:00 | 3:32:59 | -17.0 | 0.73 | 2:35:50 | 3:25:02 | 4:07:24 | 0.88 | 0.95 | 0.4 |
-| Echappée Belle 2025 : Parcours des crêtes | activity_timeseries | 9:00:09 | 11:44:16 | -164.1 | 0.65 | 8:03:15 | 9:27:09 | 10:54:41 | 0.88 | 0.95 | 0.4 |
-| Trail de côte rouge 2025 (Passerelle de Monteynard) | activity_timeseries | 3:04:15 | 3:12:12 | -8.0 | 0.76 | 2:25:03 | 3:13:35 | 3:56:21 | 0.88 | 0.95 | 0.4 |
-| Marathon de Rome 2026 | race_pacing_gpxalt | 2:28:01 | 3:47:14 | -79.2 | 0.73 | 1:56:53 | 2:39:09 | 3:17:14 | 0.88 | 0.95 | 0.4 |
+| Race | Profile | HRR mode | Constant HRR | Predicted moving time | Observed moving time | Δ (min) | Observed mean HRR | P05 finish | P50 finish | P95 finish | α | κ |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Lyon Urban Trail By Night 2025 | race_pacing_gpxalt | duration_feasible | 0.78 | 3:13:59 | 2:57:18 | 16.7 | 0.8 | 2:32:59 | 3:22:14 | 4:06:25 | 0.95 | 0.4 |
+| Trail du Grésivaudan 2026 : Le Grand V | race_pacing_gpxalt | duration_feasible | 0.78 | 3:39:39 | 3:32:59 | 6.7 | 0.73 | 2:54:53 | 3:46:48 | 4:32:08 | 0.95 | 0.4 |
+| Echappée Belle 2025 : Parcours des crêtes | activity_timeseries | duration_feasible | 0.75 | 10:31:02 | 11:44:16 | -73.2 | 0.65 | 9:30:50 | 10:59:49 | 12:41:34 | 0.95 | 0.4 |
+| Trail de côte rouge 2025 (Passerelle de Monteynard) | activity_timeseries | duration_feasible | 0.78 | 3:25:57 | 3:12:12 | 13.7 | 0.76 | 2:43:39 | 3:34:13 | 4:19:40 | 0.95 | 0.4 |
+| Marathon de Rome 2026 | race_pacing_gpxalt | duration_feasible | 0.79 | 2:44:53 | 3:47:14 | -62.4 | 0.73 | 2:13:16 | 2:57:07 | 3:39:09 | 0.95 | 0.4 |
 
-*Hold-out races were excluded from parameter estimation. Profiles are planned race_pacing+GPX altitude or executed activity GPS geometry (activity_timeseries). Predictions hold HRR = hrr_reference = 0.88 so E=1 when fresh (reference effort / effort ceiling under hrr_max_factor=1.0 — not 'HRR at VMA'). Δ is predicted − observed moving time; large negative Δ when observed mean HRR was below HRR_ref is a reference-effort scenario, not an expected finish time.*
+*Hold-out races were excluded from parameter estimation and from the HRR–duration power-law envelope. Primary predictions use the fastest constant HRR historically sustainable for the predicted finish time (duration_feasible). HRR_ref=0.88 remains the E=1 normalization/ceiling (not HRR at VMA); referencePredictedSec is kept for comparison. Δ is predicted − observed moving time.*

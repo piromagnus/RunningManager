@@ -85,5 +85,6 @@
     "gap_climb_scale": 0.85,
     "gap_descent_scale": 1.6
   },
-  "gitSha": "45a982a0043e490851687133cc22d690c27b8540"
+  "gitSha": "45a982a0043e490851687133cc22d690c27b8540",
+  "prospective_hrr_mode": "duration-feasible"
 }

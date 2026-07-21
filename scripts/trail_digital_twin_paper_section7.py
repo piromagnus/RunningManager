@@ -44,8 +44,11 @@ HOLDOUT_ACTIVITY_IDS = _pred.HOLDOUT_ACTIVITY_IDS
 RACES = _pred.RACES
 attach_altitude_from_gpx = _pred.attach_altitude_from_gpx
 fit_stage3 = _pred.fit_stage3
+fit_hrr_duration_power_law = _pred.fit_hrr_duration_power_law
+select_duration_feasible_constant_hrr = _pred.select_duration_feasible_constant_hrr
 segments_from_race_pacing = _pred.segments_from_race_pacing
 segments_from_activity_timeseries = _pred.segments_from_activity_timeseries
+predict_route = _pred.predict_route
 
 
 def load_train_segments_flexible(
@@ -354,8 +357,16 @@ def run_prospective_with_bands(
     output_dir: Path,
     physiology: dict[str, Any],
     loo_folds: pd.DataFrame,
-    hrr: float = 0.88,
+    hrr: float | None = None,
+    hrr_mode: str = "duration-feasible",
 ) -> pd.DataFrame:
+    """Prospective constant-HRR predictions with finish-time uncertainty bands.
+
+    Default ``hrr_mode=duration-feasible`` sweeps constant HRR and selects the
+    fastest value historically sustainable for the predicted duration (power-law
+    HRR–duration envelope, hold-outs excluded). Pass ``hrr`` or
+    ``hrr_mode=reference`` to force HRR = hrr_reference (E=1).
+    """
     races = {**RACES, **EXTRA_PROSPECTIVE}
     holdouts = tuple(sorted({*HOLDOUT_ACTIVITY_IDS, *(str(r["activityId"]) for r in races.values())}))
     train = load_train_segments_flexible(segment_predictions_csv, set(holdouts), cohort="hardRunOrTrailRun")
@@ -363,6 +374,34 @@ def run_prospective_with_bands(
         logger.warning("No train segments for prospective bands; skipping")
         return pd.DataFrame()
     best = fit_stage3(train, physiology, objective="race")
+    athlete_path = REPO_ROOT / "data" / "athlete.csv"
+    athlete = pd.read_csv(athlete_path).iloc[0] if athlete_path.exists() else None
+    hr_rest = float(athlete["hrRest"]) if athlete is not None else np.nan
+    hr_max = float(athlete["hrMax"]) if athlete is not None else np.nan
+
+    power_law_params: dict[str, Any] | None = None
+    use_duration = hrr is None and hrr_mode == "duration-feasible"
+    if use_duration and np.isfinite(hr_rest) and np.isfinite(hr_max):
+        power_law_params, windows = fit_hrr_duration_power_law(
+            data_dir=REPO_ROOT / "data",
+            holdout_ids=set(holdouts),
+            hr_rest=hr_rest,
+            hr_max=hr_max,
+        )
+        _write_csv(windows, output_dir / "hrr_duration_power_law_windows.csv")
+        (output_dir / "hrr_duration_power_law_params.json").write_text(
+            json.dumps(power_law_params, indent=2, default=str) + "\n",
+            encoding="utf-8",
+        )
+        logger.info(
+            "Prospective HRR mode=duration-feasible (coef=%.3f exp=%.3f)",
+            float(power_law_params.get("coefficient", float("nan"))),
+            float(power_law_params.get("exponent", float("nan"))),
+        )
+    elif hrr is None:
+        hrr = float(physiology.get("hrr_reference", 0.88))
+        logger.info("Prospective HRR mode=reference (hrr=%.3f)", hrr)
+
     rows: list[dict[str, object]] = []
     for race_key, race in races.items():
         if race.get("profile_source") == "activity_timeseries":
@@ -385,46 +424,55 @@ def run_prospective_with_bands(
         if route.empty:
             logger.warning("Empty route for %s", race_key)
             continue
-        sim = tpm.simulate_constant_hrr_route(
-            route,
-            hrr=hrr,
-            v_anchor_kmh=float(physiology["vma_flat_kmh"]),
-            alpha=float(best["alpha"]),
-            fatigue_coef=float(best["fatigueCoef"]),
-            fatigue_model=str(best["fatigueModel"]),
-            hrr_reference=float(physiology["hrr_reference"]),
-            hrr_min_factor=float(physiology["hrr_min_factor"]),
-            hrr_max_factor=float(physiology["hrr_max_factor"]),
-            min_fatigue_factor=float(physiology["min_fatigue_factor"]),
-            decay_lambda=float(physiology.get("decay_lambda", 0.2)),
-            gap_steep_threshold=float(physiology.get("gap_steep_threshold", 0.15)),
-            gap_soft_start=float(physiology.get("gap_soft_start", 0.04)),
-            gap_climb_scale=float(physiology.get("gap_climb_scale", 1.0)),
-            gap_descent_scale=float(physiology.get("gap_descent_scale", 1.0)),
-            fatigue_input_col="cumTrimpBefore",
-        )
+
+        if power_law_params is not None:
+            chosen, sweep = select_duration_feasible_constant_hrr(
+                route,
+                fit=best,
+                physiology=physiology,
+                power_law_params=power_law_params,
+                hr_rest=hr_rest,
+                hr_max=hr_max,
+            )
+            chosen_hrr = float(chosen["hrr"])
+            hrr_mode_used = "duration_feasible"
+            feasible = bool(chosen.get("feasible", False))
+            max_sustainable = float(chosen.get("maxSustainableSec", float("nan")))
+            margin_min = float(chosen.get("sustainabilityMarginMin", float("nan")))
+            _write_csv(sweep, output_dir / f"prospective_{race_key}_hrr_sweep.csv")
+        else:
+            chosen_hrr = float(hrr if hrr is not None else physiology.get("hrr_reference", 0.88))
+            hrr_mode_used = "reference" if hrr_mode == "reference" else "fixed"
+            feasible = np.nan
+            max_sustainable = np.nan
+            margin_min = np.nan
+
+        sim = predict_route(route, hrr=chosen_hrr, fit=best, physiology=physiology)
         pred_sec = float(sim["predictedTimeSec"].sum())
+        ref_sim = predict_route(
+            route,
+            hrr=float(physiology.get("hrr_reference", 0.88)),
+            fit=best,
+            physiology=physiology,
+        )
+        ref_sec = float(ref_sim["predictedTimeSec"].sum())
         bands = finish_time_uncertainty_bands(
             route,
             loo_folds[loo_folds["cohort"].astype(str).eq("hardRunOrTrailRun")]
             if not loo_folds.empty and "cohort" in loo_folds.columns
             else loo_folds,
             physiology=physiology,
-            hrr=hrr,
+            hrr=chosen_hrr,
         )
         actual_sec = np.nan
         observed_hrr = np.nan
         act_path = REPO_ROOT / "data" / "activities.csv"
-        athlete_path = REPO_ROOT / "data" / "athlete.csv"
         if act_path.exists():
             acts = pd.read_csv(act_path, dtype={"activityId": str})
             hit = acts[acts["activityId"].astype(str).eq(str(race["activityId"]))]
             if not hit.empty:
                 actual_sec = float(pd.to_numeric(hit.iloc[0]["movingSec"], errors="coerce"))
-                if athlete_path.exists() and "avgHr" in hit.columns:
-                    athlete = pd.read_csv(athlete_path).iloc[0]
-                    hr_rest = float(athlete["hrRest"])
-                    hr_max = float(athlete["hrMax"])
+                if athlete is not None and "avgHr" in hit.columns:
                     avg_hr = float(pd.to_numeric(hit.iloc[0]["avgHr"], errors="coerce"))
                     if np.isfinite(avg_hr) and hr_max > hr_rest:
                         observed_hrr = (avg_hr - hr_rest) / (hr_max - hr_rest)
@@ -433,6 +481,7 @@ def run_prospective_with_bands(
             "label": race["label"],
             "activityId": race["activityId"],
             "profileSource": profile_source,
+            "hrrMode": hrr_mode_used,
             "predictedSec": pred_sec,
             "actualMovingSec": actual_sec,
             "deltaMin": (pred_sec - actual_sec) / 60.0 if np.isfinite(actual_sec) else np.nan,
@@ -440,7 +489,12 @@ def run_prospective_with_bands(
             "alpha": best["alpha"],
             "fatigueCoef": best["fatigueCoef"],
             "fatigueModel": best["fatigueModel"],
-            "hrr": hrr,
+            "hrr": chosen_hrr,
+            "hrrFeasible": feasible,
+            "maxSustainableSec": max_sustainable,
+            "sustainabilityMarginMin": margin_min,
+            "referenceHrr": float(physiology.get("hrr_reference", 0.88)),
+            "referencePredictedSec": ref_sec,
             **bands,
         }
         rows.append(row)
@@ -648,7 +702,7 @@ def main() -> int:
                 loo_folds=loo_all[loo_all["stage"].astype(str).str.contains("Stage 3 HRR speed ratio LOO", regex=False)]
                 if not loo_all.empty
                 else loo_all,
-                hrr=float(physiology.get("hrr_reference", 0.88)),
+                hrr_mode="duration-feasible",
             )
 
     # Copy frozen race protocol + status checklist

@@ -5,8 +5,9 @@ Companion to `trail_digital_twin_hr_performance_paper_draft.md` §7 and
 
 **Canonical headline (single athlete, §7 pipeline):** hard run/trail LOO MAE
 **9.09 min** (MAPE 6.5%) vs physics baseline **30.2 min**; steep terrain MAE
-**−46%**; prospective LUT **−4.1**, Passerelles **−8.0**, Grésivaudan **−17.0**
-(≈−5 with aid), Échappée Belle **−164** (obs HRR≈0.65), Rome **out of scope**.
+**−46%**; prospective **duration-feasible** HRR: LUT **+16.7**, Passerelles **+13.7**,
+Grésivaudan **+6.7**, Échappée **−73** (HRR≈0.78/0.78/0.78/0.75); Rome **out of scope**.
+Reference \(E=1\) companions at HRR_ref=0.88: −4.1 / −8.0 / −17 / −164.
 
 **Robustness suite:** `docs/science/robustness_experiments_report.md` (R1–R11; all pass).
 

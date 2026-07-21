@@ -142,3 +142,22 @@ PYTHONPATH=/workspace uv run python scripts/predict_race_constant_hrr.py --fit-o
 - `data/exp_perf_predictions/trail_digital_twin_race_prediction/` — primary (race objective)
 - `…/trail_digital_twin_race_prediction_segment/` — conservative companion
 - Sensitivities: `hrr_sensitivity_race_pacing.csv`, `cohort_sensitivity.csv`, `altitude_sensitivity.csv`
+
+
+---
+
+## Addendum — duration-feasible HRR (2026-07-21)
+
+Primary prospective mode is now **duration-feasible**: sweep constant HRR, keep
+only values where predicted finish ≤ power-law max maintainable duration at that
+HRR (hold-outs excluded from envelope), pick fastest feasible.
+
+| Race | Feasible HRR | Δ min | Reference E=1 Δ (HRR_ref=0.88) |
+|------|--------------|-------|-------------------------------|
+| LUT | 0.78 | +16.7 | −4.1 |
+| Passerelles | 0.78 | +13.7 | −8.0 |
+| Grésivaudan | 0.78 | +6.7 | −17.0 |
+| Échappée Belle | 0.75 | −73.2 | −164 |
+| Rome | 0.79 | −62.4 | −79 (out of scope) |
+
+`--hrr-mode reference` restores the previous E=1 ceiling scenario.

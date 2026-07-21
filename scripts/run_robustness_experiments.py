@@ -325,7 +325,7 @@ def run_r9_bands(section7: Path, out_dir: Path) -> dict[str, Any]:
         output_dir=out_dir / "prospective",
         physiology=config["physiology"],
         loo_folds=loo,
-        hrr=0.88,
+        hrr_mode="duration-feasible",
     )
     ok = False
     if not bands.empty:

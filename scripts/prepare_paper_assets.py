@@ -213,10 +213,13 @@ def table_prospective(src: Path) -> pd.DataFrame:
             if "observedMeanHrr" in raw.columns and pd.notna(row["observedMeanHrr"])
             else np.nan
         )
+        hrr_mode = str(row["hrrMode"]) if "hrrMode" in raw.columns else ""
         rows.append(
             {
                 "Race": row["label"],
                 "Profile": profile,
+                "HRR mode": hrr_mode,
+                "Constant HRR": round(float(row["hrr"]), 2),
                 "Predicted moving time": _fmt_hms(float(row["predictedSec"])),
                 "Observed moving time": _fmt_hms(float(row["actualMovingSec"])),
                 "Δ (min)": round(float(row["deltaMin"]), 1),
@@ -224,7 +227,6 @@ def table_prospective(src: Path) -> pd.DataFrame:
                 "P05 finish": _fmt_hms(float(row["finishSecP05"])),
                 "P50 finish": _fmt_hms(float(row["finishSecP50"])),
                 "P95 finish": _fmt_hms(float(row["finishSecP95"])),
-                "Constant HRR": round(float(row["hrr"]), 2),
                 "α": round(float(row["alpha"]), 2),
                 "κ": round(float(row["fatigueCoef"]), 2),
             }
@@ -485,12 +487,12 @@ def write_tables(src: Path, out_dir: Path) -> dict[str, Path]:
         "table05_prospective_predictions": (
             table_prospective(src),
             "Table 5. Prospective constant-HRR race predictions with finish-time uncertainty bands.",
-            "Hold-out races were excluded from parameter estimation. Profiles are planned "
-            "race_pacing+GPX altitude or executed activity GPS geometry (activity_timeseries). "
-            "Predictions hold HRR = hrr_reference = 0.88 so E=1 when fresh "
-            "(reference effort / effort ceiling under hrr_max_factor=1.0 — not 'HRR at VMA'). "
-            "Δ is predicted − observed moving time; large negative Δ when observed mean HRR "
-            "was below HRR_ref is a reference-effort scenario, not an expected finish time.",
+            "Hold-out races were excluded from parameter estimation and from the "
+            "HRR–duration power-law envelope. Primary predictions use the fastest "
+            "constant HRR historically sustainable for the predicted finish time "
+            "(duration_feasible). HRR_ref=0.88 remains the E=1 normalization/ceiling "
+            "(not HRR at VMA); referencePredictedSec is kept for comparison. "
+            "Δ is predicted − observed moving time.",
         ),
         "table06_speed_vs_hrr_flat": (
             table_speed_hrr_excerpt(src),

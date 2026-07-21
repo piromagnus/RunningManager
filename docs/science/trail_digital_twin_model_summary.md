@@ -57,16 +57,17 @@ These change when the athlete changes (fitness, aging, device HR).
 
 ---
 
-## Prospective race prediction (constant \(\mathrm{HRR}_{\mathrm{ref}}\))
+## Prospective race prediction (duration-feasible constant HRR)
 
-**Idea:** Before the race, hold **HRR = `hrr_reference`** so the effort multiplier \(E=1\) when fresh (with paper `hrr_max_factor=1.0`), accumulate predicted TRIMP along the **planned profile**, and sum segment times. This is a **reference-effort scenario**, not “HRR at VMA” and not a free effort-modulator sweep.
+**Idea:** Before the race, sweep constant HRR on the planned profile. For each candidate \(x\), predict finish time \(T(x)\) and keep \(x\) only if \(T(x)\) ≤ the athlete’s historically maintainable duration at HRR \(x\) (power-law envelope from other activities). Select the **fastest feasible** HRR. \(\mathrm{HRR}_{\mathrm{ref}}\) remains the \(E=1\) normalization/ceiling—not the default race HRR and not “HRR at VMA.”
 
 | Allowed as input | Forbidden for estimation |
 |------------------|--------------------------|
 | GPX / planned race profile (distance, elevation) | Observed race HR stream |
 | Athlete HR limits, VMA, \(\alpha,\kappa\) fitted on **other** activities | Observed race segment times / moving time |
+| HRR–duration envelope from **other** activities | Hold-out races in the envelope fit |
 | Readiness if known a priori | Fitting \(\alpha\) on the race itself |
 
-**Constant reference effort** (v1): HRR = `hrr_reference` ⇒ \(E=1\). Raising HRR above ref cannot increase speed under `hrr_max_factor=1.0`; it only adds TRIMP. Optional: sweep HRR and pick fastest *historically feasible* from an envelope that also excludes the target races.
+**Modes:** `duration-feasible` (default prospective) vs `reference` (hold HRR = `hrr_reference` for \(E=1\) ceiling comparison). Optional: `--hard-hrr` fixed override.
 
 Prediction should usually be **slightly faster** than a near-max executed race (small pacing/aid inefficiencies remain in reality).

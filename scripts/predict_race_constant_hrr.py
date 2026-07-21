@@ -4,15 +4,20 @@ SPDX-License-Identifier: GPL-3.0-or-later
 Prospective constant-HRR race prediction from a planned profile.
 
 Fits Stage 3 alpha/fatigue on other activities only (hold-out races excluded),
-then predicts courses at HRR = hrr_reference (E=1 reference effort; not HRR at VMA).
+then predicts courses at a constant HRR. Default mode selects the fastest HRR
+that is historically sustainable for the predicted duration (power-law
+HRR–duration envelope). Optional ``--hrr-mode reference`` holds HRR =
+hrr_reference (E=1 when fresh; not HRR at VMA).
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import logging
 import sys
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -23,6 +28,28 @@ if str(REPO_ROOT) not in sys.path:
 
 from services import trail_performance_model as tpm  # noqa: E402
 from utils.gpx_parser import parse_gpx_to_timeseries  # noqa: E402
+
+logger = logging.getLogger(__name__)
+
+# Representative windows for the sustainable-HRR power law (minutes).
+DEFAULT_DURATION_WINDOWS_MIN = (
+    5,
+    10,
+    15,
+    20,
+    30,
+    45,
+    60,
+    90,
+    120,
+    180,
+    240,
+    360,
+    480,
+    720,
+    960,
+    1440,
+)
 
 HOLDOUT_ACTIVITY_IDS = (
     "17481444994",  # Grésivaudan
@@ -277,6 +304,110 @@ def predict_route(
     )
 
 
+def fit_hrr_duration_power_law(
+    *,
+    data_dir: Path,
+    holdout_ids: set[str],
+    hr_rest: float,
+    hr_max: float,
+    duration_windows_min: tuple[float, ...] = DEFAULT_DURATION_WINDOWS_MIN,
+) -> tuple[dict[str, Any], pd.DataFrame]:
+    """Fit sustainable HRR vs duration, excluding prospective hold-out activities."""
+    metrics = pd.read_csv(data_dir / "activities_metrics.csv", dtype={"activityId": str})
+    if "activityId" in metrics.columns and holdout_ids:
+        before = len(metrics)
+        metrics = metrics[~metrics["activityId"].astype(str).isin(holdout_ids)].copy()
+        dropped = before - len(metrics)
+        if dropped:
+            logger.info(
+                "Excluded %d hold-out activities from HRR–duration envelope fit",
+                dropped,
+            )
+    params, windows = tpm.estimate_hrr_duration_power_law(
+        metrics,
+        duration_windows_min=list(duration_windows_min),
+        hr_rest=hr_rest,
+        hr_max=hr_max,
+        hrr_min=0.30,
+        hrr_max=0.98,
+        target_stat="max",
+        target_quantile=0.90,
+        min_activity_count=3,
+        fit_weight_mode="performance",
+        fit_weight_power=10.0,
+        categories=("RUN", "TRAIL_RUN"),
+    )
+    return dict(params), windows
+
+
+def select_duration_feasible_constant_hrr(
+    segments: pd.DataFrame,
+    *,
+    fit: dict[str, object],
+    physiology: dict[str, float],
+    power_law_params: dict[str, Any],
+    hr_rest: float | None = None,
+    hr_max: float | None = None,
+    hrr_min: float = 0.50,
+    hrr_step: float = 0.01,
+    fatigue_input_col: str = "cumTrimpBefore",
+) -> tuple[pd.Series, pd.DataFrame]:
+    """Sweep constant HRR and pick the fastest historically sustainable value.
+
+    For each candidate HRR ``x``, predict finish time ``T(x)`` and compare to the
+    power-law max duration maintainable at ``x``. Selection is the fastest
+    feasible row (``select_best_constant_hrr``).
+    """
+    hrr_ref = float(physiology["hrr_reference"])
+    # Above HRR_ref, E cannot rise under hrr_max_factor=1.0; only TRIMP grows.
+    hrr_max_grid = min(hrr_ref, 0.98)
+    hrr_values = np.round(np.arange(hrr_min, hrr_max_grid + 0.5 * hrr_step, hrr_step), 4)
+    sweep = tpm.sweep_constant_hrr_route(
+        segments,
+        hrr_values=hrr_values,
+        v_anchor_kmh=float(physiology["vma_flat_kmh"]),
+        alpha=float(fit["alpha"]),
+        fatigue_coef=float(fit["fatigueCoef"]),
+        fatigue_model=str(fit["fatigueModel"]),
+        hrr_reference=hrr_ref,
+        hrr_min_factor=float(physiology["hrr_min_factor"]),
+        hrr_max_factor=float(physiology["hrr_max_factor"]),
+        decay_lambda=float(physiology["decay_lambda"]),
+        min_fatigue_factor=float(physiology["min_fatigue_factor"]),
+        load_factor=1.0,
+        hr_rest=hr_rest,
+        hr_max=hr_max,
+        fatigue_input_col=fatigue_input_col,
+        gap_steep_threshold=float(physiology["gap_steep_threshold"]),
+        gap_soft_start=float(physiology["gap_soft_start"]),
+        gap_climb_scale=float(physiology["gap_climb_scale"]),
+        gap_descent_scale=float(physiology["gap_descent_scale"]),
+    )
+    sweep = sweep.copy()
+    sweep["maxSustainableSec"] = sweep["hrr"].map(
+        lambda hrr: tpm.max_duration_for_hrr_power_law(float(hrr), power_law_params)
+    )
+    sweep["maxSustainableHours"] = sweep["maxSustainableSec"] / 3600.0
+    sweep["sustainabilityMarginMin"] = (
+        sweep["maxSustainableSec"] - sweep["predictedTimeSec"]
+    ) / 60.0
+    sweep["feasible"] = sweep["predictedTimeSec"].le(sweep["maxSustainableSec"])
+    sweep["durationModel"] = "power_law"
+    best = tpm.select_best_constant_hrr(sweep)
+    if best.empty:
+        logger.warning("Empty HRR sweep; falling back to hrr_reference=%.2f", hrr_ref)
+        return pd.Series({"hrr": hrr_ref, "feasible": False}), sweep
+    if not bool(best.get("feasible", False)):
+        logger.warning(
+            "No feasible constant HRR on envelope; using least-infeasible hrr=%.3f "
+            "(pred=%.0fs, maxSustainable=%.0fs)",
+            float(best["hrr"]),
+            float(best.get("predictedTimeSec", float("nan"))),
+            float(best.get("maxSustainableSec", float("nan"))),
+        )
+    return best, sweep
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -298,7 +429,21 @@ def main() -> None:
         default="race_pacing_gpxalt",
     )
     parser.add_argument("--fit-objective", choices=("race", "segment"), default="race")
-    parser.add_argument("--hard-hrr", type=float, default=None, help="Override constant hard HRR")
+    parser.add_argument(
+        "--hrr-mode",
+        choices=("duration-feasible", "reference"),
+        default="duration-feasible",
+        help=(
+            "duration-feasible: fastest constant HRR sustainable for predicted duration "
+            "(power-law envelope). reference: hold HRR=hrr_reference (E=1)."
+        ),
+    )
+    parser.add_argument(
+        "--hard-hrr",
+        type=float,
+        default=None,
+        help="Force a fixed constant HRR (overrides --hrr-mode)",
+    )
     args = parser.parse_args()
 
     physiology = {
@@ -313,7 +458,6 @@ def main() -> None:
         "gap_climb_scale": 0.85,
         "gap_descent_scale": 1.60,
     }
-    hard_hrr = float(args.hard_hrr) if args.hard_hrr is not None else float(physiology["hrr_reference"])
     holdout = set(HOLDOUT_ACTIVITY_IDS)
 
     train = load_train_segments(args.predictions_csv, holdout, cohort="hardRunOrTrailRun")
@@ -329,6 +473,27 @@ def main() -> None:
     activities = pd.read_csv(REPO_ROOT / "data" / "activities.csv", dtype={"activityId": str})
     athlete = pd.read_csv(REPO_ROOT / "data" / "athlete.csv").iloc[0]
     hr_rest, hr_max = float(athlete["hrRest"]), float(athlete["hrMax"])
+
+    power_law_params: dict[str, Any] | None = None
+    if args.hard_hrr is None and args.hrr_mode == "duration-feasible":
+        power_law_params, _windows = fit_hrr_duration_power_law(
+            data_dir=REPO_ROOT / "data",
+            holdout_ids=holdout,
+            hr_rest=hr_rest,
+            hr_max=hr_max,
+        )
+        print(
+            "HRR–duration power law:",
+            json.dumps(
+                {
+                    "coefficient": power_law_params.get("coefficient"),
+                    "exponent": power_law_params.get("exponent"),
+                    "maeHrr": power_law_params.get("maeHrr"),
+                    "fitWindowCount": power_law_params.get("fitWindowCount"),
+                },
+                indent=2,
+            ),
+        )
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
     summary_rows: list[dict[str, object]] = []
@@ -359,21 +524,65 @@ def main() -> None:
             if segments.empty:
                 print(f"skip empty profile {race_key}/{source_name}")
                 continue
-            pred = predict_route(segments, hrr=hard_hrr, fit=fit, physiology=physiology)
+            if args.hard_hrr is not None:
+                chosen_hrr = float(args.hard_hrr)
+                hrr_mode = "fixed_override"
+                feasible = np.nan
+                max_sustainable = np.nan
+                margin_min = np.nan
+                sweep = pd.DataFrame()
+            elif power_law_params is not None:
+                best, sweep = select_duration_feasible_constant_hrr(
+                    segments,
+                    fit=fit,
+                    physiology=physiology,
+                    power_law_params=power_law_params,
+                    hr_rest=hr_rest,
+                    hr_max=hr_max,
+                )
+                chosen_hrr = float(best["hrr"])
+                hrr_mode = "duration_feasible"
+                feasible = bool(best.get("feasible", False))
+                max_sustainable = float(best.get("maxSustainableSec", float("nan")))
+                margin_min = float(best.get("sustainabilityMarginMin", float("nan")))
+            else:
+                chosen_hrr = float(physiology["hrr_reference"])
+                hrr_mode = "reference"
+                feasible = np.nan
+                max_sustainable = np.nan
+                margin_min = np.nan
+                sweep = pd.DataFrame()
+
+            pred = predict_route(segments, hrr=chosen_hrr, fit=fit, physiology=physiology)
             pred_sec = float(pred["predictedTimeSec"].sum())
+            ref_pred = predict_route(
+                segments,
+                hrr=float(physiology["hrr_reference"]),
+                fit=fit,
+                physiology=physiology,
+            )
+            ref_sec = float(ref_pred["predictedTimeSec"].sum())
             row = {
                 "raceKey": race_key,
                 "label": meta["label"],
                 "profileSource": source_name,
                 "activityId": meta["activityId"],
-                "hardHrr": hard_hrr,
+                "hrrMode": hrr_mode,
+                "hardHrr": chosen_hrr,
+                "hrrFeasible": feasible,
+                "maxSustainableSec": max_sustainable,
+                "sustainabilityMarginMin": margin_min,
+                "referenceHrr": float(physiology["hrr_reference"]),
+                "referencePredictedSec": ref_sec,
                 "fitObjective": fit["fitObjective"],
                 "alpha": fit["alpha"],
                 "fatigueCoef": fit["fatigueCoef"],
                 "fatigueModel": fit["fatigueModel"],
                 "profileDistanceKm": float(segments["distanceKm"].sum()),
                 "profileElevGainM": float(segments["elevGainM"].sum()),
-                "profileMeanAltitudeM": float(pd.to_numeric(segments["meanAltitudeM"], errors="coerce").mean()),
+                "profileMeanAltitudeM": float(
+                    pd.to_numeric(segments["meanAltitudeM"], errors="coerce").mean()
+                ),
                 "predictedTimeSec": pred_sec,
                 "predictedTimeMin": pred_sec / 60.0,
                 "predictedHms": _fmt_hms(pred_sec),
@@ -388,8 +597,11 @@ def main() -> None:
             }
             summary_rows.append(row)
             pred.to_csv(args.output_dir / f"{race_key}_{source_name}_segments.csv", index=False)
+            if not sweep.empty:
+                sweep.to_csv(args.output_dir / f"{race_key}_{source_name}_hrr_sweep.csv", index=False)
             print(
-                f"{meta['label']} [{source_name}] pred={row['predictedHms']} "
+                f"{meta['label']} [{source_name}] hrr={chosen_hrr:.3f} ({hrr_mode}) "
+                f"pred={row['predictedHms']} "
                 f"actual_moving={row['actualMovingHms']} "
                 f"delta={row['deltaPredMinusActualMin']:+.1f} min "
                 f"(D+ profile={row['profileElevGainM']:.0f}m)"
@@ -400,17 +612,30 @@ def main() -> None:
     (args.output_dir / "fit_manifest.json").write_text(
         json.dumps(
             {
+                "holdoutActivityIds": sorted(holdout),
                 "fit": fit,
                 "physiology": physiology,
-                "hardHrr": hard_hrr,
-                "holdoutActivityIds": list(holdout),
-                "note": "Actual race times/HR are evaluation-only and were not used in fit or prediction.",
+                "hrrMode": args.hrr_mode if args.hard_hrr is None else "fixed_override",
+                "powerLawParams": {
+                    k: power_law_params.get(k)
+                    for k in ("coefficient", "exponent", "maeHrr", "fitWindowCount")
+                }
+                if power_law_params
+                else None,
+                "note": (
+                    "Actual race times/HR are evaluation-only. "
+                    "duration-feasible uses HRR–duration power law excluding hold-outs."
+                ),
             },
             indent=2,
+            default=str,
         )
+        + "\n",
+        encoding="utf-8",
     )
     print(f"\nWrote {args.output_dir / 'race_prediction_summary.csv'}")
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     main()

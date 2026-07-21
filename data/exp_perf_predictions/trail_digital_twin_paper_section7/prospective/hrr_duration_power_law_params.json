@@ -1,0 +1,22 @@
+{
+  "model": "hrr_duration_power_law",
+  "formula": "HRR(T_hours) = coefficient * T_hours ** exponent",
+  "coefficient": 0.8252577425196024,
+  "exponent": -0.03895490267022923,
+  "r2Log": 0.4241716543136428,
+  "weightedR2Log": 0.5394615912418746,
+  "maeHrr": 0.046051603693589925,
+  "weightedMaeHrr": 0.02217778092082512,
+  "targetStatistic": "max",
+  "targetQuantile": NaN,
+  "minActivityCount": 3,
+  "fitWeightMode": "performance",
+  "fitWeightPower": 10.0,
+  "fitWindowCount": 13,
+  "hrrMin": 0.3,
+  "hrrMax": 0.98,
+  "minWindowSec": 300.0,
+  "maxWindowSec": 86400.0,
+  "observedMinDurationSec": 332.0,
+  "observedMaxDurationSec": 33819.0
+}
