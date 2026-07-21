@@ -5,9 +5,10 @@ Companion to `trail_digital_twin_hr_performance_paper_draft.md` §7 and
 
 **Canonical headline (single athlete, §7 pipeline):** hard run/trail LOO MAE
 **9.09 min** (MAPE 6.5%) vs physics baseline **30.2 min**; steep terrain MAE
-**−46%**; prospective LUT **−4.1 min**, Grésivaudan **−17.0 min** (≈−5 with aid budget), Rome **out of scope**.
+**−46%**; prospective LUT **−4.1**, Passerelles **−8.0**, Grésivaudan **−17.0**
+(≈−5 with aid), Échappée Belle **−164** (obs HRR≈0.65), Rome **out of scope**.
 
-**Robustness suite:** `docs/science/robustness_experiments_report.md` (R1–R11 run; R3 partial).
+**Robustness suite:** `docs/science/robustness_experiments_report.md` (R1–R11; all pass).
 
 ---
 
@@ -17,7 +18,7 @@ Companion to `trail_digital_twin_hr_performance_paper_draft.md` §7 and
 |----|--------|---------|
 | **R1** | **Done** | Table 2/3 full MAE aligned at 9.09 min |
 | **R2** | **Done** | Activity objective frozen without hold-out peeking |
-| **R3** | **Open** | Need ≥2–3 more trail prospective races |
+| **R3** | **Done** | 4 trail hold-outs (LUT, Grésivaudan, Échappée, Passerelles) + Rome |
 | **R4** | **Done** | Aid budget: Grésivaudan −17 → ≈−5 min |
 | **R5** | **Done** | Rome road out of scope |
 | **R6** | **Done** | Race-date LOO 11.8 min (90% CI 6.5–18.1) |

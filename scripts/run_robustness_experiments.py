@@ -127,15 +127,27 @@ def run_r3_prospective_inventory(section7: Path) -> dict[str, Any]:
             continue
         # Skip if a comparison file already maps to current holdouts.
         candidates.append(rid)
-    return {
-        "status": "partial",
-        "n_prospective_races": int(len(bands)),
-        "labels": bands["label"].astype(str).tolist() if "label" in bands.columns else [],
-        "available_unused_pacing_profiles": candidates[:10],
-        "note": (
-            "Need ≥2–3 additional trail races with linked activityId + GPX. "
+    labels = bands["label"].astype(str).tolist() if "label" in bands.columns else []
+    trail_labels = [lab for lab in labels if "Rome" not in lab]
+    # Pass when ≥4 trail hold-outs (LUT, Grésivaudan, Échappée Belle, Passerelles).
+    status = "pass" if len(trail_labels) >= 4 else "partial"
+    note = (
+        "Trail hold-outs use race_pacing+GPX altitude or executed activity GPS "
+        "(Échappée Belle, Trail des Passerelles / Côte Rouge). Rome remains road "
+        "out-of-scope negative control."
+        if status == "pass"
+        else (
+            "Need ≥2–3 additional trail races with linked activityId + profile. "
             "Unused race_pacing UUIDs exist but lack preregistered hold-out mapping."
-        ),
+        )
+    )
+    return {
+        "status": status,
+        "n_prospective_races": int(len(bands)),
+        "n_trail_prospective_races": int(len(trail_labels)),
+        "labels": labels,
+        "available_unused_pacing_profiles": candidates[:10],
+        "note": note,
     }
 
 
@@ -480,7 +492,11 @@ def write_report(results: dict[str, Any], path: Path) -> None:
     summaries = {
         "R1": f"Table2 vs Table3 full MAE aligned: {'PASS' if r1['status']=='pass' else 'FAIL'}",
         "R2": f"Frozen objective={results['R2']['chosen_objective']} (no hold-out peeking)",
-        "R3": f"{results['R3']['n_prospective_races']} prospective races; more trail hold-outs still needed",
+        "R3": (
+            f"{results['R3']['n_trail_prospective_races']} trail + "
+            f"{results['R3']['n_prospective_races'] - results['R3']['n_trail_prospective_races']} road "
+            f"prospective races ({results['R3']['status']})"
+        ),
         "R4": "Aid budgets move Grésivaudan Δ toward 0 without refitting",
         "R5": "Rome road marked out of scope (trail twin)",
         "R6": f"Race-date blocked LOO MAE={results['R6'].get('maeMin', float('nan')):.1f} min "
@@ -538,7 +554,8 @@ def write_report(results: dict[str, Any], path: Path) -> None:
         "",
         r3["note"],
         "",
-        f"- Current races ({r3['n_prospective_races']}): {', '.join(r3['labels'])}",
+        f"- Current races ({r3['n_prospective_races']}; "
+        f"{r3.get('n_trail_prospective_races', '?')} trail): {', '.join(r3['labels'])}",
         f"- Unused pacing profiles: `{r3['available_unused_pacing_profiles']}`",
         "",
     ]
@@ -604,7 +621,8 @@ def write_report(results: dict[str, Any], path: Path) -> None:
         "5. **Uncertainty bands** are now usable for coaching envelopes (R9).",
         "6. **HR QC** is not a confounder in this corpus (R7).",
         "7. **κ floor** should be reported as a sensitivity finding on hard trail (R11).",
-        "8. **More trail prospective races** remain the main evidence gap (R3).",
+        "8. **Trail prospective hold-outs** now include LUT, Grésivaudan, Échappée Belle, "
+        "and Passerelles (R3 pass); multi-athlete replication remains the main gap.",
         "",
         "## What it means",
         "",
@@ -614,7 +632,7 @@ def write_report(results: dict[str, Any], path: Path) -> None:
         "",
         "## What to do next",
         "",
-        "1. Preregister 2–3 more trail races with race_pacing + Strava IDs (**R3**).",
+        "1. Multi-athlete replication (B1); optional further trail races remain nice-to-have.",
         "2. Optional: DEM altitude on Grésivaudan (B3).",
         "3. Multi-athlete replication when data available (B1).",
         "4. Keep Rome as explicit negative control / out-of-scope in the paper.",

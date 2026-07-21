@@ -207,12 +207,20 @@ def table_prospective(src: Path) -> pd.DataFrame:
     raw = pd.read_csv(path)
     rows = []
     for _, row in raw.iterrows():
+        profile = str(row["profileSource"]) if "profileSource" in raw.columns else ""
+        obs_hrr = (
+            round(float(row["observedMeanHrr"]), 2)
+            if "observedMeanHrr" in raw.columns and pd.notna(row["observedMeanHrr"])
+            else np.nan
+        )
         rows.append(
             {
                 "Race": row["label"],
+                "Profile": profile,
                 "Predicted moving time": _fmt_hms(float(row["predictedSec"])),
                 "Observed moving time": _fmt_hms(float(row["actualMovingSec"])),
                 "Δ (min)": round(float(row["deltaMin"]), 1),
+                "Observed mean HRR": obs_hrr,
                 "P05 finish": _fmt_hms(float(row["finishSecP05"])),
                 "P50 finish": _fmt_hms(float(row["finishSecP50"])),
                 "P95 finish": _fmt_hms(float(row["finishSecP95"])),
@@ -477,8 +485,10 @@ def write_tables(src: Path, out_dir: Path) -> dict[str, Path]:
         "table05_prospective_predictions": (
             table_prospective(src),
             "Table 5. Prospective constant-HRR race predictions with finish-time uncertainty bands.",
-            "Hold-out races were excluded from parameter estimation. Predictions use a planned "
-            "course profile at constant HRR = 0.88. Δ is predicted − observed moving time.",
+            "Hold-out races were excluded from parameter estimation. Profiles are planned "
+            "race_pacing+GPX altitude or executed activity GPS geometry (activity_timeseries). "
+            "Predictions use constant HRR = 0.88. Δ is predicted − observed moving time; "
+            "large negative Δ with submaximal observed mean HRR is an upper-bound hard-effort envelope.",
         ),
         "table06_speed_vs_hrr_flat": (
             table_speed_hrr_excerpt(src),

@@ -24,7 +24,12 @@ if str(REPO_ROOT) not in sys.path:
 from services import trail_performance_model as tpm  # noqa: E402
 from utils.gpx_parser import parse_gpx_to_timeseries  # noqa: E402
 
-HOLDOUT_ACTIVITY_IDS = ("17481444994", "16325125849")  # Grésivaudan, LUT By Night
+HOLDOUT_ACTIVITY_IDS = (
+    "17481444994",  # Grésivaudan
+    "16325125849",  # LUT By Night
+    "15563904138",  # Echappée Belle 2025
+    "15087396899",  # Trail des Passerelles / Côte Rouge 2025
+)
 
 RACES = {
     "lut_30k": {
@@ -38,6 +43,16 @@ RACES = {
         "activityId": "17481444994",
         "gpx": "divers/trail-du-gresivaudan-2026.gpx",
         "race_pacing_id": "c67065ad-ec3c-41ce-9388-d62acd4d1531",
+    },
+    "echappee_belle": {
+        "label": "Echappée Belle 2025 : Parcours des crêtes",
+        "activityId": "15563904138",
+        "profile_source": "activity_timeseries",
+    },
+    "trail_passerelles": {
+        "label": "Trail de côte rouge 2025 (Passerelle de Monteynard)",
+        "activityId": "15087396899",
+        "profile_source": "activity_timeseries",
     },
 }
 
@@ -102,6 +117,55 @@ def segments_from_race_pacing(csv_path: Path) -> pd.DataFrame:
             "meanHrReserve",
         ]
     ]
+
+
+def segments_from_activity_timeseries(
+    timeseries_csv: Path,
+    *,
+    segment_km: float = 1.0,
+) -> pd.DataFrame:
+    """Build a prospective route from a real executed activity GPS profile.
+
+    Uses geometry only (distance, grade, altitude). Observed HR/times are not
+    passed into the constant-HRR simulator; callers compare against activity
+    moving time separately after hold-out fitting.
+    """
+    raw = pd.read_csv(timeseries_csv)
+    if raw.empty:
+        return pd.DataFrame()
+    prepared = tpm.prepare_raw_timeseries_for_segments(raw)
+    segs = tpm.segment_timeseries(prepared, segment_km=segment_km)
+    if segs.empty:
+        return pd.DataFrame()
+    out = segs.copy()
+    out["activityId"] = "route"
+    # Prospective profile: strip observed effort/time from the simulator inputs.
+    out["actualTimeSec"] = np.nan
+    out["meanHrReserve"] = np.nan
+    if "gapFactorIntegrated" not in out.columns:
+        out["gapFactorIntegrated"] = out["avgGrade"].map(tpm.gap_factor)
+    if "gapFactorAvgGrade" not in out.columns:
+        out["gapFactorAvgGrade"] = out["gapFactorIntegrated"]
+    if "terrainFamily" not in out.columns:
+        out["terrainFamily"] = out["avgGrade"].map(tpm.terrain_family)
+    keep = [
+        "segmentIndex",
+        "startKm",
+        "endKm",
+        "distanceKm",
+        "elevGainM",
+        "elevLossM",
+        "meanAltitudeM",
+        "avgGrade",
+        "gapFactorIntegrated",
+        "gapFactorAvgGrade",
+        "terrainFamily",
+        "progress",
+        "activityId",
+        "actualTimeSec",
+        "meanHrReserve",
+    ]
+    return out[[c for c in keep if c in out.columns]].reset_index(drop=True)
 
 
 def load_train_segments(
@@ -277,15 +341,19 @@ def main() -> None:
         observed_hrr = (float(act["avgHr"]) - hr_rest) / (hr_max - hr_rest)
 
         sources: list[tuple[str, pd.DataFrame]] = []
-        pacing_path = REPO_ROOT / "data" / "race_pacing" / f"{meta['race_pacing_id']}_segments.csv"
-        gpx_path = REPO_ROOT / meta["gpx"]
-        if args.profile_source in ("race_pacing", "both"):
-            sources.append(("race_pacing", segments_from_race_pacing(pacing_path)))
-        if args.profile_source in ("race_pacing_gpxalt", "both"):
-            pacing = segments_from_race_pacing(pacing_path)
-            sources.append(("race_pacing_gpxalt", attach_altitude_from_gpx(pacing, gpx_path)))
-        if args.profile_source in ("gpx", "both"):
-            sources.append(("gpx", segments_from_gpx(gpx_path)))
+        if meta.get("profile_source") == "activity_timeseries":
+            ts_path = REPO_ROOT / "data" / "timeseries" / f"{meta['activityId']}.csv"
+            sources.append(("activity_timeseries", segments_from_activity_timeseries(ts_path)))
+        else:
+            pacing_path = REPO_ROOT / "data" / "race_pacing" / f"{meta['race_pacing_id']}_segments.csv"
+            gpx_path = REPO_ROOT / meta["gpx"]
+            if args.profile_source in ("race_pacing", "both"):
+                sources.append(("race_pacing", segments_from_race_pacing(pacing_path)))
+            if args.profile_source in ("race_pacing_gpxalt", "both"):
+                pacing = segments_from_race_pacing(pacing_path)
+                sources.append(("race_pacing_gpxalt", attach_altitude_from_gpx(pacing, gpx_path)))
+            if args.profile_source in ("gpx", "both"):
+                sources.append(("gpx", segments_from_gpx(gpx_path)))
 
         for source_name, segments in sources:
             if segments.empty:

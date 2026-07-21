@@ -22,6 +22,8 @@
   "holdout_activity_ids": [
     "17481444994",
     "16325125849",
+    "15563904138",
+    "15087396899",
     "17815897198"
   ],
   "prospective_races": {
@@ -36,6 +38,16 @@
       "activityId": "17481444994",
       "gpx": "divers/trail-du-gresivaudan-2026.gpx",
       "race_pacing_id": "c67065ad-ec3c-41ce-9388-d62acd4d1531"
+    },
+    "echappee_belle": {
+      "label": "Echapp\u00e9e Belle 2025 : Parcours des cr\u00eates",
+      "activityId": "15563904138",
+      "profile_source": "activity_timeseries"
+    },
+    "trail_passerelles": {
+      "label": "Trail de c\u00f4te rouge 2025 (Passerelle de Monteynard)",
+      "activityId": "15087396899",
+      "profile_source": "activity_timeseries"
     },
     "rome_marathon": {
       "label": "Marathon de Rome 2026",

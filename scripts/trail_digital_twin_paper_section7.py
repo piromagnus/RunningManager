@@ -45,6 +45,7 @@ RACES = _pred.RACES
 attach_altitude_from_gpx = _pred.attach_altitude_from_gpx
 fit_stage3 = _pred.fit_stage3
 segments_from_race_pacing = _pred.segments_from_race_pacing
+segments_from_activity_timeseries = _pred.segments_from_activity_timeseries
 
 
 def load_train_segments_flexible(
@@ -69,7 +70,7 @@ def load_train_segments_flexible(
     return sub.reset_index(drop=True)
 
 
-# Extra prospective races beyond the two hold-outs already in RACES.
+# Extra prospective races beyond those already in RACES (Rome remains a road negative control).
 EXTRA_PROSPECTIVE = {
     "rome_marathon": {
         "label": "Marathon de Rome 2026",
@@ -364,14 +365,26 @@ def run_prospective_with_bands(
     best = fit_stage3(train, physiology, objective="race")
     rows: list[dict[str, object]] = []
     for race_key, race in races.items():
-        pacing = REPO_ROOT / "data" / "race_pacing" / f"{race['race_pacing_id']}_segments.csv"
-        if not pacing.exists():
-            logger.warning("Missing race_pacing for %s", race_key)
+        if race.get("profile_source") == "activity_timeseries":
+            ts_path = REPO_ROOT / "data" / "timeseries" / f"{race['activityId']}.csv"
+            if not ts_path.exists():
+                logger.warning("Missing timeseries for %s: %s", race_key, ts_path)
+                continue
+            route = segments_from_activity_timeseries(ts_path)
+            profile_source = "activity_timeseries"
+        else:
+            pacing = REPO_ROOT / "data" / "race_pacing" / f"{race['race_pacing_id']}_segments.csv"
+            if not pacing.exists():
+                logger.warning("Missing race_pacing for %s", race_key)
+                continue
+            route = segments_from_race_pacing(pacing)
+            gpx_path = REPO_ROOT / str(race["gpx"])
+            if gpx_path.exists():
+                route = attach_altitude_from_gpx(route, gpx_path)
+            profile_source = "race_pacing_gpxalt"
+        if route.empty:
+            logger.warning("Empty route for %s", race_key)
             continue
-        route = segments_from_race_pacing(pacing)
-        gpx_path = REPO_ROOT / str(race["gpx"])
-        if gpx_path.exists():
-            route = attach_altitude_from_gpx(route, gpx_path)
         sim = tpm.simulate_constant_hrr_route(
             route,
             hrr=hrr,
@@ -400,19 +413,30 @@ def run_prospective_with_bands(
             hrr=hrr,
         )
         actual_sec = np.nan
+        observed_hrr = np.nan
         act_path = REPO_ROOT / "data" / "activities.csv"
+        athlete_path = REPO_ROOT / "data" / "athlete.csv"
         if act_path.exists():
-            acts = pd.read_csv(act_path)
+            acts = pd.read_csv(act_path, dtype={"activityId": str})
             hit = acts[acts["activityId"].astype(str).eq(str(race["activityId"]))]
             if not hit.empty:
                 actual_sec = float(pd.to_numeric(hit.iloc[0]["movingSec"], errors="coerce"))
+                if athlete_path.exists() and "avgHr" in hit.columns:
+                    athlete = pd.read_csv(athlete_path).iloc[0]
+                    hr_rest = float(athlete["hrRest"])
+                    hr_max = float(athlete["hrMax"])
+                    avg_hr = float(pd.to_numeric(hit.iloc[0]["avgHr"], errors="coerce"))
+                    if np.isfinite(avg_hr) and hr_max > hr_rest:
+                        observed_hrr = (avg_hr - hr_rest) / (hr_max - hr_rest)
         row = {
             "raceKey": race_key,
             "label": race["label"],
             "activityId": race["activityId"],
+            "profileSource": profile_source,
             "predictedSec": pred_sec,
             "actualMovingSec": actual_sec,
             "deltaMin": (pred_sec - actual_sec) / 60.0 if np.isfinite(actual_sec) else np.nan,
+            "observedMeanHrr": observed_hrr,
             "alpha": best["alpha"],
             "fatigueCoef": best["fatigueCoef"],
             "fatigueModel": best["fatigueModel"],
@@ -647,7 +671,7 @@ def main() -> int:
         "preregistered_splits": "done",
         "nested_loo_bootstrap_alpha_kappa": "done",
         "physics_baseline_matched": "done",
-        "broader_prospective": "done_lut_gresivaudan_rome",
+        "broader_prospective": "done_lut_gresivaudan_echappee_passerelles_rome",
         "finish_time_uncertainty_bands": "done",
         "sex_age_strata": "blocked_single_athlete",
         "weather_coverage": "done_sparse_no_model_term",

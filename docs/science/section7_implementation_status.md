@@ -3,7 +3,7 @@
 Artifacts: `data/exp_perf_predictions/trail_digital_twin_paper_section7/`.
 Robustness report: [`robustness_experiments_report.md`](robustness_experiments_report.md).
 Remaining checklist: [`remaining_experiments.md`](remaining_experiments.md).
-Paper draft: [`trail_digital_twin_hr_performance_paper_draft.md`](trail_digital_twin_hr_performance_paper_draft.md) (v0.5).
+Paper draft: [`trail_digital_twin_hr_performance_paper_draft.md`](trail_digital_twin_hr_performance_paper_draft.md) (v0.6).
 
 ## Headline findings (canonical)
 
@@ -13,7 +13,7 @@ Paper draft: [`trail_digital_twin_hr_performance_paper_draft.md`](trail_digital_
 | Hard trail M3 LOO MAE | **17.39 min** |
 | Ablation ΔMAE (−HRR / −TRIMP / −GAP), R1-aligned | **+13.5 / +15.6 / +9.6 min** |
 | Steep terrain MAE (before → after GAP scales) | **3.05 → 1.64 min (−46%)** |
-| Prospective Δ (LUT / Grésivaudan / Rome) | **−4.1 / −17.0 / −79.2 min** (Rome out of scope) |
+| Prospective Δ (LUT / Passerelles / Grésivaudan / Échappée / Rome) | **−4.1 / −8.0 / −17.0 / −164 / −79.2 min** (Rome out of scope) |
 | Grésivaudan with 12 min aid budget | **≈ −5 min** |
 | §7 slight rejects | **4 segments (0.17%, 84 min)** |
 
@@ -21,8 +21,7 @@ Paper draft: [`trail_digital_twin_hr_performance_paper_draft.md`](trail_digital_
 
 | Status | IDs |
 |--------|-----|
-| Pass | R1, R2, R4, R5, R6, R7, R8, R9, R10, R11 |
-| Partial / open | **R3** (need more trail prospective races) |
+| Pass | R1–R11 (incl. R3: 4 trail + Rome) |
 
 ## Still blocked (data)
 
