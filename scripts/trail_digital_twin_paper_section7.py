@@ -279,23 +279,47 @@ def finish_time_uncertainty_bands(
     iterations: int = 300,
     seed: int = 20260721,
 ) -> dict[str, float]:
-    """Resample LOO (alpha, kappa) pairs and simulate constant-HRR finish times."""
+    """Resample LOO (alpha, kappa) with continuous jitter for finish-time bands (R9).
+
+    Discrete bootstrap over a small (α, κ) grid yields degenerate P05=P50 when
+    few unique pairs exist. We therefore (1) resample fold pairs and (2) add
+    Gaussian jitter from the empirical fold-wise spread of α and κ, plus a
+    residual scale from LOO activity finish-time errors when available.
+    """
     folds = loo_folds.dropna(subset=["alpha", "fatigueCoef"]).copy()
     if folds.empty or route.empty:
         return {}
     alphas = pd.to_numeric(folds["alpha"], errors="coerce").to_numpy(dtype=float)
     kappas = pd.to_numeric(folds["fatigueCoef"], errors="coerce").to_numpy(dtype=float)
     models = folds.get("fatigueModel", pd.Series(["exponential"] * len(folds))).astype(str).tolist()
+    alpha_std = float(np.nanstd(alphas)) if len(alphas) > 1 else 0.02
+    kappa_std = float(np.nanstd(kappas)) if len(kappas) > 1 else 0.05
+    # Floor jitter so bands remain informative even when grid collapses.
+    alpha_std = max(alpha_std, 0.02)
+    kappa_std = max(kappa_std, 0.03)
+    residual_std = 0.0
+    if {"actualTimeSec", "predictedTimeSec"}.issubset(folds.columns):
+        err = (
+            pd.to_numeric(folds["predictedTimeSec"], errors="coerce")
+            - pd.to_numeric(folds["actualTimeSec"], errors="coerce")
+        ).to_numpy(dtype=float)
+        residual_std = float(np.nanstd(err)) if np.isfinite(err).any() else 0.0
+        residual_std = max(residual_std, 60.0)  # ≥1 min residual noise
+    else:
+        residual_std = 180.0  # 3 min fallback when fold errors missing
+
     rng = np.random.default_rng(seed)
     samples = np.empty(iterations, dtype=float)
     for i in range(iterations):
         idx = int(rng.integers(0, len(alphas)))
+        alpha = float(alphas[idx] + rng.normal(0.0, alpha_std))
+        fatigue_coef = float(max(0.0, kappas[idx] + rng.normal(0.0, kappa_std)))
         sim = tpm.simulate_constant_hrr_route(
             route,
             hrr=hrr,
             v_anchor_kmh=float(physiology["vma_flat_kmh"]),
-            alpha=float(alphas[idx]),
-            fatigue_coef=float(kappas[idx]),
+            alpha=alpha,
+            fatigue_coef=fatigue_coef,
             fatigue_model=str(models[idx]),
             hrr_reference=float(physiology["hrr_reference"]),
             hrr_min_factor=float(physiology["hrr_min_factor"]),
@@ -308,13 +332,18 @@ def finish_time_uncertainty_bands(
             gap_descent_scale=float(physiology.get("gap_descent_scale", 1.0)),
             fatigue_input_col="cumTrimpBefore",
         )
-        samples[i] = float(sim["predictedTimeSec"].sum())
+        base = float(sim["predictedTimeSec"].sum())
+        samples[i] = base + float(rng.normal(0.0, residual_std))
+    samples = np.maximum(samples, 60.0)
     return {
         "finishSecMean": float(np.mean(samples)),
         "finishSecP05": float(np.quantile(samples, 0.05)),
         "finishSecP50": float(np.quantile(samples, 0.50)),
         "finishSecP95": float(np.quantile(samples, 0.95)),
         "iterations": float(iterations),
+        "alphaJitterStd": alpha_std,
+        "kappaJitterStd": kappa_std,
+        "residualStdSec": residual_std,
     }
 
 

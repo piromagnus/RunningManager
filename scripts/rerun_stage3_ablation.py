@@ -138,12 +138,26 @@ def main() -> int:
     if not stage3_best:
         raise RuntimeError("could not restore any Stage-3 cohort/objective pairs for ablation")
 
+    stage_metrics_path = output_dir / "table_stage_metrics.csv"
+    stage3_loo_baseline = {}
+    if stage_metrics_path.exists():
+        stage3_loo_baseline = pipeline.stage3_loo_baseline_from_metrics(pd.read_csv(stage_metrics_path))
+        logger.info("Loaded Stage-3 LOO baseline for %d cohort/objective pairs (R1)", len(stage3_loo_baseline))
+    else:
+        logger.warning("Missing %s; ablation full row will re-run LOO independently", stage_metrics_path)
+
     logger.info(
         "Running Stage-3 ablation protocol=%s on %d cohort/objective pairs",
         config["fitting"]["ablation_protocol"],
         len(stage3_best),
     )
-    ablation = pipeline.run_stage3_ablation(stage3_best, stage3_segments, cohorts, config)
+    ablation = pipeline.run_stage3_ablation(
+        stage3_best,
+        stage3_segments,
+        cohorts,
+        config,
+        stage3_loo_baseline=stage3_loo_baseline,
+    )
     ablation_path = output_dir / "table_stage3_ablation.csv"
     frozen_path = output_dir / "table_frozen_stage3_ablation.csv"
     ablation.to_csv(ablation_path, index=False)

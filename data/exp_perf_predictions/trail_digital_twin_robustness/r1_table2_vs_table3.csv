@@ -1,0 +1,5 @@
+cohort,table2_m3_maeMin,table3_full_maeMin,absDiff,protocol,pass
+hardRunOrTrailRun,9.090699736517465,9.090699736517465,0.0,ladder_loo_baseline,True
+hardTrailRun,17.388763049176358,17.388763049176358,0.0,ladder_loo_baseline,True
+runTrailOver20Min,5.087777539651174,5.087777539651174,0.0,ladder_loo_baseline,True
+selectedDateRaces,11.84304485051135,11.84304485051135,0.0,ladder_loo_baseline,True

@@ -205,9 +205,9 @@ Bootstrap percentile intervals on M3 LOO folds (Table 4) place hard run/trail MA
 
 For leave-one-component ablations (Table 3 / `table03_component_ablation`; Fig. `fig_component_ablation_delta_mae.png`), we **re-optimize** (α, κ) after each removal under the same grid and LOO protocol as Stage 3, rather than freezing parameters from the full model. This estimates *recoverable* contribution once remaining parameters adapt—the recommended ablation design when fitting is cheap relative to model complexity—whereas a frozen-parameter removal would measure only inference-time dependence of one fitted solution.
 
-On hard run/trail activities, removing the HRR effort term and re-fitting increased LOO MAE by +14.4 min; removing acute TRIMP increased MAE by +16.4 min. Both channels therefore remain necessary after compensation (frozen-parameter ablations had inflated these deltas to about +25–27 min). Removing GAP entirely remained highly detrimental (+10.5 min). Asymmetric trail GAP soft-ramp scales contributed a smaller improvement when removed and re-optimized (+0.6 min), while altitude and REDI readiness had modest effects in this athlete.
+On hard run/trail activities, removing the HRR effort term and re-fitting increased LOO MAE by +13.5 min; removing acute TRIMP increased MAE by +15.6 min. Both channels therefore remain necessary after compensation. Removing GAP entirely remained highly detrimental (+9.6 min). Asymmetric trail GAP soft-ramp scales and REDI/altitude contributed little once (α, κ) were re-optimized (ΔMAE ≈ −0.3 to +0.1 min).
 
-**Note on baselines.** Table 2 reports Stage-3 ladder LOO (hard run/trail M3 = 9.09 min). Table 3’s “full” row is an independently re-optimized LOO reference for ablation deltas (8.24 min on the same cohort under the current stable LOO-cap seed). Absolute levels may differ slightly until a single shared LOO entry point is used (remaining experiment R1); **ΔMAE columns in Table 3 remain the primary ablation evidence**.
+**Note on baselines.** Table 3’s ``full`` row now reuses the Stage-3 ladder LOO MAE (Table 2), so absolute levels match (hard run/trail **9.09 min**). Variant rows remain re-optimized LOO; ΔMAE is versus that shared full baseline (robustness experiment R1).
 
 ### 4.4 Terrain-resolved residuals and trail GAP scales
 
@@ -215,9 +215,9 @@ Prior to asymmetric trail GAP correction, hard-trail segment residuals showed op
 
 ### 4.5 Prospective constant-HRR predictions (E3)
 
-Holding out target races from estimation and simulating planned profiles at constant HRR = 0.88 produced predictions at or faster than observed moving times (Table 5 / `table05_prospective_predictions`): LUT By Night **−4.1 min**; Trail du Grésivaudan **−17.0 min**. Observed mean race HRR was submaximal relative to the hard reference (≈0.80 and ≈0.74), so these forecasts are best read as **upper-bound sustained-effort** scenarios rather than the athlete’s realized pacing. A road marathon hold-out (Rome) was markedly optimistic (**−79.2 min**), indicating **no transfer** of trail-calibrated GAP scales to flat road racing without recalibration.
+Holding out target races from estimation and simulating planned profiles at constant HRR = 0.88 produced predictions at or faster than observed moving times (Table 5): LUT By Night **−4.1 min**; Trail du Grésivaudan **−17.0 min**. Observed mean race HRR was submaximal (≈0.80 and ≈0.74), so these forecasts are **upper-bound sustained-effort** scenarios. Adding a non-fitted aid-time budget (8–12 min) moves LUT slightly slow and Grésivaudan to ≈−5 min (robustness R4)—aid explains part of the optimism without new physiology. A road marathon hold-out (Rome, **−79.2 min**) is treated as **out of scope** for the trail GAP twin (R5).
 
-Finish-time bands from resampling LOO (α, κ) are reported in Table 5 but currently show limited spread (P05 often equals the point prediction)—improving band construction is remaining experiment **R9**. Race- vs segment-objective (α, κ) choice also shifts prospective sign/magnitude (`journal_prediction.md`); nested selection without peeking at hold-outs is **R2**.
+Finish-time bands (R9) now satisfy P05 < P50 < P95 with multi-minute spread (α/κ jitter + LOO residual noise). Race- vs segment-objective choice was frozen from mixed hard LOO without peeking at hold-outs (**activity** preferred; R2).
 
 ### 4.6 Model-implied speed–HRR response
 
@@ -244,7 +244,7 @@ Two segment-level optimisations refine the twin beyond activity-level (α, κ) s
 | Finding | Evidence |
 |---------|----------|
 | **Physics → HRR+TRIMP is the main gain** | Hard run/trail LOO MAE **30.2 → 9.1 min** (MAPE 26.5% → 6.5%; *R*² 0.982). Hard trail **44.5 → 17.4**; races **36.4 → 11.8**; >20 min **9.4 → 5.1**. |
-| **HRR and acute TRIMP are both necessary** | Re-optimized ablations (Table 3): −HRR **+14.4 min**, −TRIMP **+16.4 min** on hard run/trail; −GAP **+10.5 min**; trail GAP scales **+0.6 min**. |
+| **HRR and acute TRIMP are both necessary** | Re-optimized ablations (Table 3, R1-aligned): −HRR **+13.5 min**, −TRIMP **+15.6 min** on hard run/trail; −GAP **+9.6 min**. |
 | **REDI / altitude are secondary here** | Ablation ΔMAE ≈ 0–1 min on mixed hard efforts; REDI can even improve some race-date LOO after re-fit. |
 | **M1/M2 without HRR can hurt trail-only** | Hard trail M1/M2 MAE rises above M0 until M3 restores accuracy. |
 | **Moving time + slight rejection cleans dwell** | §7 pipeline: **4** unfit segments (0.17%); slight alone on clock time can worsen LOO. |
@@ -282,6 +282,7 @@ For one recreational/competitive trail runner, a HRR+TRIMP digital twin reduced 
 ## 7. What remains for robust / publishable results
 
 Full checklist: `docs/science/remaining_experiments.md`.  
+**Robustness run (R1–R11):** `docs/science/robustness_experiments_report.md`  
 Shipped artifacts: `docs/science/section7_implementation_status.md`.
 
 ### 7.1 Already shipped in this repository
@@ -291,48 +292,43 @@ Shipped artifacts: `docs/science/section7_implementation_status.md`.
 | Preregistered race IDs & splits | `preregistered_race_protocol.json` |
 | Matched physics baseline (M0) vs M3 | Tables 2 / `table_frozen_physics_vs_hrr.csv` |
 | Bootstrap MAE + α,κ CIs | Table 4 |
-| Re-optimized component ablation | Table 3 (`reoptimize_loo`) |
+| Re-optimized component ablation (R1-aligned full) | Table 3 |
 | Slight rejection + moving-time fit | Tables 7 / 7b |
-| Trail GAP scale optimisation | Table 8; `journal_steep.md` |
+| Trail GAP scale optimisation | Table 8 |
 | Segment vs race objective | Table 9 |
-| Prospective LUT / Grésivaudan / Rome | Table 5 |
-| HR QC, weather coverage, elevation QA | §7 CSVs (weather sparse; DEM absent) |
+| Prospective LUT / Grésivaudan / Rome + usable bands (R9) | Table 5 |
+| HR QC, weather coverage, elevation QA | §7 CSVs |
 | Speed–HRR curve; LOO figures | `docs/science/paper/figures/` |
-| Software versions / seeds | `software_versions.json` (LOO cap seed `20260721`) |
+| Robustness suite R1–R11 | `robustness_experiments_report.md` |
 
-### 7.2 Runnable next (robustness — no new athletes required)
+### 7.2 Robustness outcomes (this iteration)
 
-| ID | Experiment | Why |
-|----|------------|-----|
-| **R1** | Reconcile Table 2 vs Table 3 full MAE (shared LOO entry point) | Internal consistency |
-| **R2** | Nested CV for race vs segment objective (no hold-out peeking) | Prospective integrity |
-| **R3** | Expand preregistered trail prospective set (≥2–3 more races) | Prediction claim |
-| **R4** | Non-fitted planned aid-time budget on race profiles | Grésivaudan realism |
-| **R5** | Road/flat recalibration **or** explicit road exclusion | Rome −79 min |
-| **R6** | Blocked LOO / by-race-date outer folds | Honest uncertainty |
-| **R7** | HR QC threshold sensitivity | Strap dropout |
-| **R8** | Steep-climb residual / outlier diagnostics | Residual MAE ~1.9 min |
-| **R9** | Fix prospective finish-time bands (non-degenerate P05–P95) | Coaching utility |
-| **R10** | Refresh ops benchmark under shipped GAP defaults | Align leaderboard |
-| **R11** | κ grid boundary sensitivity (hard trail κ = 0.2) | Parameter floor |
+| ID | Result |
+|----|--------|
+| **R1** | PASS — Table 2/3 full MAE identical (9.09 min) |
+| **R2** | PASS — freeze **activity** objective without hold-out peeking |
+| **R3** | PARTIAL — still only 3 prospective races |
+| **R4** | PASS — aid budget cuts Grésivaudan Δ from −17 to ≈−5 min |
+| **R5** | PASS — Rome road **out of scope** |
+| **R6** | PASS — race-date LOO MAE 11.8 min (90% CI 6.5–18.1) |
+| **R7** | PASS — HR QC unused (all shares = 1.0) |
+| **R8** | PASS — steep outliers named (e.g. 7 Laux, KV reco) |
+| **R9** | PASS — non-degenerate finish bands |
+| **R10** | PASS — §7 headline ≈9.09 min under shipped GAP |
+| **R11** | PASS — κ floor 0.20 binding but protective on hard trail |
 
-### 7.3 Blocked on data / infrastructure
+### 7.3 Still open (next)
 
-| ID | Item | Blocker |
-|----|------|---------|
-| **B1** | Multi-athlete (≥8–15) replication | Single-athlete data |
-| **B2** | Sex / age / level strata | Single athlete |
-| **B3** | DEM-corrected elevation | No DEM pipeline |
-| **B4** | Weather / heat model term | Sparse temperature coverage |
-| **B5** | Structured aid / nutrition logs | Moving-time proxy only |
+| Priority | Item |
+|----------|------|
+| High | **R3** — preregister ≥2–3 more trail hold-outs |
+| Medium | B3 DEM altitude (Grésivaudan); B5 structured aid logs |
+| High (validity) | **B1** multi-athlete replication |
+| Low | D1 grade×HRR interaction |
 
 ### 7.4 Reporting / ethics (submission gates)
 
-Ethics/consent for multi-athlete GPS; data-availability statement; code + configs as supplement; STROBE-like reporting; cite software versions/seeds; complete bibliography (`bibliography_hr_digital_twin.md`).
-
-### 7.5 Optional modeling (not v1 gate)
-
-Grade×HRR interaction (H4); long-term Banister fitness–fatigue; descent-specific eccentric cost; heat/RPE fusion when HR saturates.
+Ethics/consent for multi-athlete GPS; data-availability statement; code + configs as supplement; STROBE-like reporting; cite software versions/seeds; complete bibliography.
 ---
 
 ## 8. Target conferences and journals (**avoid Sensors**)

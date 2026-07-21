@@ -1794,6 +1794,7 @@ def _run_stage3_ablation_reoptimize(
     stage3_segments: Mapping[tuple[str, str], pd.DataFrame],
     cohorts: Mapping[str, pd.DataFrame],
     config: Mapping[str, Any],
+    stage3_loo_baseline: Mapping[tuple[str, str], Mapping[str, object]] | None = None,
 ) -> pd.DataFrame:
     """Preferred ablation: re-optimize (α, κ) for each leave-one-component variant."""
     physiology = config["physiology"]
@@ -1802,6 +1803,7 @@ def _run_stage3_ablation_reoptimize(
     fit_actual_time_col = _fit_actual_time_col(config)
     loo_include = set(config.get("cohorts", {}).get("loo_include") or [])
     loo_enabled = "loo" in set(fitting.get("validation_modes", ["in_sample", "loo"]))
+    baseline = stage3_loo_baseline or {}
     rows: list[dict[str, object]] = []
 
     for (cohort_name, objective), best in stage3_best.items():
@@ -1824,6 +1826,39 @@ def _run_stage3_ablation_reoptimize(
         full_mae: float | None = None
         for variant in _ablation_variant_definitions(cohort_segments):
             label = str(variant["label"])
+            # R1: reuse Stage-3 ladder LOO metrics for the full baseline when available.
+            if label == "full" and (cohort_name, objective) in baseline:
+                base = baseline[(cohort_name, objective)]
+                row = {
+                    "cohort": cohort_name,
+                    "stage": "full",
+                    "r2": float(base.get("r2", np.nan)),
+                    "maeMin": float(base["maeMin"]),
+                    "mapePct": float(base.get("mapePct", np.nan)),
+                    "biasMin": float(base.get("biasMin", np.nan)),
+                    "fitObjective": objective,
+                    "fatigueState": best.get("fatigueState", ""),
+                    "acuteTrimpCol": acute_col,
+                    "fatigueModel": fatigue_model,
+                    "secondaryAcuteTrimpCol": secondary_col,
+                    "secondaryFatigueModel": secondary_model,
+                    "secondaryFatigueCoef": float(best.get("secondaryFatigueCoef", 0.0) or 0.0),
+                    "alpha": float(base.get("alpha", best.get("alpha", np.nan))),
+                    "fatigueCoef": float(base.get("fatigueCoef", best.get("fatigueCoef", np.nan))),
+                    "ablationProtocol": "ladder_loo_baseline",
+                    "validation": "loo",
+                    "deltaMaeMinVsFull": 0.0,
+                }
+                full_mae = float(row["maeMin"])
+                rows.append(row)
+                logger.info(
+                    "Ablation cohort=%s objective=%s variant=full protocol=ladder_loo_baseline maeMin=%.2f",
+                    cohort_name,
+                    objective,
+                    full_mae,
+                )
+                continue
+
             variant_segments = variant["segments"]  # type: ignore[assignment]
             assert isinstance(variant_segments, pd.DataFrame)
             use_hrr_effort = bool(variant.get("use_hrr_effort", True))
@@ -1951,11 +1986,38 @@ def _run_stage3_ablation_reoptimize(
     return pd.DataFrame(rows)
 
 
+def stage3_loo_baseline_from_metrics(
+    stage_metrics: pd.DataFrame,
+    *,
+    stage_name: str = "Stage 3 HRR speed ratio LOO",
+) -> dict[tuple[str, str], dict[str, object]]:
+    """Extract Stage-3 ladder LOO metrics for ablation full-baseline alignment (R1)."""
+    if stage_metrics.empty:
+        return {}
+    subset = stage_metrics[stage_metrics["stage"].astype(str).eq(stage_name)].copy()
+    baseline: dict[tuple[str, str], dict[str, object]] = {}
+    for _, row in subset.iterrows():
+        key = (str(row["cohort"]), str(row.get("fitObjective", "activity")))
+        baseline[key] = {
+            "maeMin": float(row["maeMin"]),
+            "mapePct": float(row.get("mapePct", np.nan)),
+            "biasMin": float(row.get("biasMin", np.nan)),
+            "r2": float(row.get("r2", np.nan)),
+            "alpha": float(row["alpha"]) if "alpha" in row and pd.notna(row["alpha"]) else np.nan,
+            "fatigueCoef": float(row["fatigueCoef"])
+            if "fatigueCoef" in row and pd.notna(row["fatigueCoef"])
+            else np.nan,
+        }
+    return baseline
+
+
+
 def run_stage3_ablation(
     stage3_best: Mapping[tuple[str, str], Mapping[str, object]],
     stage3_segments: Mapping[tuple[str, str], pd.DataFrame],
     cohorts: Mapping[str, pd.DataFrame],
     config: Mapping[str, Any],
+    stage3_loo_baseline: Mapping[tuple[str, str], Mapping[str, object]] | None = None,
 ) -> pd.DataFrame:
     """Ablate selected Stage 3 components for each cohort/objective pair.
 
@@ -1963,6 +2025,10 @@ def run_stage3_ablation(
     evaluates with LOO when enabled (gold-standard contribution estimate). Legacy
     ``frozen`` keeps Stage-3 parameters fixed and only disables components at
     prediction time (inference-time dependency).
+
+    When ``stage3_loo_baseline`` is provided (cohort, objective) → metrics for the
+    Stage-3 ladder LOO row, the reoptimize protocol uses that row as the ``full``
+    baseline so Table 2 and Table 3 share the same absolute MAE (R1).
     """
     fitting = config.get("fitting", {})
     protocol = str(fitting.get("ablation_protocol", "reoptimize")).strip().lower()
@@ -1991,7 +2057,13 @@ def run_stage3_ablation(
         return _run_stage3_ablation_frozen(filtered_best, stage3_segments, cohorts, config)
     if protocol != "reoptimize":
         raise ValueError(f"unsupported fitting.ablation_protocol: {protocol}")
-    return _run_stage3_ablation_reoptimize(filtered_best, stage3_segments, cohorts, config)
+    return _run_stage3_ablation_reoptimize(
+        filtered_best,
+        stage3_segments,
+        cohorts,
+        config,
+        stage3_loo_baseline=stage3_loo_baseline,
+    )
 
 
 def run_segment_grid(
@@ -2331,7 +2403,16 @@ def run_pipeline(
         config,
         v_vt2_kmh,
     )
-    stage3_ablation = run_stage3_ablation(stage3_best, stage3_segments, cohorts, config)
+    stage3_loo_baseline = stage3_loo_baseline_from_metrics(
+        stage_tables.get("table_stage_metrics", pd.DataFrame())
+    )
+    stage3_ablation = run_stage3_ablation(
+        stage3_best,
+        stage3_segments,
+        cohorts,
+        config,
+        stage3_loo_baseline=stage3_loo_baseline,
+    )
     segment_grid_metrics, segment_grid_predictions = run_segment_grid(cohorts, segment_features, config)
     robustness_checks = run_robustness_checks(cohorts, all_segments_df, activity_df, config)
     stage3_segment_predictions = _stage3_segment_predictions(stage3_best, stage3_segments, config)

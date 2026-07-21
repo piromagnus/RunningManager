@@ -2,27 +2,27 @@
 
 | Cohort | Variant | MAE (min) | MAPE (%) | Bias (min) | R² | ΔMAE vs full (min) | Protocol |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Hard trail runs | Full model (M3 + trail GAP scales) | 17.39 | 9.65 | -9.8 | 0.969 | 0.0 | reoptimize_loo |
+| Hard trail runs | Full model (M3 + trail GAP scales) | 17.39 | 9.65 | -9.8 | 0.969 | 0.0 | ladder_loo_baseline |
 | Hard trail runs | Without grade-adjusted pace | 34.49 | 16.67 | -18.46 | 0.865 | 17.1 | reoptimize_loo |
 | Hard trail runs | Without altitude correction | 19.9 | 10.43 | -12.03 | 0.958 | 2.51 | reoptimize_loo |
 | Hard trail runs | Without REDI readiness | 19.17 | 10.76 | -14.06 | 0.956 | 1.78 | reoptimize_loo |
 | Hard trail runs | Without HRR effort term | 46.17 | 17.1 | -40.05 | 0.725 | 28.78 | reoptimize_loo |
 | Hard trail runs | Without acute TRIMP fatigue | 47.11 | 20.89 | -46.35 | 0.776 | 29.72 | reoptimize_loo |
 | Hard trail runs | Without asymmetric trail GAP scales | 20.93 | 11.11 | -12.52 | 0.958 | 3.54 | reoptimize_loo |
-| Hard run or trail runs | Full model (M3 + trail GAP scales) | 8.24 | 7.3 | -4.18 | 0.986 | 0.0 | reoptimize_loo |
-| Hard run or trail runs | Without grade-adjusted pace | 18.71 | 13.5 | -8.5 | 0.901 | 10.47 | reoptimize_loo |
-| Hard run or trail runs | Without altitude correction | 9.23 | 7.81 | -0.26 | 0.984 | 0.99 | reoptimize_loo |
-| Hard run or trail runs | Without REDI readiness | 8.8 | 7.51 | -2.57 | 0.983 | 0.56 | reoptimize_loo |
-| Hard run or trail runs | Without HRR effort term | 22.61 | 13.14 | -19.23 | 0.844 | 14.37 | reoptimize_loo |
-| Hard run or trail runs | Without acute TRIMP fatigue | 24.64 | 15.37 | -23.61 | 0.835 | 16.4 | reoptimize_loo |
-| Hard run or trail runs | Without asymmetric trail GAP scales | 8.87 | 7.89 | -0.7 | 0.984 | 0.64 | reoptimize_loo |
-| Run/trail > 20 min | Full model (M3 + trail GAP scales) | 5.97 | 8.18 | -3.14 | 0.981 | 0.0 | reoptimize_loo |
-| Run/trail > 20 min | Without grade-adjusted pace | 12.0 | 14.33 | -3.97 | 0.901 | 6.03 | reoptimize_loo |
-| Run/trail > 20 min | Without altitude correction | 6.29 | 8.3 | -3.54 | 0.976 | 0.33 | reoptimize_loo |
-| Run/trail > 20 min | Without REDI readiness | 5.32 | 7.76 | -1.75 | 0.981 | -0.65 | reoptimize_loo |
-| Run/trail > 20 min | Without HRR effort term | 12.48 | 15.34 | -10.06 | 0.892 | 6.51 | reoptimize_loo |
-| Run/trail > 20 min | Without acute TRIMP fatigue | 12.53 | 11.84 | -11.12 | 0.867 | 6.56 | reoptimize_loo |
-| Run/trail > 20 min | Without asymmetric trail GAP scales | 5.69 | 8.4 | -2.97 | 0.986 | -0.28 | reoptimize_loo |
+| Hard run or trail runs | Full model (M3 + trail GAP scales) | 9.09 | 6.52 | -5.51 | 0.982 | 0.0 | ladder_loo_baseline |
+| Hard run or trail runs | Without grade-adjusted pace | 18.71 | 13.5 | -8.5 | 0.901 | 9.62 | reoptimize_loo |
+| Hard run or trail runs | Without altitude correction | 9.23 | 7.81 | -0.26 | 0.984 | 0.14 | reoptimize_loo |
+| Hard run or trail runs | Without REDI readiness | 8.8 | 7.51 | -2.57 | 0.983 | -0.29 | reoptimize_loo |
+| Hard run or trail runs | Without HRR effort term | 22.61 | 13.14 | -19.23 | 0.844 | 13.51 | reoptimize_loo |
+| Hard run or trail runs | Without acute TRIMP fatigue | 24.64 | 15.37 | -23.61 | 0.835 | 15.55 | reoptimize_loo |
+| Hard run or trail runs | Without asymmetric trail GAP scales | 8.87 | 7.89 | -0.7 | 0.984 | -0.22 | reoptimize_loo |
+| Run/trail > 20 min | Full model (M3 + trail GAP scales) | 5.09 | 8.09 | -2.31 | 0.971 | 0.0 | ladder_loo_baseline |
+| Run/trail > 20 min | Without grade-adjusted pace | 12.0 | 14.33 | -3.97 | 0.901 | 6.91 | reoptimize_loo |
+| Run/trail > 20 min | Without altitude correction | 6.29 | 8.3 | -3.54 | 0.976 | 1.21 | reoptimize_loo |
+| Run/trail > 20 min | Without REDI readiness | 5.32 | 7.76 | -1.75 | 0.981 | 0.23 | reoptimize_loo |
+| Run/trail > 20 min | Without HRR effort term | 12.48 | 15.34 | -10.06 | 0.892 | 7.39 | reoptimize_loo |
+| Run/trail > 20 min | Without acute TRIMP fatigue | 12.53 | 11.84 | -11.12 | 0.867 | 7.44 | reoptimize_loo |
+| Run/trail > 20 min | Without asymmetric trail GAP scales | 5.69 | 8.4 | -2.97 | 0.986 | 0.6 | reoptimize_loo |
 | Top-10 hard trail by HRR | Full model (M3 + trail GAP scales) | 3.82 | 4.75 | -0.6 | 0.993 | 0.0 | reoptimize_in_sample |
 | Top-10 hard trail by HRR | Without grade-adjusted pace | 11.55 | 19.1 | -8.86 | 0.932 | 7.74 | reoptimize_in_sample |
 | Top-10 hard trail by HRR | Without altitude correction | 3.99 | 5.34 | -1.48 | 0.992 | 0.17 | reoptimize_in_sample |
@@ -30,7 +30,7 @@
 | Top-10 hard trail by HRR | Without HRR effort term | 4.43 | 6.77 | -1.01 | 0.992 | 0.61 | reoptimize_in_sample |
 | Top-10 hard trail by HRR | Without acute TRIMP fatigue | 20.96 | 19.39 | -20.96 | 0.807 | 17.15 | reoptimize_in_sample |
 | Top-10 hard trail by HRR | Without asymmetric trail GAP scales | 4.9 | 6.81 | -1.9 | 0.99 | 1.09 | reoptimize_in_sample |
-| Selected race dates | Full model (M3 + trail GAP scales) | 11.84 | 5.93 | 4.1 | 0.987 | 0.0 | reoptimize_loo |
+| Selected race dates | Full model (M3 + trail GAP scales) | 11.84 | 5.93 | 4.1 | 0.987 | 0.0 | ladder_loo_baseline |
 | Selected race dates | Without grade-adjusted pace | 29.74 | 14.88 | -11.73 | 0.89 | 17.9 | reoptimize_loo |
 | Selected race dates | Without altitude correction | 12.7 | 6.09 | 1.33 | 0.984 | 0.85 | reoptimize_loo |
 | Selected race dates | Without REDI readiness | 9.2 | 4.3 | 2.86 | 0.992 | -2.64 | reoptimize_loo |
