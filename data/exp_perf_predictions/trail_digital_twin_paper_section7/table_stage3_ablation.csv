@@ -1,71 +1,36 @@
-cohort,stage,r2,maeMin,mapePct,biasMin,fitObjective,fatigueState,acuteTrimpCol,fatigueModel,secondaryAcuteTrimpCol,secondaryFatigueModel,secondaryFatigueCoef,deltaMaeMinVsFull
-hardTrailRun,full,0.9687131911347608,17.38876304917637,9.646133248797856,-9.80461447452493,activity,cumulative,cumTrimpBefore,linear,,,0.0,0.0
-hardTrailRun,no GAP,0.7675519904923788,46.270563807612376,23.043042312170346,-44.83470188695537,activity,cumulative,cumTrimpBefore,linear,,,0.0,28.881800758436007
-hardTrailRun,no altitude,0.9526200611324275,20.49817656756746,10.408434982196558,-13.883493965965698,activity,cumulative,cumTrimpBefore,linear,,,0.0,3.10941351839109
-hardTrailRun,no REDI readiness,0.9678654603114502,17.254191473328486,9.88176004254076,-5.854677131782895,activity,cumulative,cumTrimpBefore,linear,,,0.0,-0.13457157584788249
-hardTrailRun,no HRR speed ratio,0.5677202147111473,65.49805725752508,29.76741357175092,-65.4437439409286,activity,cumulative,cumTrimpBefore,linear,,,0.0,48.10929420834871
-hardTrailRun,no acute fatigue,0.6681420960750757,60.8156842521739,28.703687961489972,-60.54499378169482,activity,cumulative,cumTrimpBefore,linear,,,0.0,43.426921202997534
-hardTrailRun,no trail GAP scales,0.953511926341021,20.721918115869755,10.64077203128434,-15.046242736695794,activity,cumulative,cumTrimpBefore,linear,,,0.0,3.3331550666933865
-hardTrailRun,full,0.9592291885365615,17.96853452162027,8.322579709399433,-14.325915707598789,segment,decayed,decayedTrimpBefore,linear,,,0.0,0.0
-hardTrailRun,no GAP,0.7399130866333591,49.811143112615596,23.73451301882033,-49.769505586773015,segment,decayed,decayedTrimpBefore,linear,,,0.0,31.842608590995326
-hardTrailRun,no altitude,0.9408580723973514,21.450443460810266,9.22079238740173,-18.310716302941564,segment,decayed,decayedTrimpBefore,linear,,,0.0,3.4819089391899958
-hardTrailRun,no REDI readiness,0.9594423445563646,18.11426676576831,8.455325685021947,-10.469106806786602,segment,decayed,decayedTrimpBefore,linear,,,0.0,0.1457322441480393
-hardTrailRun,no HRR speed ratio,0.5390037566808616,68.35784910041072,30.074293096745258,-68.35784910041072,segment,decayed,decayedTrimpBefore,linear,,,0.0,50.38931457879045
-hardTrailRun,no acute fatigue,0.7756170243393363,47.10718910392402,20.88706068509139,-46.3466270370576,segment,decayed,decayedTrimpBefore,linear,,,0.0,29.13865458230375
-hardTrailRun,no trail GAP scales,0.9420363080393461,21.278713331620782,9.650094363414354,-18.89070921983213,segment,decayed,decayedTrimpBefore,linear,,,0.0,3.3101788100005116
-hardRunOrTrailRun,full,0.9749875896028355,9.617866596113972,7.313693154907678,-5.170783604638021,activity,decayed,decayedTrimpBefore,exponential,,,0.0,0.0
-hardRunOrTrailRun,no GAP,0.8228897638098078,23.101236709503624,14.222840795693989,-21.413495224630783,activity,decayed,decayedTrimpBefore,exponential,,,0.0,13.483370113389652
-hardRunOrTrailRun,no altitude,0.9623732226537082,11.130091362517344,7.710524411041418,-6.966896170847417,activity,decayed,decayedTrimpBefore,exponential,,,0.0,1.5122247664033726
-hardRunOrTrailRun,no REDI readiness,0.9743401822033257,9.656562572798245,7.3747086167141225,-3.1072791827282153,activity,decayed,decayedTrimpBefore,exponential,,,0.0,0.0386959766842736
-hardRunOrTrailRun,no HRR speed ratio,0.6657097110098634,36.881422447699364,24.883671631269532,-36.85773445164852,activity,decayed,decayedTrimpBefore,exponential,,,0.0,27.263555851585394
-hardRunOrTrailRun,no acute fatigue,0.7450041398397171,34.37702022511872,23.33140142986549,-34.18084139850404,activity,decayed,decayedTrimpBefore,exponential,,,0.0,24.75915362900475
-hardRunOrTrailRun,no trail GAP scales,0.963677413286756,10.895365000828356,7.834149226766768,-7.328117884996431,activity,decayed,decayedTrimpBefore,exponential,,,0.0,1.2774984047143843
-hardRunOrTrailRun,full,0.9693141233166036,10.024692881713205,7.1512079018467265,-6.148748896099475,segment,decayed,decayedTrimpBefore,linear,,,0.0,0.0
-hardRunOrTrailRun,no GAP,0.8095334873309845,24.509861745345983,14.792860802944787,-22.34237217171543,segment,decayed,decayedTrimpBefore,linear,,,0.0,14.485168863632778
-hardRunOrTrailRun,no altitude,0.9559734119092074,11.544972672233104,7.541353743454847,-7.922477771629959,segment,decayed,decayedTrimpBefore,linear,,,0.0,1.5202797905198988
-hardRunOrTrailRun,no REDI readiness,0.9694560018361555,10.21394147514204,7.13130280895148,-4.122704146903433,segment,decayed,decayedTrimpBefore,linear,,,0.0,0.18924859342883416
-hardRunOrTrailRun,no HRR speed ratio,0.6522709962111066,37.740564315020734,24.409150989009134,-37.740564315020734,segment,decayed,decayedTrimpBefore,linear,,,0.0,27.715871433307527
-hardRunOrTrailRun,no acute fatigue,0.8305389135203561,25.267746945085396,15.233333412692415,-24.438438958807772,segment,decayed,decayedTrimpBefore,linear,,,0.0,15.24305406337219
-hardRunOrTrailRun,no trail GAP scales,0.9568116791327869,11.512170993316317,7.850653320405167,-8.18850731346421,segment,decayed,decayedTrimpBefore,linear,,,0.0,1.487478111603112
-runTrailOver20Min,full,0.9770577754392151,6.549719227901045,7.712816440752583,-3.23179129215591,activity,decayed,decayedTrimpBefore,exponential,,,0.0,0.0
-runTrailOver20Min,no GAP,0.8477149749246318,14.108599169851088,13.090464420540401,-12.351219426465034,activity,decayed,decayedTrimpBefore,exponential,,,0.0,7.5588799419500425
-runTrailOver20Min,no altitude,0.9664382165361094,7.315403377275677,7.941808051081504,-4.171793179022654,activity,decayed,decayedTrimpBefore,exponential,,,0.0,0.765684149374632
-runTrailOver20Min,no REDI readiness,0.976808928557748,6.372954480574228,7.287389199855555,-2.2251383066697112,activity,decayed,decayedTrimpBefore,exponential,,,0.0,-0.1767647473268168
-runTrailOver20Min,no HRR speed ratio,0.7056924734916994,25.15052960076674,28.4456368190161,-25.138313063814532,activity,decayed,decayedTrimpBefore,exponential,,,0.0,18.600810372865695
-runTrailOver20Min,no acute fatigue,0.781817262162883,20.102099586426732,18.564024427349135,-19.86573791366512,activity,decayed,decayedTrimpBefore,exponential,,,0.0,13.552380358525687
-runTrailOver20Min,no trail GAP scales,0.9673156658800667,7.311470809857129,8.275619059391145,-4.489290077187179,activity,decayed,decayedTrimpBefore,exponential,,,0.0,0.7617515819560836
-runTrailOver20Min,full,0.9747641422580924,6.681973098945919,7.765569230137256,-3.2888956745375166,segment,decayed,decayedTrimpBefore,exponential,,,0.0,0.0
-runTrailOver20Min,no GAP,0.8419542586395345,14.57802986201831,13.336207812948913,-12.403393182843823,segment,decayed,decayedTrimpBefore,exponential,,,0.0,7.896056763072391
-runTrailOver20Min,no altitude,0.9637615642249302,7.444511735600007,7.986791191358359,-4.22256233988759,segment,decayed,decayedTrimpBefore,exponential,,,0.0,0.7625386366540878
-runTrailOver20Min,no REDI readiness,0.9749266670195945,6.511668244726262,7.278415772801441,-2.2964621344018394,segment,decayed,decayedTrimpBefore,exponential,,,0.0,-0.17030485421965746
-runTrailOver20Min,no HRR speed ratio,0.6998025807576957,25.26269276451441,27.708391737324277,-25.259374666808938,segment,decayed,decayedTrimpBefore,exponential,,,0.0,18.580719665568488
-runTrailOver20Min,no acute fatigue,0.8190280649493682,17.188223096024185,14.84152037188618,-16.59755953564937,segment,decayed,decayedTrimpBefore,exponential,,,0.0,10.506249997078266
-runTrailOver20Min,no trail GAP scales,0.96423321531783,7.505178427756093,8.363407082979144,-4.512932720939217,segment,decayed,decayedTrimpBefore,exponential,,,0.0,0.8232053288101735
-top10HardTrailByHRR,full,0.9930908986087114,3.815792252284416,4.750319624432723,-0.5964544254512331,activity,decayed,decayedTrimpBefore,linear,,,0.0,0.0
-top10HardTrailByHRR,no GAP,0.8507138006282917,20.226224664440256,26.38918832025483,-20.226224664440256,activity,decayed,decayedTrimpBefore,linear,,,0.0,16.41043241215584
-top10HardTrailByHRR,no altitude,0.9923972649028819,3.985793688283037,5.335239528809328,-1.482777035345657,activity,decayed,decayedTrimpBefore,linear,,,0.0,0.17000143599862083
-top10HardTrailByHRR,no REDI readiness,0.9890422680039717,4.788224631924442,5.7989704993571936,1.5207504221045482,activity,decayed,decayedTrimpBefore,linear,,,0.0,0.972432379640026
-top10HardTrailByHRR,no HRR speed ratio,0.9323334243819013,12.842394472112145,12.720930604225494,-12.842394472112145,activity,decayed,decayedTrimpBefore,linear,,,0.0,9.02660221982773
-top10HardTrailByHRR,no acute fatigue,0.8067870623507926,20.963271496562335,19.390022309962454,-20.963271496562335,activity,decayed,decayedTrimpBefore,linear,,,0.0,17.147479244277918
-top10HardTrailByHRR,no trail GAP scales,0.990120688635359,4.901006339306549,6.806577873276616,-1.8978666042014614,activity,decayed,decayedTrimpBefore,linear,,,0.0,1.0852140870221327
-top10HardTrailByHRR,full,0.9930908986087114,3.815792252284416,4.750319624432723,-0.5964544254512331,segment,decayed,decayedTrimpBefore,linear,,,0.0,0.0
-top10HardTrailByHRR,no GAP,0.8507138006282917,20.226224664440256,26.38918832025483,-20.226224664440256,segment,decayed,decayedTrimpBefore,linear,,,0.0,16.41043241215584
-top10HardTrailByHRR,no altitude,0.9923972649028819,3.985793688283037,5.335239528809328,-1.482777035345657,segment,decayed,decayedTrimpBefore,linear,,,0.0,0.17000143599862083
-top10HardTrailByHRR,no REDI readiness,0.9890422680039717,4.788224631924442,5.7989704993571936,1.5207504221045482,segment,decayed,decayedTrimpBefore,linear,,,0.0,0.972432379640026
-top10HardTrailByHRR,no HRR speed ratio,0.9323334243819013,12.842394472112145,12.720930604225494,-12.842394472112145,segment,decayed,decayedTrimpBefore,linear,,,0.0,9.02660221982773
-top10HardTrailByHRR,no acute fatigue,0.8067870623507926,20.963271496562335,19.390022309962454,-20.963271496562335,segment,decayed,decayedTrimpBefore,linear,,,0.0,17.147479244277918
-top10HardTrailByHRR,no trail GAP scales,0.990120688635359,4.901006339306549,6.806577873276616,-1.8978666042014614,segment,decayed,decayedTrimpBefore,linear,,,0.0,1.0852140870221327
-selectedDateRaces,full,0.9948134845111061,9.111149449331545,5.436594576829022,6.833523080856931,activity,decayed,decayedTrimpBefore,linear,,,0.0,0.0
-selectedDateRaces,no GAP,0.8601678915216717,30.039658010689482,13.624844153299609,-28.75011931221308,activity,decayed,decayedTrimpBefore,linear,,,0.0,20.928508561357937
-selectedDateRaces,no altitude,0.993611770764063,10.020605431718192,5.60908629468145,4.00691725791115,activity,decayed,decayedTrimpBefore,linear,,,0.0,0.9094559823866462
-selectedDateRaces,no REDI readiness,0.9840097769678384,14.636059589286209,8.086073838720216,14.636059589286209,activity,decayed,decayedTrimpBefore,linear,,,0.0,5.524910139954663
-selectedDateRaces,no HRR speed ratio,0.8593368296667379,32.21012863198365,12.434741647881202,-31.94656876876554,activity,decayed,decayedTrimpBefore,linear,,,0.0,23.098979182652105
-selectedDateRaces,no acute fatigue,0.739668515936891,53.03697693289178,22.96355886970963,-53.03697693289178,activity,decayed,decayedTrimpBefore,linear,,,0.0,43.92582748356024
-selectedDateRaces,no trail GAP scales,0.9952888139844148,8.288061514665078,5.3220712149620555,4.40915294683094,activity,decayed,decayedTrimpBefore,linear,,,0.0,-0.8230879346664679
-selectedDateRaces,full,0.9929001077074919,7.716936251162358,3.4674207395141474,-2.972744612599939,segment,decayed,decayedTrimpBefore,exponential,,,0.0,0.0
-selectedDateRaces,no GAP,0.8213567290000023,36.9702250791378,16.794790735888487,-36.9702250791378,segment,decayed,decayedTrimpBefore,exponential,,,0.0,29.25328882797544
-selectedDateRaces,no altitude,0.9872530595022185,9.708228638338529,3.874218958124646,-5.689149645623316,segment,decayed,decayedTrimpBefore,exponential,,,0.0,1.9912923871761707
-selectedDateRaces,no REDI readiness,0.9930975711812102,9.432210639664607,4.579925841828601,4.482652774268983,segment,decayed,decayedTrimpBefore,exponential,,,0.0,1.715274388502249
-selectedDateRaces,no HRR speed ratio,0.8213873058302874,39.7717402855581,15.974502790209078,-39.7717402855581,segment,decayed,decayedTrimpBefore,exponential,,,0.0,32.054804034395744
-selectedDateRaces,no acute fatigue,0.739668515936891,53.03697693289178,22.96355886970963,-53.03697693289178,segment,decayed,decayedTrimpBefore,exponential,,,0.0,45.320040681729424
-selectedDateRaces,no trail GAP scales,0.9898655568306124,8.78378625073973,3.9790669163601375,-5.227064906571752,segment,decayed,decayedTrimpBefore,exponential,,,0.0,1.0668499995773724
+cohort,stage,r2,maeMin,mapePct,biasMin,alpha,fatigueCoef,secondaryFatigueCoef,ablationProtocol,validation,fitObjective,fatigueState,acuteTrimpCol,fatigueModel,secondaryAcuteTrimpCol,secondaryFatigueModel,deltaMaeMinVsFull
+hardTrailRun,full,0.9687131911347608,17.388763049176358,9.646133248797856,-9.804614474524927,0.95,0.2,0.0,reoptimize_loo,loo,activity,cumulative,cumTrimpBefore,linear,nan,nan,0.0
+hardTrailRun,no GAP,0.8647381471313362,34.48674636536679,16.670786310080576,-18.45937102326482,0.85,0.4,0.0,reoptimize_loo,loo,activity,cumulative,cumTrimpBefore,linear,nan,nan,17.097983316190433
+hardTrailRun,no altitude,0.9576568928762942,19.903147741570674,10.431945406740212,-12.025406455566829,0.95,0.2,0.0,reoptimize_loo,loo,activity,cumulative,cumTrimpBefore,linear,nan,nan,2.514384692394316
+hardTrailRun,no REDI readiness,0.9563704816438805,19.1682641629023,10.763757270016894,-14.05590754799848,1.0,0.2,0.0,reoptimize_loo,loo,activity,cumulative,cumTrimpBefore,linear,nan,nan,1.7795011137259422
+hardTrailRun,no HRR speed ratio,0.7248482791153452,46.166271489084664,17.097284854714456,-40.045921498994545,0.85,0.6,0.0,reoptimize_loo,loo,activity,cumulative,cumTrimpBefore,linear,nan,nan,28.777508439908306
+hardTrailRun,no acute fatigue,0.7756170243393363,47.10718910392402,20.88706068509139,-46.3466270370576,0.85,0.0,0.0,reoptimize_loo,loo,activity,cumulative,cumTrimpBefore,linear,nan,nan,29.718426054747663
+hardTrailRun,no trail GAP scales,0.9578763679438513,20.926418653125342,11.111044483656423,-12.520159267968172,0.95,0.2,0.0,reoptimize_loo,loo,activity,cumulative,cumTrimpBefore,linear,nan,nan,3.537655603948984
+hardRunOrTrailRun,full,0.9860609154633136,8.239365633265267,7.296382826884862,-4.177493498502266,0.95,0.4,0.0,reoptimize_loo,loo,activity,decayed,decayedTrimpBefore,exponential,nan,nan,0.0
+hardRunOrTrailRun,no GAP,0.9005937793907316,18.709070813092943,13.500249282243107,-8.500329778523104,0.85,0.4,0.0,reoptimize_loo,loo,activity,decayed,decayedTrimpBefore,exponential,nan,nan,10.469705179827676
+hardRunOrTrailRun,no altitude,0.9838317441475942,9.232695349952794,7.809577588850865,-0.2555489240157628,0.9,0.4,0.0,reoptimize_loo,loo,activity,decayed,decayedTrimpBefore,exponential,nan,nan,0.9933297166875263
+hardRunOrTrailRun,no REDI readiness,0.9832038629700279,8.796677412520985,7.5121627418405295,-2.5665899218744728,0.95,0.4,0.0,reoptimize_loo,loo,activity,decayed,decayedTrimpBefore,exponential,nan,nan,0.5573117792557181
+hardRunOrTrailRun,no HRR speed ratio,0.8437973506738237,22.6050322790049,13.141100154454236,-19.23377683963241,0.85,0.6,0.0,reoptimize_loo,loo,activity,decayed,decayedTrimpBefore,exponential,nan,nan,14.365666645739632
+hardRunOrTrailRun,no acute fatigue,0.8350592227206849,24.64207027068625,15.371778063205452,-23.611571264457233,0.85,0.0,0.0,reoptimize_loo,loo,activity,decayed,decayedTrimpBefore,exponential,nan,nan,16.40270463742098
+hardRunOrTrailRun,no trail GAP scales,0.9843932861801686,8.874694502834236,7.893757701946788,-0.6986433222822614,0.9,0.4,0.0,reoptimize_loo,loo,activity,decayed,decayedTrimpBefore,exponential,nan,nan,0.6353288695689692
+runTrailOver20Min,full,0.9811752742626089,5.967168456163837,8.175426026490532,-3.1413273368673873,0.9,0.3,0.0,reoptimize_loo,loo,activity,decayed,decayedTrimpBefore,exponential,nan,nan,0.0
+runTrailOver20Min,no GAP,0.9011101312451141,12.001734848218723,14.329731004569613,-3.968679608794322,0.85,0.4,0.0,reoptimize_loo,loo,activity,decayed,decayedTrimpBefore,exponential,nan,nan,6.034566392054885
+runTrailOver20Min,no altitude,0.9755917088446924,6.294805627881341,8.299598409825457,-3.5436378165444364,0.9,0.3,0.0,reoptimize_loo,loo,activity,decayed,decayedTrimpBefore,exponential,nan,nan,0.3276371717175035
+runTrailOver20Min,no REDI readiness,0.9814232064009394,5.321192447560742,7.756447778387851,-1.745659114586292,0.85,0.2,0.0,reoptimize_loo,loo,activity,decayed,decayedTrimpBefore,exponential,nan,nan,-0.6459760086030952
+runTrailOver20Min,no HRR speed ratio,0.8917132337329219,12.476670866605117,15.335265996349506,-10.063550459028233,0.85,0.6,0.0,reoptimize_loo,loo,activity,decayed,decayedTrimpBefore,exponential,nan,nan,6.5095024104412795
+runTrailOver20Min,no acute fatigue,0.8674523015573729,12.531226896894715,11.83648460768479,-11.117657270979924,0.85,0.0,0.0,reoptimize_loo,loo,activity,decayed,decayedTrimpBefore,exponential,nan,nan,6.564058440730878
+runTrailOver20Min,no trail GAP scales,0.9861213633920979,5.69098389134315,8.40380430366449,-2.968947569441246,0.9,0.3,0.0,reoptimize_loo,loo,activity,decayed,decayedTrimpBefore,exponential,nan,nan,-0.27618456482068776
+top10HardTrailByHRR,full,0.9930908986087115,3.815792252284412,4.750319624432725,-0.5964544254512415,0.85,0.2,0.0,reoptimize_in_sample,in_sample,activity,decayed,decayedTrimpBefore,linear,nan,nan,0.0
+top10HardTrailByHRR,no GAP,0.9321674398599856,11.55370585408989,19.104789357946277,-8.86038981774103,0.85,0.3,0.0,reoptimize_in_sample,in_sample,activity,decayed,decayedTrimpBefore,linear,nan,nan,7.737913601805477
+top10HardTrailByHRR,no altitude,0.9923972649028819,3.9857936882830387,5.335239528809329,-1.4827770353456624,0.85,0.2,0.0,reoptimize_in_sample,in_sample,activity,decayed,decayedTrimpBefore,linear,nan,nan,0.1700014359986266
+top10HardTrailByHRR,no REDI readiness,0.9895677381016226,5.1089875614346445,6.856833316832933,-2.4836872082597146,1.0,0.3,0.0,reoptimize_in_sample,in_sample,activity,decayed,decayedTrimpBefore,linear,nan,nan,1.2931953091502324
+top10HardTrailByHRR,no HRR speed ratio,0.9921538423768108,4.430114812136732,6.769678196972097,-1.0133586745596153,0.85,0.3,0.0,reoptimize_in_sample,in_sample,activity,decayed,decayedTrimpBefore,linear,nan,nan,0.6143225598523196
+top10HardTrailByHRR,no acute fatigue,0.8067870623507926,20.96327149656234,19.390022309962458,-20.96327149656234,0.85,0.0,0.0,reoptimize_in_sample,in_sample,activity,decayed,decayedTrimpBefore,linear,nan,nan,17.147479244277925
+top10HardTrailByHRR,no trail GAP scales,0.990120688635359,4.901006339306551,6.806577873276619,-1.8978666042014696,0.85,0.2,0.0,reoptimize_in_sample,in_sample,activity,decayed,decayedTrimpBefore,linear,nan,nan,1.0852140870221385
+selectedDateRaces,full,0.9867199889764906,11.84304485051135,5.931996771258221,4.101627679677147,0.9,0.3,0.0,reoptimize_loo,loo,activity,decayed,decayedTrimpBefore,linear,nan,nan,0.0
+selectedDateRaces,no GAP,0.8898171146884426,29.74014377631377,14.878283649197588,-11.728201808390045,0.85,0.4,0.0,reoptimize_loo,loo,activity,decayed,decayedTrimpBefore,linear,nan,nan,17.897098925802418
+selectedDateRaces,no altitude,0.9836043185265301,12.69706993117574,6.094436643662784,1.3304527584536108,0.9,0.3,0.0,reoptimize_loo,loo,activity,decayed,decayedTrimpBefore,linear,nan,nan,0.8540250806643908
+selectedDateRaces,no REDI readiness,0.991719544602934,9.20007390443101,4.302128449364873,2.859266296871822,0.95,0.3,0.0,reoptimize_loo,loo,activity,decayed,decayedTrimpBefore,linear,nan,nan,-2.6429709460803394
+selectedDateRaces,no HRR speed ratio,0.9103416999691241,26.4840600736584,10.809335184557005,-10.737700051200676,0.85,0.6,0.0,reoptimize_loo,loo,activity,decayed,decayedTrimpBefore,linear,nan,nan,14.641015223147052
+selectedDateRaces,no acute fatigue,0.7915225867661388,45.49459866968497,18.432003509104312,-45.49459866968497,0.85,0.0,0.0,reoptimize_loo,loo,activity,decayed,decayedTrimpBefore,linear,nan,nan,33.65155381917362
+selectedDateRaces,no trail GAP scales,0.9857667424632035,10.98898878363119,5.811857645094634,1.7082256778648215,0.9,0.3,0.0,reoptimize_loo,loo,activity,decayed,decayedTrimpBefore,linear,nan,nan,-0.85405606688016

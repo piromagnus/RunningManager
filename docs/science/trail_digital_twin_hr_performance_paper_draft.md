@@ -202,7 +202,7 @@ Bootstrap percentile intervals on M3 LOO folds (Table 4) place hard run/trail MA
 
 For leave-one-component ablations (Table 3 / `table03_component_ablation`; Fig. `fig_component_ablation_delta_mae.png`), we **re-optimize** (α, κ) after each removal under the same grid and LOO protocol as Stage 3, rather than freezing parameters from the full model. This estimates *recoverable* contribution once remaining parameters adapt—the recommended ablation design when fitting is cheap relative to model complexity—whereas a frozen-parameter removal would measure only inference-time dependence of one fitted solution.
 
-On hard run/trail activities, removing the HRR effort term and re-fitting still increased LOO MAE substantially, as did removing acute TRIMP, confirming that both channels remain necessary after compensation. Removing GAP entirely was also highly detrimental. Asymmetric trail GAP soft-ramp scales contributed a smaller but consistent improvement when removed and re-optimized, while altitude and REDI readiness had modest effects in this athlete.
+On hard run/trail activities, removing the HRR effort term and re-fitting increased LOO MAE by +14.4 min; removing acute TRIMP increased MAE by +16.4 min. Both channels therefore remain necessary after compensation (frozen-parameter ablations had inflated these deltas to about +25–27 min). Removing GAP entirely remained highly detrimental (+10.5 min). Asymmetric trail GAP soft-ramp scales contributed a smaller improvement when removed and re-optimized (+0.6 min), while altitude and REDI readiness had modest effects in this athlete.
 
 ### 4.4 Terrain-resolved residuals and trail GAP scales
 

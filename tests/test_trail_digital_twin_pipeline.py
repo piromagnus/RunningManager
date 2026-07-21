@@ -488,6 +488,17 @@ def test_segment_type_metrics_group_stage3_errors_by_terrain() -> None:
     assert descent["maeMin"] == pytest.approx(1.0)
 
 
+def test_loo_activity_cap_seed_is_stable_across_processes() -> None:
+    config = {"cohorts": {"loo_activity_cap": 2, "loo_activity_cap_seed": 20260721}}
+    ids = [f"a{i}" for i in range(10)]
+    first = pipeline._select_loo_activity_ids(ids, "hardRunOrTrailRun", config)
+    second = pipeline._select_loo_activity_ids(ids, "hardRunOrTrailRun", config)
+    assert first == second
+    assert len(first) == 2
+    other = pipeline._select_loo_activity_ids(ids, "hardTrailRun", config)
+    assert other != first
+
+
 def test_config_rejects_invalid_ablation_protocol() -> None:
     raw = _valid_minimal_config()
     raw["fitting"] = {"ablation_protocol": "partial"}

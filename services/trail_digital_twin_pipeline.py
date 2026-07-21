@@ -7,6 +7,7 @@ Configurable trail digital-twin extension pipeline.
 from __future__ import annotations
 
 import html
+import hashlib
 import json
 import logging
 import math
@@ -1199,8 +1200,8 @@ def _run_paper_stage_models_for_objective(task: tuple[object, ...]) -> dict[str,
     loo_cap = int(config.get("cohorts", {}).get("loo_activity_cap", 0) or 0)
     if run_loo and loo_cap > 0 and len(loo_ids) > loo_cap:
         seed = int(config.get("cohorts", {}).get("loo_activity_cap_seed", 20260721))
-        # Stable per-cohort seed so caps are reproducible across runs.
-        cohort_seed = seed + (abs(hash(cohort_name)) % 10_000)
+        # Stable per-cohort seed so caps are reproducible across runs/processes.
+        cohort_seed = seed + _stable_cohort_seed_offset(cohort_name)
         rng = np.random.default_rng(cohort_seed)
         loo_ids = sorted(rng.choice(np.array(loo_ids, dtype=object), size=loo_cap, replace=False).tolist())
         logger.warning(
@@ -1638,13 +1639,19 @@ def run_paper_stage_models(
     return tables, stage3_best, stage3_segments
 
 
+def _stable_cohort_seed_offset(cohort_name: str) -> int:
+    """Stable per-cohort offset (avoid Python's randomized ``hash()``)."""
+    digest = hashlib.sha256(str(cohort_name).encode("utf-8")).hexdigest()
+    return int(digest[:8], 16) % 10_000
+
+
 def _select_loo_activity_ids(activity_ids: Sequence[str], cohort_name: str, config: Mapping[str, Any]) -> list[str]:
     """Apply the same LOO activity cap used by Stage 0–3 paper models."""
     loo_ids = [str(activity_id) for activity_id in activity_ids]
     loo_cap = int(config.get("cohorts", {}).get("loo_activity_cap", 0) or 0)
     if loo_cap > 0 and len(loo_ids) > loo_cap:
         seed = int(config.get("cohorts", {}).get("loo_activity_cap_seed", 20260721))
-        cohort_seed = seed + (abs(hash(cohort_name)) % 10_000)
+        cohort_seed = seed + _stable_cohort_seed_offset(cohort_name)
         rng = np.random.default_rng(cohort_seed)
         loo_ids = sorted(rng.choice(np.array(loo_ids, dtype=object), size=loo_cap, replace=False).tolist())
         logger.warning(
