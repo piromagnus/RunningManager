@@ -70,6 +70,19 @@ def test_config_merges_defaults_and_normalises_stage3_states() -> None:
     assert config["physiology"]["vma_flat_kmh"] == pytest.approx(18.0)
     assert config["execution"]["jobs"] == 1
     assert config["fitting"]["enabled_objectives"] == ["activity", "segment"]
+    assert config["fitting"]["ablation_protocol"] == "reoptimize"
+    assert config["fitting"]["ablation_fit_objectives"] == []
+    assert config["segment_exclusion"]["enabled"] is False
+    assert config["segment_exclusion"]["min_mean_speed_eq_kmh"] == pytest.approx(3.0)
+    assert config["segment_exclusion"]["max_stationary_time_share"] == pytest.approx(0.40)
+    assert config["segment_exclusion"]["max_abs_altitude_rate_mph"] == pytest.approx(120.0)
+    assert config["segment_exclusion"]["use_moving_time_for_fit"] is False
+    assert pipeline._fit_actual_time_col(config) == "actualTimeSec"
+    moving = pipeline._deep_merge(config, {"segment_exclusion": {"use_moving_time_for_fit": True}})
+    assert pipeline._fit_actual_time_col(moving) == "actualMovingTimeSec"
+    assert pipeline._fit_mask_col(config) is None
+    enabled = pipeline._deep_merge(config, {"segment_exclusion": {"enabled": True}})
+    assert pipeline._fit_mask_col(enabled) == "isFitEligible"
     assert {state["fatigue_state"] for state in config["fitting"]["stage3_fatigue_states"]} == {
         "decayed",
         "cumulative",
@@ -269,6 +282,32 @@ def test_build_cohorts_includes_hard_run_or_trail_run() -> None:
     assert cohorts["hardRunOrTrailRun"]["activityId"].tolist() == ["trail", "run"]
 
 
+def test_build_cohorts_includes_run_trail_over_20_min() -> None:
+    config = pipeline.normalise_config(_valid_minimal_config())
+    config["cohorts"]["include"] = ["runTrailOver20Min", "hardRunOrTrailRun"]
+    activity_df = pd.DataFrame(
+        {
+            "activityId": ["long_easy", "short", "hard"],
+            "category": ["RUN", "RUN", "TRAIL_RUN"],
+            "movingSec": [25 * 60.0, 15 * 60.0, 40 * 60.0],
+            "distanceKm": [5.0, 3.0, 12.0],
+            "ascentM": [50.0, 20.0, 600.0],
+            "hrReserveRatio": [0.55, 0.50, 0.75],
+            "hasTimeseries": [True, True, True],
+        }
+    )
+    segments_by_activity = {
+        "long_easy": pd.DataFrame({"distanceKm": [1.0], "actualTimeSec": [300.0]}),
+        "short": pd.DataFrame({"distanceKm": [1.0], "actualTimeSec": [300.0]}),
+        "hard": pd.DataFrame({"distanceKm": [1.0], "actualTimeSec": [300.0]}),
+    }
+
+    cohorts = pipeline._build_cohorts(activity_df, segments_by_activity, config)
+
+    assert set(cohorts["runTrailOver20Min"]["activityId"]) == {"long_easy", "hard"}
+    assert cohorts["hardRunOrTrailRun"]["activityId"].tolist() == ["hard"]
+
+
 def test_html_renderer_is_self_contained_and_has_expected_sections() -> None:
     result = pipeline.PipelineResult(
         tables={
@@ -447,6 +486,141 @@ def test_segment_type_metrics_group_stage3_errors_by_terrain() -> None:
     assert climb["biasMin"] == pytest.approx(-0.25)
     assert descent["terrainLabel"] == "Descent"
     assert descent["maeMin"] == pytest.approx(1.0)
+
+
+def test_loo_activity_cap_seed_is_stable_across_processes() -> None:
+    config = {"cohorts": {"loo_activity_cap": 2, "loo_activity_cap_seed": 20260721}}
+    ids = [f"a{i}" for i in range(10)]
+    first = pipeline._select_loo_activity_ids(ids, "hardRunOrTrailRun", config)
+    second = pipeline._select_loo_activity_ids(ids, "hardRunOrTrailRun", config)
+    assert first == second
+    assert len(first) == 2
+    other = pipeline._select_loo_activity_ids(ids, "hardTrailRun", config)
+    assert other != first
+
+
+def test_config_rejects_invalid_ablation_protocol() -> None:
+    raw = _valid_minimal_config()
+    raw["fitting"] = {"ablation_protocol": "partial"}
+
+    with pytest.raises(ValueError, match="ablation_protocol"):
+        pipeline.normalise_config(raw)
+
+
+def _tiny_ablation_fixture() -> tuple[
+    dict[tuple[str, str], dict[str, object]],
+    dict[tuple[str, str], pd.DataFrame],
+    dict[str, pd.DataFrame],
+    dict[str, object],
+]:
+    segments = pd.DataFrame(
+        {
+            "activityId": ["a", "a", "b", "b", "c", "c"],
+            "distanceKm": [1.0] * 6,
+            "avgGrade": [0.0, 0.08, 0.0, 0.08, 0.0, 0.08],
+            "meanAltitudeM": [200.0] * 6,
+            "actualTimeSec": [400.0, 480.0, 410.0, 500.0, 390.0, 470.0],
+            "actualMovingTimeSec": [400.0, 480.0, 410.0, 500.0, 390.0, 470.0],
+            "meanHrReserve": [0.72, 0.80, 0.70, 0.78, 0.74, 0.82],
+            "decayedTrimpBefore": [0.0, 0.25, 0.0, 0.30, 0.0, 0.20],
+            "cumTrimpBefore": [0.0, 0.30, 0.0, 0.35, 0.0, 0.25],
+            "progress": [0.25, 0.75, 0.25, 0.75, 0.25, 0.75],
+            "rediReadinessFactor": [1.0] * 6,
+            "gapFactor": [1.0, 1.2, 1.0, 1.2, 1.0, 1.2],
+            "isFitEligible": [True] * 6,
+        }
+    )
+    cohort = pd.DataFrame(
+        {
+            "activityId": ["a", "b", "c"],
+            "actualTimeSec": [880.0, 910.0, 860.0],
+        }
+    )
+    stage3_best = {
+        ("tiny", "activity"): {
+            "alpha": 0.90,
+            "fatigueCoef": 0.30,
+            "fatigueModel": "linear",
+            "fatigueState": "decayed",
+            "acuteTrimpCol": "decayedTrimpBefore",
+            "secondaryAcuteTrimpCol": "",
+            "secondaryFatigueModel": "",
+            "secondaryFatigueCoef": 0.0,
+        }
+    }
+    stage3_segments = {("tiny", "activity"): segments}
+    cohorts = {"tiny": cohort}
+    config = pipeline.normalise_config(
+        {
+            **_valid_minimal_config(),
+            "physiology": {
+                "vma_flat_kmh": 12.0,
+                "hrr_reference": 0.80,
+                "hrr_min_factor": 0.40,
+                "hrr_max_factor": 1.0,
+                "min_fatigue_factor": 0.60,
+                "gap_climb_scale": 0.85,
+                "gap_descent_scale": 1.60,
+            },
+            "fitting": {
+                "enabled_objectives": ["activity"],
+                "validation_modes": ["in_sample", "loo"],
+                "ablation_protocol": "reoptimize",
+                "ablation_fit_objectives": ["activity"],
+                "hrr_trimp_alpha_grid": [0.85, 0.95],
+                "hrr_trimp_kappa_grid": [0.0, 0.30],
+                "hrr_trimp_secondary_kappa_grid": [0.0],
+                "fatigue_models": ["linear"],
+                "stage3_fatigue_states": [
+                    {
+                        "fatigue_state": "decayed",
+                        "acute_trimp_col": "decayedTrimpBefore",
+                        "label": "decayed",
+                        "fatigue_models": ["linear"],
+                    }
+                ],
+            },
+            "cohorts": {"loo_include": ["tiny"]},
+        }
+    )
+    return stage3_best, stage3_segments, cohorts, config
+
+
+def test_stage3_ablation_reoptimizes_parameters_per_variant() -> None:
+    stage3_best, stage3_segments, cohorts, config = _tiny_ablation_fixture()
+
+    table = pipeline.run_stage3_ablation(stage3_best, stage3_segments, cohorts, config)
+
+    assert not table.empty
+    assert set(table["ablationProtocol"]) == {"reoptimize_loo"}
+    assert set(table["validation"]) == {"loo"}
+    assert "full" in set(table["stage"])
+    assert "no HRR speed ratio" in set(table["stage"])
+    assert "linear progress fatigue" in set(table["stage"])
+    # Re-optimized variants may select different (α, κ) than the restored Stage-3 seed.
+    alphas = table.set_index("stage")["alpha"]
+    assert alphas.nunique() >= 1
+    no_fatigue = table[table["stage"].eq("no acute fatigue")].iloc[0]
+    assert float(no_fatigue["fatigueCoef"]) == pytest.approx(0.0)
+    progress = table[table["stage"].eq("linear progress fatigue")].iloc[0]
+    assert str(progress["acuteTrimpCol"]) == "progress"
+    assert str(progress["fatigueModel"]) == "linear"
+
+
+def test_stage3_ablation_frozen_keeps_seed_parameters() -> None:
+    stage3_best, stage3_segments, cohorts, config = _tiny_ablation_fixture()
+    config["fitting"]["ablation_protocol"] = "frozen"
+
+    table = pipeline.run_stage3_ablation(stage3_best, stage3_segments, cohorts, config)
+
+    assert set(table["ablationProtocol"]) == {"frozen"}
+    assert set(table["validation"]) == {"in_sample"}
+    assert table["alpha"].nunique() == 1
+    assert float(table["alpha"].iloc[0]) == pytest.approx(0.90)
+    no_fatigue = table[table["stage"].eq("no acute fatigue")].iloc[0]
+    assert float(no_fatigue["fatigueCoef"]) == pytest.approx(0.0)
+    full = table[table["stage"].eq("full")].iloc[0]
+    assert float(full["fatigueCoef"]) == pytest.approx(0.30)
 
 
 def test_hrr_trimp_loo_accepts_segment_objective() -> None:

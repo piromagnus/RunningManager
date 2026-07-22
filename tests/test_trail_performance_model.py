@@ -22,6 +22,30 @@ def test_minetti_cost_is_clamped_and_gap_flat_is_one() -> None:
     assert model.gap_factor(0.2) > 1.0
 
 
+def test_trail_gap_multiplier_is_asymmetric_on_steep_grades() -> None:
+    assert model.trail_gap_multiplier(0.20, climb_scale=0.85, descent_scale=1.60) == pytest.approx(0.85)
+    assert model.trail_gap_multiplier(-0.20, climb_scale=0.85, descent_scale=1.60) == pytest.approx(1.60)
+    assert model.trail_gap_multiplier(0.0, climb_scale=0.85, descent_scale=1.60) == pytest.approx(1.0)
+    # Soft ramp: midway between soft_start=0.04 and steep=0.15
+    mid = model.trail_gap_multiplier(
+        0.095,
+        steep_threshold=0.15,
+        soft_start=0.04,
+        climb_scale=0.85,
+        descent_scale=1.60,
+    )
+    assert mid == pytest.approx(0.925, abs=1e-3)
+    scaled = model.apply_trail_gap_multipliers(
+        np.array([2.0, 0.6, 1.0]),
+        np.array([0.20, -0.20, 0.0]),
+        climb_scale=0.85,
+        descent_scale=1.60,
+    )
+    assert scaled[0] == pytest.approx(1.7)
+    assert scaled[1] == pytest.approx(0.96)
+    assert scaled[2] == pytest.approx(1.0)
+
+
 def test_altitude_factor_decreases_with_altitude() -> None:
     sea_level = model.altitude_factor(0.0)
     mid_altitude = model.altitude_factor(1_000.0)
@@ -1012,3 +1036,258 @@ def test_hr_regression_keeps_low_submaximal_effort_rows() -> None:
 
     assert len(predicted) == 4
     assert np.isfinite(predicted).all()
+
+
+def test_segment_timeseries_records_stationary_share_for_idle_block() -> None:
+    # Moving first half, then device-open idle with tiny GPS jitter.
+    distances = [0.1, 0.2, 0.3, 0.4, 0.401, 0.402, 0.403, 0.404]
+    durations = [60.0, 120.0, 180.0, 240.0, 540.0, 840.0, 1140.0, 1440.0]
+    df = pd.DataFrame(
+        {
+            "cumulated_distance": distances,
+            "cumulated_duration_seconds": durations,
+            "grade_ma_10": [0.0] * len(distances),
+            "hr": [140.0] * len(distances),
+        }
+    )
+
+    segments = model.segment_timeseries(df, segment_km=1.0)
+    assert len(segments) == 1
+    assert segments.iloc[0]["stationaryTimeShare"] > 0.5
+    assert segments.iloc[0]["meanSpeedKmh"] < 2.0
+
+
+def test_segment_timeseries_keeps_zero_distance_dwell_time() -> None:
+    # 0.5 km move, then 10 minutes stopped at the same distance, then finish the km.
+    df = pd.DataFrame(
+        {
+            "cumulated_distance": [0.1, 0.3, 0.5, 0.5, 0.5, 0.5, 0.75, 1.0],
+            "cumulated_duration_seconds": [60.0, 120.0, 180.0, 330.0, 480.0, 780.0, 900.0, 1020.0],
+            "grade_ma_10": [0.0] * 8,
+            "hr": [150.0] * 8,
+        }
+    )
+    segments = model.segment_timeseries(df, segment_km=1.0)
+    assert len(segments) == 1
+    assert segments.iloc[0]["distanceKm"] == pytest.approx(1.0)
+    assert segments.iloc[0]["actualTimeSec"] == pytest.approx(1020.0)
+    assert segments.iloc[0]["stationaryTimeSec"] >= 600.0
+    assert segments.iloc[0]["stationaryTimeShare"] > 0.5
+
+
+def test_apply_segment_exclusion_flags_low_speed_eq_and_high_stationary_share() -> None:
+    segments = pd.DataFrame(
+        {
+            "distanceKm": [1.0, 1.0, 1.0, 1.0],
+            "actualTimeSec": [360.0, 1800.0, 600.0, 1200.0],
+            "meanSpeedKmh": [10.0, 1.5, 6.0, 2.0],
+            "meanSpeedEqKmh": [10.0, 1.2, 6.0, 7.5],
+            "stationaryTimeShare": [0.05, 0.20, 0.95, 0.10],
+            # Flat on altitude-over-time (m of |Δelev| per clock hour).
+            "absAltitudeRateMph": [40.0, 30.0, 10.0, 20.0],
+        }
+    )
+    annotated = model.apply_segment_exclusion(
+        segments,
+        enabled=True,
+        min_mean_speed_eq_kmh=3.0,
+        max_stationary_time_share=0.80,
+        max_abs_altitude_rate_mph=120.0,
+    )
+    assert annotated["isFitEligible"].tolist() == [True, False, False, True]
+    assert "near_flat_altitude_time" in annotated.loc[1, "exclusionReason"]
+    assert "low_mean_speed_eq" in annotated.loc[1, "exclusionReason"]
+    assert "high_stationary_share" in annotated.loc[2, "exclusionReason"]
+    assert annotated.loc[3, "exclusionReason"] == ""
+
+
+def test_apply_segment_exclusion_keeps_climbing_altitude_time_profile() -> None:
+    """Slow climbs must stay in the fit set when altitude rises over time."""
+    segments = pd.DataFrame(
+        {
+            "distanceKm": [1.0, 1.0],
+            "actualTimeSec": [1800.0, 1800.0],
+            "meanSpeedKmh": [2.0, 1.5],
+            "meanSpeedEqKmh": [8.0, 1.2],
+            "stationaryTimeShare": [0.05, 0.50],
+            # ~400–600 m/h vertical activity → rising altitude–time profile.
+            "absAltitudeRateMph": [400.0, 600.0],
+            "avgGrade": [0.02, 0.02],  # mild distance-grade must not matter
+        }
+    )
+    annotated = model.apply_segment_exclusion(
+        segments,
+        enabled=True,
+        min_mean_speed_eq_kmh=3.0,
+        max_stationary_time_share=0.40,
+        max_abs_altitude_rate_mph=120.0,
+    )
+    assert annotated["isFitEligible"].tolist() == [True, True]
+    assert (annotated["exclusionReason"] == "").all()
+
+
+def test_segment_timeseries_reports_altitude_rate_over_time() -> None:
+    """absAltitudeRateMph is gross |Δelev| / clock hour, not distance grade."""
+    # 1 km in 600 s with +50 m elev → 50 / 600 * 3600 = 300 m/h
+    n = 11
+    df = pd.DataFrame(
+        {
+            "cumulated_distance": np.linspace(0.0, 1.0, n),
+            "cumulated_duration_seconds": np.linspace(0.0, 600.0, n),
+            "elevationM_ma_5": np.linspace(0.0, 50.0, n),
+            "grade_ma_10": np.full(n, 0.05),
+            "speed_km_h": np.full(n, 6.0),
+            "lat": np.linspace(45.0, 45.01, n),
+            "lon": np.linspace(5.0, 5.01, n),
+        }
+    )
+    segments = model.segment_timeseries(df, segment_km=1.0)
+    assert not segments.empty
+    assert segments.iloc[0]["absAltitudeRateMph"] == pytest.approx(300.0, rel=0.05)
+    assert "netAltitudeRateMph" in segments.columns
+
+
+def test_hrr_trimp_grid_search_optimizes_on_fit_mask_and_scores_full_race() -> None:
+    segments = pd.DataFrame(
+        {
+            "activityId": ["a", "a", "a", "b", "b", "b"],
+            "distanceKm": [1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+            "avgGrade": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            "meanAltitudeM": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            "meanHrReserve": [0.70, 0.72, 0.70, 0.70, 0.74, 0.70],
+            "decayedTrimpBefore": [0.0, 4.0, 8.0, 0.0, 5.0, 9.0],
+            "isFitEligible": [True, True, False, True, True, False],
+        }
+    )
+    clean = segments[segments["isFitEligible"]].copy()
+    clean["actualTimeSec"] = model.predict_hrr_trimp_segment_times(
+        clean,
+        v_anchor_kmh=12.0,
+        alpha=0.80,
+        fatigue_coef=0.30,
+        fatigue_model="linear",
+        trimp_scale=10.0,
+    )
+    segments = segments.merge(
+        clean[["activityId", "decayedTrimpBefore", "actualTimeSec"]],
+        on=["activityId", "decayedTrimpBefore"],
+        how="left",
+        suffixes=("", "_clean"),
+    )
+    # Idle segments are much slower than the model would expect.
+    segments.loc[~segments["isFitEligible"], "actualTimeSec"] = 1800.0
+
+    best, grid, prediction = model.hrr_trimp_grid_search_model(
+        segments,
+        v_anchor_kmh=12.0,
+        alpha_grid=[0.70, 0.80, 0.90],
+        fatigue_coef_grid=[0.0, 0.30],
+        fatigue_models=("linear",),
+        trimp_scale=10.0,
+        fit_mask_col="isFitEligible",
+    )
+    loo = model.leave_one_out_hrr_trimp_grid_search(
+        segments,
+        v_anchor_kmh=12.0,
+        alpha_grid=[0.70, 0.80, 0.90],
+        fatigue_coef_grid=[0.0, 0.30],
+        fatigue_models=("linear",),
+        trimp_scale=10.0,
+        fit_mask_col="isFitEligible",
+    )
+
+    assert best["alpha"] == pytest.approx(0.80)
+    assert best["fatigueCoef"] == pytest.approx(0.30)
+    assert best["fitSegmentCount"] == 4
+    assert best["fullSegmentCount"] == 6
+    assert best["raceMaeSecFull"] > best["raceMaeSec"]
+    assert prediction["isFitEligible"].tolist() == [True, True, False, True, True, False]
+    assert len(loo) == 2
+    assert {"excludedSegmentCount", "excludedTimeSec", "predictedFitEligibleSec"}.issubset(loo.columns)
+    assert int(loo["excludedSegmentCount"].sum()) == 2
+    assert float(grid["segmentMaeSec"].min()) <= float(grid["segmentMaeSecFull"].min()) + 1e-9
+
+
+def test_hrr_trimp_grid_search_fits_on_moving_time_and_scores_full_clock() -> None:
+    """Stationary dwell is stripped from the fit target; errorSec stays on full clock."""
+    segments = pd.DataFrame(
+        {
+            "activityId": ["a", "a", "b", "b"],
+            "distanceKm": [1.0, 1.0, 1.0, 1.0],
+            "avgGrade": [0.0, 0.0, 0.0, 0.0],
+            "meanAltitudeM": [0.0, 0.0, 0.0, 0.0],
+            "meanHrReserve": [0.70, 0.72, 0.70, 0.74],
+            "decayedTrimpBefore": [0.0, 4.0, 0.0, 5.0],
+            "stationaryTimeSec": [0.0, 600.0, 0.0, 900.0],
+        }
+    )
+    moving = model.predict_hrr_trimp_segment_times(
+        segments,
+        v_anchor_kmh=12.0,
+        alpha=0.80,
+        fatigue_coef=0.30,
+        fatigue_model="linear",
+        trimp_scale=10.0,
+    )
+    segments["actualMovingTimeSec"] = moving
+    segments["actualTimeSec"] = moving + segments["stationaryTimeSec"]
+
+    best, grid, prediction = model.hrr_trimp_grid_search_model(
+        segments,
+        v_anchor_kmh=12.0,
+        alpha_grid=[0.70, 0.80, 0.90],
+        fatigue_coef_grid=[0.0, 0.30],
+        fatigue_models=("linear",),
+        trimp_scale=10.0,
+        actual_time_col="actualMovingTimeSec",
+        observed_activity_times_sec={
+            "a": float(segments.loc[segments["activityId"].eq("a"), "actualTimeSec"].sum()),
+            "b": float(segments.loc[segments["activityId"].eq("b"), "actualTimeSec"].sum()),
+        },
+    )
+    assert best["alpha"] == pytest.approx(0.80)
+    assert best["fatigueCoef"] == pytest.approx(0.30)
+    assert best["actualTimeCol"] == "actualMovingTimeSec"
+    assert best["raceMaeSecFull"] > best["raceMaeSec"]
+    assert "fitErrorSec" in prediction.columns
+    assert prediction["fitErrorSec"].abs().max() < prediction["errorSec"].abs().max()
+
+
+def test_segment_timeseries_reports_hr_valid_share() -> None:
+    n = 11
+    hr = np.full(n, 150.0)
+    hr[0] = np.nan
+    hr[1] = np.nan
+    df = pd.DataFrame(
+        {
+            "cumulated_distance": np.linspace(0.0, 1.0, n),
+            "cumulated_duration_seconds": np.linspace(0.0, 360.0, n),
+            "elevationM": np.zeros(n),
+            "hr": hr,
+        }
+    )
+    segments = model.segment_timeseries(df, segment_km=1.0, hr_rest=50.0, hr_max=200.0)
+    assert not segments.empty
+    assert segments.iloc[0]["hrSampleCount"] == n
+    assert segments.iloc[0]["hrValidSampleCount"] == n - 2
+    assert segments.iloc[0]["hrValidShare"] == pytest.approx((n - 2) / n)
+
+
+def test_speed_vs_hrr_curve_increases_until_effort_ceiling() -> None:
+    curve = model.speed_vs_hrr_curve(
+        hrr_values=[0.60, 0.70, 0.80, 0.88, 0.95],
+        v_anchor_kmh=18.0,
+        alpha=0.95,
+        distance_km=1.0,
+        avg_grade=0.0,
+        fatigue_coef=0.0,
+        hrr_reference=0.88,
+        hrr_min_factor=0.30,
+        hrr_max_factor=1.0,
+    )
+    assert len(curve) == 5
+    assert curve.loc[curve["hrr"] == 0.80, "speedKmh"].iloc[0] > curve.loc[curve["hrr"] == 0.60, "speedKmh"].iloc[0]
+    assert curve.loc[curve["hrr"] == 0.95, "speedKmh"].iloc[0] == pytest.approx(
+        curve.loc[curve["hrr"] == 0.88, "speedKmh"].iloc[0],
+        rel=1e-6,
+    )

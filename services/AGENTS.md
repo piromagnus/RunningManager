@@ -17,8 +17,8 @@ Domain services for planning, analytics, metrics, and external integrations.
 | `garmin_import_service.py` | Garmin import (stub) |
 | `garmin_export_service.py` | TCX export for intervals |
 | `dashboard_data_service.py` | Dashboard data preprocessing |
-| `trail_digital_twin_pipeline.py` | Configurable trail digital-twin fitting/report pipeline |
-| `trail_digital_twin_benchmark.py` | Benchmark sweep expansion, leaderboard extraction, and HTML reporting |
+| `trail_digital_twin_pipeline.py` | Configurable trail digital-twin fitting/report pipeline; cohorts include `runTrailOver20Min`; LOO caps/`loo_include`; HR QC in `segment_qc`; `software_versions.json`; Stage-3 ablation protocols `reoptimize` (default) vs `frozen`; ablation includes TRIMP→linear progress fatigue substitution |
+| `trail_digital_twin_benchmark.py` | Benchmark sweep expansion, leaderboard extraction, HTML reporting; bootstrap MAE + α/κ uncertainty helpers |
 | `activity_feed_service.py` | Activity list building |
 | `activity_detail_service.py` | Single activity detail loading |
 | `lap_metrics_service.py` | Lap-level metrics extraction |
@@ -103,8 +103,12 @@ Key metrics:
 - `has_elevation_metrics(activity_id)`: Check if cached elevation metrics are available
 
 ### Trail Performance Model
-- `prepare_raw_timeseries_for_segments(...)`: Fast raw GPS/HR/elevation preparation for notebook segment aggregation
-- `segment_timeseries(df)`: Aggregate processed activity streams into 1 km course segments; includes distance-weighted integrated GAP and mixed climb/descent diagnostics
+- `gap_factor(grade)` / `trail_gap_multiplier(...)`: Minetti running GAP plus optional soft-ramped trail climb/descent scales (`gap_climb_scale`, `gap_descent_scale`)
+- Pre-race constant-HRR prediction: `scripts/predict_race_constant_hrr.py` (hold-out races; planned profile only)
+- Model summary (athlete vs general params): `docs/science/trail_digital_twin_model_summary.md`
+- Prediction journal: `docs/science/journal_prediction.md`
+- `segment_timeseries(df)`: Aggregate processed activity streams into 1 km course segments; includes distance-weighted integrated GAP, mixed climb/descent diagnostics, `stationaryTimeShare`, and `actualMovingTimeSec`
+- `apply_segment_exclusion(...)`: Flag immobile segments that are flat on the altitude–time profile (`absAltitudeRateMph`) via `isFitEligible` + `exclusionReason`; requires low altitude rate AND (low `meanSpeedEqKmh` OR high `stationaryTimeShare`) so climbing/descending time profiles stay in the fit set
 - `grid_search_model(...)`: Fit paper-style `alpha` and fatigue/pacing-decay parameter
 - `leave_one_out_grid_search(...)`: Race/activity-level LOO validation for notebook experiments
 - `top_hrr_hard_trailrun_ids(...)`: Build top hard TrailRun subset by average HR reserve
@@ -122,8 +126,8 @@ Key metrics:
 - `select_best_constant_hrr(...)`: Fastest feasible HRR choice from a sweep
 - `segment_grid_search_model(...)`: Extension-only segment-level grid search with race-summed metrics
 - `predict_hrr_trimp_segment_times(...)`: Constrained HRR-linear plus raw acute-load fatigue speed equation; supports decayed TRIMP, cumulative TRIMP, progress, or decayed-plus-secondary fatigue input, and treats `trimp_scale` as deprecated/ignored
-- `hrr_trimp_grid_search_model(...)`: Small-grid constrained HRR-TRIMP calibration with segment and race metrics
-- `leave_one_out_hrr_trimp_grid_search(...)`: All-activity LOO validation for the constrained HRR-TRIMP model
+- `hrr_trimp_grid_search_model(..., fit_mask_col=None)`: Small-grid constrained HRR-TRIMP calibration; optional fit mask optimizes on cleaned segments while still predicting full race
+- `leave_one_out_hrr_trimp_grid_search(..., fit_mask_col=None)`: All-activity LOO; fit on eligible segments, score full race (plus fit-eligible diagnostics)
 - `forbidden_anonymized_columns(...)`: Guard direct identifiers from paper feature exports
 - `fit_linear_regression(...)`: Lightweight HR and segment model fitting for notebook analysis
 
@@ -133,7 +137,10 @@ Key metrics:
 - `write_outputs(result, output_dir)`: Write CSV assets, manifest, and self-contained HTML report
 - `table_hrr_trimp_grid_search`: Exported Stage 1-3 HRR/TRIMP alpha-kappa grid-search cells with physiology bounds and MAE metrics
 - `table_segment_type_metrics`: Stage 3 segment-level MAE, bias, MAPE, R2, and counts by terrain family
+- `segment_exclusion` config: optional altitude–time flat immobile fit mask (`isFitEligible`); keys include `use_moving_time_for_fit` to strip dwell from Stage 3 fit; full-race LOO retained
 - Default config path: `configs/trail_digital_twin_extensions.yaml`
+- Segment-exclusion A/B: `configs/trail_digital_twin_benchmark_segment_exclusion.yaml`
+- Moving-time fit A/B: `configs/trail_digital_twin_benchmark_moving_time_fit.yaml`
 
 ### Trail Digital Twin Benchmark
 - `load_benchmark_config(path)`: Read and validate grouped benchmark sweep YAML

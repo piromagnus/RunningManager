@@ -6,6 +6,7 @@ Trail running digital-twin helpers used by the research notebook.
 
 from __future__ import annotations
 
+import logging
 import math
 from dataclasses import dataclass
 from typing import Iterable, Mapping, Optional, Sequence
@@ -15,12 +16,22 @@ import pandas as pd
 
 from utils.redi import compute_redi
 
+logger = logging.getLogger(__name__)
+
 MINETTI_RUNNING_FLAT_COST = 3.6
 MINETTI_GRADE_CLAMP = 0.75
 GRADE_OUTLIER_ABS_THRESHOLD = 1.0
 EARTH_RADIUS_M = 6_371_000.0
 SEGMENT_GRADE_SHARE_THRESHOLD = 0.03
 MIXED_CLIMB_DESCENT_MIN_SHARE = 0.25
+DEFAULT_STATIONARY_SPEED_KMH = 1.0
+DEFAULT_MIN_MEAN_SPEED_EQ_KMH = 3.0
+DEFAULT_MAX_STATIONARY_TIME_SHARE = 0.40
+# Near-flat on the altitude–time profile: gross |Δelev| per clock hour.
+# (Not distance-grade: slow climbs stay non-flat even when |avgGrade| is modest.)
+DEFAULT_MAX_ABS_ALTITUDE_RATE_MPH = 120.0
+# Deprecated distance-grade gate (kept only for backward-compatible kwargs).
+DEFAULT_MAX_ABS_GRADE_FOR_EXCLUSION = 0.05
 DEFAULT_FORBIDDEN_ANONYMIZED_COLUMNS = frozenset(
     {
         "activityid",
@@ -67,6 +78,76 @@ def minetti_running_cost(grade: float) -> float:
 def gap_factor(grade: float) -> float:
     """Grade-adjustment cost factor with f_gap(0) = 1."""
     return minetti_running_cost(grade) / MINETTI_RUNNING_FLAT_COST
+
+
+DEFAULT_GAP_STEEP_THRESHOLD = 0.15
+DEFAULT_GAP_SOFT_START = 0.04
+DEFAULT_GAP_CLIMB_SCALE = 1.0
+DEFAULT_GAP_DESCENT_SCALE = 1.0
+
+
+def trail_gap_multiplier(
+    grade: float,
+    *,
+    steep_threshold: float = DEFAULT_GAP_STEEP_THRESHOLD,
+    soft_start: float = DEFAULT_GAP_SOFT_START,
+    climb_scale: float = DEFAULT_GAP_CLIMB_SCALE,
+    descent_scale: float = DEFAULT_GAP_DESCENT_SCALE,
+) -> float:
+    """Asymmetric trail correction on top of Minetti running GAP.
+
+    Scales ramp from 1.0 at ``±soft_start`` to the full climb/descent scale at
+    ``±steep_threshold``, then stay constant beyond that. Defaults keep Minetti
+    unchanged (scales = 1.0).
+    """
+    g = _to_float(grade, 0.0)
+    thresh = abs(float(steep_threshold))
+    soft = max(0.0, min(abs(float(soft_start)), thresh - 1e-6))
+    climb = max(0.1, float(climb_scale))
+    descent = max(0.1, float(descent_scale))
+    if g >= soft:
+        if climb == 1.0:
+            return 1.0
+        span = max(thresh - soft, 1e-9)
+        t = min(1.0, max(0.0, (g - soft) / span))
+        return 1.0 + t * (climb - 1.0)
+    if g <= -soft:
+        if descent == 1.0:
+            return 1.0
+        span = max(thresh - soft, 1e-9)
+        t = min(1.0, max(0.0, (-g - soft) / span))
+        return 1.0 + t * (descent - 1.0)
+    return 1.0
+
+
+def apply_trail_gap_multipliers(
+    gap: np.ndarray | pd.Series,
+    grades: np.ndarray | pd.Series,
+    *,
+    steep_threshold: float = DEFAULT_GAP_STEEP_THRESHOLD,
+    soft_start: float = DEFAULT_GAP_SOFT_START,
+    climb_scale: float = DEFAULT_GAP_CLIMB_SCALE,
+    descent_scale: float = DEFAULT_GAP_DESCENT_SCALE,
+) -> np.ndarray:
+    """Element-wise trail GAP scaling for segment arrays."""
+    gap_arr = np.asarray(gap, dtype=float)
+    grade_arr = np.asarray(pd.to_numeric(pd.Series(grades), errors="coerce").fillna(0.0), dtype=float)
+    if gap_arr.shape != grade_arr.shape:
+        raise ValueError("gap and grades must have the same shape")
+    multipliers = np.array(
+        [
+            trail_gap_multiplier(
+                float(g),
+                steep_threshold=steep_threshold,
+                soft_start=soft_start,
+                climb_scale=climb_scale,
+                descent_scale=descent_scale,
+            )
+            for g in grade_arr
+        ],
+        dtype=float,
+    )
+    return np.clip(gap_arr * multipliers, 0.1, None)
 
 
 def altitude_factor(altitude_m: float) -> float:
@@ -171,17 +252,37 @@ def _weighted_std(values: pd.Series, weights: pd.Series) -> float:
     return math.sqrt(max(0.0, variance))
 
 
-def _gap_factors_for_segments(segments_df: pd.DataFrame) -> pd.Series:
-    fallback = (
-        pd.to_numeric(segments_df.get("avgGrade", pd.Series(0.0, index=segments_df.index)), errors="coerce")
-        .fillna(0.0)
-        .map(gap_factor)
-    )
+def _gap_factors_for_segments(
+    segments_df: pd.DataFrame,
+    *,
+    steep_threshold: float = DEFAULT_GAP_STEEP_THRESHOLD,
+    soft_start: float = DEFAULT_GAP_SOFT_START,
+    climb_scale: float = DEFAULT_GAP_CLIMB_SCALE,
+    descent_scale: float = DEFAULT_GAP_DESCENT_SCALE,
+) -> pd.Series:
+    grades = pd.to_numeric(
+        segments_df.get("avgGrade", pd.Series(0.0, index=segments_df.index)),
+        errors="coerce",
+    ).fillna(0.0)
+    fallback = grades.map(gap_factor)
     for col in ("gapFactorIntegrated", "gapFactor"):
         if col in segments_df.columns:
             gap_values = pd.to_numeric(segments_df[col], errors="coerce")
-            return gap_values.where(gap_values > 0.0).fillna(fallback).clip(lower=0.1)
-    return fallback.clip(lower=0.1)
+            base = gap_values.where(gap_values > 0.0).fillna(fallback).clip(lower=0.1)
+            break
+    else:
+        base = fallback.clip(lower=0.1)
+    if climb_scale == 1.0 and descent_scale == 1.0:
+        return base
+    scaled = apply_trail_gap_multipliers(
+        base.to_numpy(dtype=float),
+        grades.to_numpy(dtype=float),
+        steep_threshold=steep_threshold,
+        soft_start=soft_start,
+        climb_scale=climb_scale,
+        descent_scale=descent_scale,
+    )
+    return pd.Series(scaled, index=segments_df.index)
 
 
 def gps_technicality_index(latitudes: Sequence[float], longitudes: Sequence[float]) -> float:
@@ -362,37 +463,38 @@ def segment_timeseries(
         df[elevation_col] = pd.to_numeric(df[elevation_col], errors="coerce")
         df["elevation_difference"] = df[elevation_col].diff().fillna(0.0)
 
-    df = df[df["delta_km"] > 0].copy()
-    if df.empty:
+    # Keep zero-distance rows so device-open / aid-station dwell time is attributed to
+    # the current distance segment instead of being dropped before aggregation.
+    if df["delta_km"].gt(0).sum() == 0:
         return pd.DataFrame()
 
     total_distance = float(df["cumulated_distance"].max())
-    df["segmentIndex"] = np.floor(
-        ((df["prev_distance"] + df["cumulated_distance"]) / 2.0) / segment_km
-    ).astype(int)
+    df["segmentIndex"] = np.floor(df["prev_distance"] / max(float(segment_km), 1e-9)).astype(int)
 
     rows: list[dict[str, object]] = []
     for seg_idx, seg_df in df.groupby("segmentIndex", sort=True):
-        distance_km = float(seg_df["delta_km"].sum())
+        moving_df = seg_df[seg_df["delta_km"] > 0]
+        distance_km = float(moving_df["delta_km"].sum()) if not moving_df.empty else 0.0
         if distance_km < min_distance_km:
             continue
         time_sec = float(seg_df["delta_time_sec"].sum())
-        elev_diff = pd.to_numeric(seg_df["elevation_difference"], errors="coerce").fillna(0.0)
+        elev_source = moving_df if not moving_df.empty else seg_df
+        elev_diff = pd.to_numeric(elev_source["elevation_difference"], errors="coerce").fillna(0.0)
         gain_m = float(elev_diff.clip(lower=0.0).sum())
         loss_m = float((-elev_diff.clip(upper=0.0)).sum())
         start_km = float(seg_df["prev_distance"].min())
         end_km = float(seg_df["cumulated_distance"].max())
         progress = (start_km + end_km) / max(2.0 * total_distance, 1e-9)
-        grade_col = "grade_ma_10" if "grade_ma_10" in seg_df.columns else None
+        grade_col = "grade_ma_10" if "grade_ma_10" in elev_source.columns else None
         net_grade = (gain_m - loss_m) / (distance_km * 1000.0) if distance_km > 0 else np.nan
-        grade_weights = pd.to_numeric(seg_df["delta_km"], errors="coerce").fillna(0.0)
+        grade_weights = pd.to_numeric(elev_source["delta_km"], errors="coerce").fillna(0.0)
         if grade_col:
-            local_grade = pd.to_numeric(seg_df[grade_col], errors="coerce")
+            local_grade = pd.to_numeric(elev_source[grade_col], errors="coerce")
             local_grade = local_grade.mask(local_grade.abs() > GRADE_OUTLIER_ABS_THRESHOLD)
             local_grade = local_grade.interpolate(method="linear", limit_direction="both")
             avg_grade = _weighted_mean(local_grade, grade_weights)
         else:
-            local_grade = pd.Series(np.nan, index=seg_df.index)
+            local_grade = pd.Series(np.nan, index=elev_source.index)
             avg_grade = np.nan
         fallback_grade = avg_grade if pd.notna(avg_grade) else net_grade
         local_grade = local_grade.fillna(fallback_grade if pd.notna(fallback_grade) else 0.0)
@@ -423,11 +525,21 @@ def segment_timeseries(
         )
 
         mean_altitude = (
-            _weighted_mean(seg_df[elevation_col], seg_df["delta_km"]) if elevation_col else np.nan
+            _weighted_mean(elev_source[elevation_col], elev_source["delta_km"]) if elevation_col else np.nan
         )
-        mean_hr = _weighted_mean(seg_df["hr"], seg_df["delta_time_sec"]) if "hr" in seg_df else np.nan
-        if pd.isna(mean_hr) and "hr_smooth" in seg_df:
-            mean_hr = _weighted_mean(seg_df["hr_smooth"], seg_df["delta_time_sec"])
+        hr_series = None
+        if "hr" in seg_df.columns:
+            hr_series = pd.to_numeric(seg_df["hr"], errors="coerce")
+        elif "hr_smooth" in seg_df.columns:
+            hr_series = pd.to_numeric(seg_df["hr_smooth"], errors="coerce")
+        hr_sample_count = int(len(seg_df))
+        hr_valid_sample_count = int(hr_series.notna().sum()) if hr_series is not None else 0
+        hr_valid_share = (
+            float(hr_valid_sample_count) / float(hr_sample_count) if hr_sample_count > 0 else np.nan
+        )
+        mean_hr = (
+            _weighted_mean(hr_series, seg_df["delta_time_sec"]) if hr_series is not None else np.nan
+        )
 
         mean_hr_reserve = np.nan
         if hr_rest is not None and hr_max is not None and hr_max > hr_rest and pd.notna(mean_hr):
@@ -447,9 +559,31 @@ def segment_timeseries(
         else:
             mean_speed_eq = mean_speed
 
+        delta_time = pd.to_numeric(seg_df["delta_time_sec"], errors="coerce").fillna(0.0)
+        delta_km = pd.to_numeric(seg_df["delta_km"], errors="coerce").fillna(0.0)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            instant_speed = np.where(delta_time > 0.0, delta_km / delta_time * 3600.0, 0.0)
+        stationary_mask = (delta_km <= 0.0) | (instant_speed < DEFAULT_STATIONARY_SPEED_KMH)
+        stationary_time_sec = float(delta_time.to_numpy(dtype=float)[stationary_mask].sum())
+        stationary_time_share = stationary_time_sec / time_sec if time_sec > 0 else 0.0
+        # Moving clock for Stage 3 fit: strip device-open / aid-station dwell.
+        actual_moving_time_sec = max(0.0, time_sec - stationary_time_sec)
+
+        # Altitude-over-time flatness (full segment clock, including dwell).
+        # Distinct from avgGrade / netGrade which are altitude-over-distance.
+        full_elev_diff = pd.to_numeric(seg_df["elevation_difference"], errors="coerce").fillna(0.0)
+        full_gain_m = float(full_elev_diff.clip(lower=0.0).sum())
+        full_loss_m = float((-full_elev_diff.clip(upper=0.0)).sum())
+        abs_altitude_rate_mph = (
+            (full_gain_m + full_loss_m) / time_sec * 3600.0 if time_sec > 0 else np.nan
+        )
+        net_altitude_rate_mph = (
+            (full_gain_m - full_loss_m) / time_sec * 3600.0 if time_sec > 0 else np.nan
+        )
+
         technicality = 0.0
-        if "lat" in seg_df.columns and "lon" in seg_df.columns:
-            technicality = gps_technicality_index(seg_df["lat"], seg_df["lon"])
+        if "lat" in elev_source.columns and "lon" in elev_source.columns:
+            technicality = gps_technicality_index(elev_source["lat"], elev_source["lon"])
 
         rows.append(
             {
@@ -480,13 +614,193 @@ def segment_timeseries(
                 "technicalityGps": technicality,
                 "meanHr": mean_hr,
                 "meanHrReserve": mean_hr_reserve,
+                "hrSampleCount": hr_sample_count,
+                "hrValidSampleCount": hr_valid_sample_count,
+                "hrValidShare": hr_valid_share,
                 "meanSpeedKmh": mean_speed,
                 "meanSpeedEqKmh": mean_speed_eq,
+                "stationaryTimeShare": stationary_time_share,
+                "stationaryTimeSec": stationary_time_sec,
+                "actualMovingTimeSec": actual_moving_time_sec,
+                "absAltitudeRateMph": abs_altitude_rate_mph,
+                "netAltitudeRateMph": net_altitude_rate_mph,
                 "progress": progress,
             }
         )
 
     return pd.DataFrame(rows)
+
+
+def apply_segment_exclusion(
+    segments_df: pd.DataFrame,
+    *,
+    enabled: bool = True,
+    min_mean_speed_eq_kmh: float = DEFAULT_MIN_MEAN_SPEED_EQ_KMH,
+    max_stationary_time_share: float = DEFAULT_MAX_STATIONARY_TIME_SHARE,
+    stationary_speed_kmh: float = DEFAULT_STATIONARY_SPEED_KMH,
+    max_abs_altitude_rate_mph: float = DEFAULT_MAX_ABS_ALTITUDE_RATE_MPH,
+    max_abs_grade: Optional[float] = None,
+    min_mean_speed_kmh: Optional[float] = None,
+) -> pd.DataFrame:
+    """Flag immobile segments that are flat on the altitude–time profile.
+
+    A segment is excluded only when **all** of the following hold:
+    - altitude-over-time is flat / almost flat
+      (``absAltitudeRateMph <= max_abs_altitude_rate_mph``, gross |Δelev|/hour)
+    - AND there is immobility evidence: low grade-adjusted ``meanSpeedEqKmh``
+      and/or high ``stationaryTimeShare`` (device-open / aid-station dwell)
+
+    Distance-based grade (``avgGrade``) is intentionally not used: a slow climb can
+    look mild per km while rising clearly on the altitude–time chart. Excluded
+    segments remain in the frame for full-race evaluation.
+    """
+    if segments_df.empty:
+        return segments_df.copy()
+
+    # Backward-compatible alias from earlier raw-speed configs.
+    if min_mean_speed_kmh is not None:
+        logger.warning(
+            "apply_segment_exclusion: min_mean_speed_kmh is deprecated; "
+            "using it as min_mean_speed_eq_kmh (grade-adjusted)"
+        )
+        min_mean_speed_eq_kmh = float(min_mean_speed_kmh)
+
+    if max_abs_grade is not None:
+        logger.warning(
+            "apply_segment_exclusion: max_abs_grade is deprecated; "
+            "flatness uses absAltitudeRateMph (altitude over time), not avgGrade. "
+            "Ignoring max_abs_grade=%s; using max_abs_altitude_rate_mph=%s",
+            max_abs_grade,
+            max_abs_altitude_rate_mph,
+        )
+
+    out = segments_df.copy()
+    speed_eq = pd.to_numeric(out.get("meanSpeedEqKmh"), errors="coerce")
+    if speed_eq.isna().all():
+        raw_speed = pd.to_numeric(out.get("meanSpeedKmh"), errors="coerce")
+        if not raw_speed.isna().all():
+            logger.warning(
+                "apply_segment_exclusion: meanSpeedEqKmh missing; "
+                "falling back to meanSpeedKmh (steep climbs may be over-excluded)"
+            )
+            speed_eq = raw_speed
+            out["meanSpeedEqKmh"] = speed_eq
+        elif {"distanceKm", "actualTimeSec"}.issubset(out.columns):
+            logger.warning(
+                "apply_segment_exclusion: speed columns missing; "
+                "falling back to distance/time speed"
+            )
+            distance = pd.to_numeric(out["distanceKm"], errors="coerce")
+            time_sec = pd.to_numeric(out["actualTimeSec"], errors="coerce")
+            speed_eq = pd.Series(
+                np.where(
+                    (time_sec > 0) & np.isfinite(distance) & np.isfinite(time_sec),
+                    distance / time_sec * 3600.0,
+                    np.nan,
+                ),
+                index=out.index,
+            )
+            out["meanSpeedEqKmh"] = speed_eq
+        else:
+            speed_eq = pd.Series(np.nan, index=out.index)
+
+    if "stationaryTimeShare" in out.columns:
+        stationary_share = pd.to_numeric(out["stationaryTimeShare"], errors="coerce")
+    else:
+        logger.warning(
+            "apply_segment_exclusion: stationaryTimeShare missing; "
+            "falling back to speed-eq only"
+        )
+        stationary_share = pd.Series(0.0, index=out.index)
+        out["stationaryTimeShare"] = stationary_share
+
+    if "absAltitudeRateMph" in out.columns:
+        altitude_rate = pd.to_numeric(out["absAltitudeRateMph"], errors="coerce")
+    elif {"elevGainM", "elevLossM", "actualTimeSec"}.issubset(out.columns):
+        logger.warning(
+            "apply_segment_exclusion: absAltitudeRateMph missing; "
+            "falling back to (elevGainM+elevLossM)/actualTimeSec"
+        )
+        gain = pd.to_numeric(out["elevGainM"], errors="coerce").fillna(0.0)
+        loss = pd.to_numeric(out["elevLossM"], errors="coerce").fillna(0.0)
+        time_sec = pd.to_numeric(out["actualTimeSec"], errors="coerce")
+        altitude_rate = pd.Series(
+            np.where(
+                (time_sec > 0) & np.isfinite(time_sec),
+                (gain + loss) / time_sec * 3600.0,
+                np.nan,
+            ),
+            index=out.index,
+        )
+        out["absAltitudeRateMph"] = altitude_rate
+    else:
+        logger.warning(
+            "apply_segment_exclusion: altitude-rate columns missing; "
+            "falling back to treating all segments as flat on altitude–time"
+        )
+        altitude_rate = pd.Series(0.0, index=out.index)
+        out["absAltitudeRateMph"] = altitude_rate
+
+    reasons: list[str] = []
+    eligible: list[bool] = []
+    for idx in out.index:
+        reason_parts: list[str] = []
+        speed_val = speed_eq.loc[idx]
+        share_val = stationary_share.loc[idx]
+        rate_val = altitude_rate.loc[idx]
+        if enabled:
+            near_flat_time = pd.notna(rate_val) and float(rate_val) <= float(
+                max_abs_altitude_rate_mph
+            )
+            low_speed = pd.notna(speed_val) and float(speed_val) < float(min_mean_speed_eq_kmh)
+            high_share = pd.notna(share_val) and float(share_val) > float(max_stationary_time_share)
+            # Immobile only when altitude-over-time profile is flat / almost flat.
+            if near_flat_time and (low_speed or high_share):
+                reason_parts.append("near_flat_altitude_time")
+                if low_speed:
+                    reason_parts.append("low_mean_speed_eq")
+                if high_share:
+                    reason_parts.append("high_stationary_share")
+        eligible.append(not reason_parts)
+        reasons.append("|".join(reason_parts))
+
+    out["isFitEligible"] = eligible if enabled else [True] * len(out)
+    out["exclusionReason"] = reasons if enabled else [""] * len(out)
+    out.attrs["segment_exclusion"] = {
+        "enabled": bool(enabled),
+        "min_mean_speed_eq_kmh": float(min_mean_speed_eq_kmh),
+        "max_stationary_time_share": float(max_stationary_time_share),
+        "stationary_speed_kmh": float(stationary_speed_kmh),
+        "max_abs_altitude_rate_mph": float(max_abs_altitude_rate_mph),
+        "excluded_count": int((~pd.Series(out["isFitEligible"])).sum()) if enabled else 0,
+    }
+    return out
+
+
+def _resolve_fit_mask(
+    segments_df: pd.DataFrame,
+    fit_mask_col: Optional[str],
+    *,
+    context: str,
+) -> pd.Series:
+    """Return a boolean fit mask; fall back to all-True with a warning when missing."""
+    if not fit_mask_col:
+        return pd.Series(True, index=segments_df.index)
+    if fit_mask_col not in segments_df.columns:
+        logger.warning(
+            "%s: fit_mask_col=%s missing; falling back to fitting on all segments",
+            context,
+            fit_mask_col,
+        )
+        return pd.Series(True, index=segments_df.index)
+    mask = segments_df[fit_mask_col].fillna(False).astype(bool)
+    if not bool(mask.any()):
+        logger.warning(
+            "%s: fit mask excluded every segment; falling back to fitting on all segments",
+            context,
+        )
+        return pd.Series(True, index=segments_df.index)
+    return mask
 
 
 def route_segments_from_points(
@@ -1639,6 +1953,10 @@ def predict_hrr_trimp_segment_times(
     secondary_fatigue_model: Optional[str] = None,
     load_factor_col: Optional[str] = None,
     use_hrr_effort: bool = True,
+    gap_steep_threshold: float = DEFAULT_GAP_STEEP_THRESHOLD,
+    gap_soft_start: float = DEFAULT_GAP_SOFT_START,
+    gap_climb_scale: float = DEFAULT_GAP_CLIMB_SCALE,
+    gap_descent_scale: float = DEFAULT_GAP_DESCENT_SCALE,
 ) -> pd.Series:
     """Predict segment times with a constrained HRR and acute-load speed equation.
 
@@ -1648,6 +1966,9 @@ def predict_hrr_trimp_segment_times(
     column can be multiplied in with its own coefficient for short-term plus muscular
     fatigue variants. ``trimp_scale`` is kept only for compatibility with older scripts
     and is ignored.
+
+    ``gap_climb_scale`` / ``gap_descent_scale`` apply an asymmetric trail correction on
+    Minetti GAP for steep grades (``|avgGrade| >= gap_steep_threshold``).
     """
     if segments_df.empty:
         return pd.Series(dtype=float)
@@ -1657,7 +1978,13 @@ def predict_hrr_trimp_segment_times(
         segments_df.get("meanAltitudeM", pd.Series(0.0, index=segments_df.index)),
         errors="coerce",
     ).fillna(0.0)
-    gap = _gap_factors_for_segments(segments_df).to_numpy(dtype=float)
+    gap = _gap_factors_for_segments(
+        segments_df,
+        steep_threshold=gap_steep_threshold,
+        soft_start=gap_soft_start,
+        climb_scale=gap_climb_scale,
+        descent_scale=gap_descent_scale,
+    ).to_numpy(dtype=float)
     altitude_values = altitude.map(altitude_factor).to_numpy(dtype=float)
     if use_hrr_effort:
         hrr_effort = _hrr_effort_values(
@@ -1702,6 +2029,85 @@ def predict_hrr_trimp_segment_times(
     return pd.Series(predicted, index=segments_df.index)
 
 
+def speed_vs_hrr_curve(
+    *,
+    hrr_values: Iterable[float],
+    v_anchor_kmh: float,
+    alpha: float,
+    distance_km: float = 1.0,
+    avg_grade: float = 0.0,
+    mean_altitude_m: float = 0.0,
+    fatigue_coef: float = 0.0,
+    fatigue_model: str = "exponential",
+    cum_trimp_before: float = 0.0,
+    hrr_reference: float = 0.88,
+    hrr_min_factor: float = 0.30,
+    hrr_max_factor: float = 1.0,
+    min_fatigue_factor: float = 0.60,
+    gap_steep_threshold: float = DEFAULT_GAP_STEEP_THRESHOLD,
+    gap_soft_start: float = DEFAULT_GAP_SOFT_START,
+    gap_climb_scale: float = DEFAULT_GAP_CLIMB_SCALE,
+    gap_descent_scale: float = DEFAULT_GAP_DESCENT_SCALE,
+) -> pd.DataFrame:
+    """Predicted equivalent/ground speed vs HRR on a single synthetic segment.
+
+    Fresh-segment default uses ``cum_trimp_before=0``. The returned speed is the
+    model ground speed on the given grade (km/h), not grade-adjusted pace.
+    """
+    rows: list[dict[str, float]] = []
+    base_gap = float(gap_factor(float(avg_grade)))
+    for hrr in hrr_values:
+        segment = pd.DataFrame(
+            [
+                {
+                    "distanceKm": float(distance_km),
+                    "avgGrade": float(avg_grade),
+                    "meanAltitudeM": float(mean_altitude_m),
+                    "gapFactorIntegrated": base_gap,
+                    "meanHrReserve": float(hrr),
+                    "cumTrimpBefore": float(cum_trimp_before),
+                    "decayedTrimpBefore": float(cum_trimp_before),
+                    "rediReadinessFactor": 1.0,
+                }
+            ]
+        )
+        predicted_time = float(
+            predict_hrr_trimp_segment_times(
+                segment,
+                v_anchor_kmh=v_anchor_kmh,
+                alpha=alpha,
+                fatigue_coef=fatigue_coef,
+                fatigue_model=fatigue_model,
+                hrr_reference=hrr_reference,
+                hrr_min_factor=hrr_min_factor,
+                hrr_max_factor=hrr_max_factor,
+                min_fatigue_factor=min_fatigue_factor,
+                hrr_col="meanHrReserve",
+                acute_trimp_col="cumTrimpBefore",
+                load_factor_col="rediReadinessFactor",
+                use_hrr_effort=True,
+                gap_steep_threshold=gap_steep_threshold,
+                gap_soft_start=gap_soft_start,
+                gap_climb_scale=gap_climb_scale,
+                gap_descent_scale=gap_descent_scale,
+            ).iloc[0]
+        )
+        speed_kmh = float(distance_km) / max(predicted_time, 1e-9) * 3600.0
+        rows.append(
+            {
+                "hrr": float(hrr),
+                "distanceKm": float(distance_km),
+                "avgGrade": float(avg_grade),
+                "meanAltitudeM": float(mean_altitude_m),
+                "cumTrimpBefore": float(cum_trimp_before),
+                "predictedTimeSec": predicted_time,
+                "speedKmh": speed_kmh,
+                "paceMinPerKm": (predicted_time / 60.0) / max(float(distance_km), 1e-9),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
 def _segment_trimp_from_prediction(time_sec: float, hrr: float) -> float:
     duration_hours = max(0.0, _to_float(time_sec, 0.0)) / 3600.0
     reserve = max(0.0, min(1.2, _to_float(hrr, 0.0)))
@@ -1738,7 +2144,13 @@ def _hrr_trimp_grid_terms(
         errors="coerce",
     ).fillna(0.0)
     altitude_values = altitude.map(altitude_factor).to_numpy(dtype=float)
-    gap = _gap_factors_for_segments(segments_df).to_numpy(dtype=float)
+    gap = _gap_factors_for_segments(
+        segments_df,
+        steep_threshold=float(prediction_kwargs.get("gap_steep_threshold", DEFAULT_GAP_STEEP_THRESHOLD)),
+        soft_start=float(prediction_kwargs.get("gap_soft_start", DEFAULT_GAP_SOFT_START)),
+        climb_scale=float(prediction_kwargs.get("gap_climb_scale", DEFAULT_GAP_CLIMB_SCALE)),
+        descent_scale=float(prediction_kwargs.get("gap_descent_scale", DEFAULT_GAP_DESCENT_SCALE)),
+    ).to_numpy(dtype=float)
     if bool(prediction_kwargs.get("use_hrr_effort", True)):
         hrr_effort = _hrr_effort_values(
             segments_df,
@@ -1832,6 +2244,10 @@ def simulate_constant_hrr_route(
     load_factor: float = 1.0,
     use_hrr_effort: bool = True,
     fatigue_input_col: str = "cumTrimpBefore",
+    gap_steep_threshold: float = DEFAULT_GAP_STEEP_THRESHOLD,
+    gap_soft_start: float = DEFAULT_GAP_SOFT_START,
+    gap_climb_scale: float = DEFAULT_GAP_CLIMB_SCALE,
+    gap_descent_scale: float = DEFAULT_GAP_DESCENT_SCALE,
 ) -> pd.DataFrame:
     """Predict a planned route at constant HRR with sequential predicted TRIMP fatigue.
 
@@ -1877,6 +2293,10 @@ def simulate_constant_hrr_route(
                 acute_trimp_col=fatigue_input_col,
                 load_factor_col="_preRaceLoadFactor",
                 use_hrr_effort=use_hrr_effort,
+                gap_steep_threshold=gap_steep_threshold,
+                gap_soft_start=gap_soft_start,
+                gap_climb_scale=gap_climb_scale,
+                gap_descent_scale=gap_descent_scale,
             ).iloc[0]
         )
         segment_trimp = _segment_trimp_from_prediction(predicted_time, float(hrr))
@@ -1919,13 +2339,17 @@ def simulate_observed_hrr_segments(
     fallback_hrr: float = 0.70,
     hrr_col: str = "meanHrReserve",
     fatigue_input_col: str = "cumTrimpBefore",
+    gap_steep_threshold: float = DEFAULT_GAP_STEEP_THRESHOLD,
+    gap_soft_start: float = DEFAULT_GAP_SOFT_START,
+    gap_climb_scale: float = DEFAULT_GAP_CLIMB_SCALE,
+    gap_descent_scale: float = DEFAULT_GAP_DESCENT_SCALE,
 ) -> pd.DataFrame:
-    """Predict segments sequentially using observed per-segment HRR.
+    """Predict segments sequentially using per-segment HRR (observed or planned).
 
-    Segment HRR is observed, but acute TRIMP is accumulated from predicted segment time
-    to avoid using actual segment duration inside the prediction. By default, the speed
-    penalty uses cumulative predicted TRIMP so that a fixed HRR maps to a decreasing
-    acute performance state over time.
+    Segment HRR comes from ``hrr_col``, but acute TRIMP is accumulated from predicted
+    segment time to avoid using actual segment duration inside the prediction. By
+    default, the speed penalty uses cumulative predicted TRIMP so that a fixed HRR
+    maps to a decreasing acute performance state over time.
     """
     if segments_df.empty:
         return segments_df.copy()
@@ -1971,6 +2395,10 @@ def simulate_observed_hrr_segments(
                 acute_trimp_col=fatigue_input_col,
                 load_factor_col="_activityLoadFactor",
                 use_hrr_effort=True,
+                gap_steep_threshold=gap_steep_threshold,
+                gap_soft_start=gap_soft_start,
+                gap_climb_scale=gap_climb_scale,
+                gap_descent_scale=gap_descent_scale,
             ).iloc[0]
         )
         actual_time = _to_float(segment.get("actualTimeSec"), np.nan)
@@ -2031,6 +2459,10 @@ def sweep_constant_hrr_route(
     hr_max: Optional[float] = None,
     fatigue_input_col: str = "cumTrimpBefore",
     use_hrr_effort: bool = True,
+    gap_steep_threshold: float = DEFAULT_GAP_STEEP_THRESHOLD,
+    gap_soft_start: float = DEFAULT_GAP_SOFT_START,
+    gap_climb_scale: float = DEFAULT_GAP_CLIMB_SCALE,
+    gap_descent_scale: float = DEFAULT_GAP_DESCENT_SCALE,
 ) -> pd.DataFrame:
     """Sweep constant-HRR race estimates and mark historically feasible choices."""
     route_distance = float(
@@ -2058,6 +2490,10 @@ def sweep_constant_hrr_route(
             load_factor=load_factor,
             fatigue_input_col=fatigue_input_col,
             use_hrr_effort=use_hrr_effort,
+            gap_steep_threshold=gap_steep_threshold,
+            gap_soft_start=gap_soft_start,
+            gap_climb_scale=gap_climb_scale,
+            gap_descent_scale=gap_descent_scale,
         )
         total_time = float(pd.to_numeric(prediction.get("predictedTimeSec"), errors="coerce").sum())
         max_duration = max_duration_for_hrr(hrr, envelope_df) if has_envelope else np.nan
@@ -2117,23 +2553,63 @@ def hrr_trimp_grid_search_model(
     activity_col: str = "activityId",
     objective: str = "race",
     observed_activity_times_sec: Optional[Mapping[str, float]] = None,
+    fit_mask_col: Optional[str] = None,
+    actual_time_col: str = "actualTimeSec",
     **prediction_kwargs: object,
 ) -> tuple[dict[str, object], pd.DataFrame, pd.DataFrame]:
-    """Grid-search the constrained HRR+TRIMP model with segment and race metrics."""
+    """Grid-search the constrained HRR+TRIMP model with segment and race metrics.
+
+    When ``fit_mask_col`` is set, hyperparameters are selected using only fit-eligible
+    segments. Predictions are still produced for every segment so full-race evaluation
+    remains available after optimization.
+
+    ``actual_time_col`` selects the segment clock used for fit metrics (e.g.
+    ``actualMovingTimeSec`` to strip stationary dwell). Full-race metrics still use
+    ``observed_activity_times_sec`` when provided; per-segment ``errorSec`` remains
+    versus full ``actualTimeSec``.
+    """
     if segments_df.empty:
         empty = pd.DataFrame()
         return {}, empty, empty
 
-    actual_segment = pd.to_numeric(segments_df["actualTimeSec"], errors="coerce")
-    actual_segment_values = actual_segment.to_numpy(dtype=float)
+    fit_mask = _resolve_fit_mask(segments_df, fit_mask_col, context="hrr_trimp_grid_search_model")
+    if actual_time_col not in segments_df.columns:
+        logger.warning(
+            "hrr_trimp_grid_search_model: actual_time_col=%s missing; "
+            "falling back to actualTimeSec",
+            actual_time_col,
+        )
+        actual_time_col = "actualTimeSec"
+    fit_actual_segment = pd.to_numeric(segments_df[actual_time_col], errors="coerce")
+    full_actual_segment = pd.to_numeric(segments_df["actualTimeSec"], errors="coerce")
+    fit_actual_values = fit_actual_segment.to_numpy(dtype=float)
+    full_actual_values = full_actual_segment.to_numpy(dtype=float)
+    fit_mask_values = fit_mask.to_numpy(dtype=bool)
+    # Drop zero-moving segments from the fit set when using moving time.
+    if actual_time_col != "actualTimeSec":
+        positive_moving = np.isfinite(fit_actual_values) & (fit_actual_values > 1.0)
+        if not bool(positive_moving[fit_mask_values].any()):
+            logger.warning(
+                "hrr_trimp_grid_search_model: no positive %s rows under fit mask; "
+                "keeping original mask",
+                actual_time_col,
+            )
+        else:
+            fit_mask_values = fit_mask_values & positive_moving
     activity_codes: Optional[np.ndarray] = None
     race_actual_values = np.array([], dtype=float)
+    race_actual_fit_values = np.array([], dtype=float)
     if activity_col in segments_df.columns:
         activity_labels, activity_uniques = pd.factorize(segments_df[activity_col].astype(str), sort=False)
         activity_codes = activity_labels.astype(int)
         race_actual_values = np.bincount(
             activity_codes,
-            weights=np.nan_to_num(actual_segment_values, nan=0.0),
+            weights=np.nan_to_num(full_actual_values, nan=0.0),
+            minlength=len(activity_uniques),
+        ).astype(float)
+        race_actual_fit_values = np.bincount(
+            activity_codes,
+            weights=np.nan_to_num(fit_actual_values * fit_mask_values, nan=0.0),
             minlength=len(activity_uniques),
         ).astype(float)
         if observed_activity_times_sec is not None:
@@ -2177,8 +2653,21 @@ def hrr_trimp_grid_search_model(
                         secondary_fatigue_model=secondary_model,
                         has_secondary_fatigue=has_secondary_fatigue,
                     )
-                    segment_metrics = _regression_metrics_arrays(actual_segment_values, predicted_values)
+                    segment_metrics = _regression_metrics_arrays(
+                        fit_actual_values[fit_mask_values],
+                        predicted_values[fit_mask_values],
+                    )
+                    segment_metrics_full = _regression_metrics_arrays(
+                        full_actual_values,
+                        predicted_values,
+                    )
                     race_metrics = {
+                        "r2": np.nan,
+                        "maeSec": np.nan,
+                        "mapePct": np.nan,
+                        "biasSec": np.nan,
+                    }
+                    race_metrics_full = {
                         "r2": np.nan,
                         "maeSec": np.nan,
                         "mapePct": np.nan,
@@ -2190,7 +2679,28 @@ def hrr_trimp_grid_search_model(
                             weights=np.nan_to_num(predicted_values, nan=0.0),
                             minlength=len(race_actual_values),
                         ).astype(float)
-                        race_metrics = _regression_metrics_arrays(race_actual_values, race_predicted_values)
+                        race_predicted_fit_values = np.bincount(
+                            activity_codes,
+                            weights=np.nan_to_num(predicted_values * fit_mask_values, nan=0.0),
+                            minlength=len(race_actual_fit_values),
+                        ).astype(float)
+                        # Prefer cleaned / moving-time totals for selection when active.
+                        use_fit_only = bool(fit_mask_col) and (not bool(fit_mask_values.all()))
+                        use_moving_fit = actual_time_col != "actualTimeSec"
+                        if use_fit_only or use_moving_fit:
+                            race_metrics = _regression_metrics_arrays(
+                                race_actual_fit_values,
+                                race_predicted_fit_values,
+                            )
+                        else:
+                            race_metrics = _regression_metrics_arrays(
+                                race_actual_values,
+                                race_predicted_values,
+                            )
+                        race_metrics_full = _regression_metrics_arrays(
+                            race_actual_values,
+                            race_predicted_values,
+                        )
                     row = {
                         "alpha": alpha,
                         "fatigueCoef": fatigue_coef,
@@ -2198,14 +2708,25 @@ def hrr_trimp_grid_search_model(
                         "secondaryFatigueCoef": secondary_fatigue_coef,
                         "secondaryFatigueModel": secondary_model,
                         "secondaryAcuteTrimpCol": str(secondary_col or ""),
+                        "actualTimeCol": actual_time_col,
                         "segmentR2": segment_metrics["r2"],
                         "segmentMaeSec": segment_metrics["maeSec"],
                         "segmentMapePct": segment_metrics["mapePct"],
                         "segmentBiasSec": segment_metrics["biasSec"],
+                        "segmentR2Full": segment_metrics_full["r2"],
+                        "segmentMaeSecFull": segment_metrics_full["maeSec"],
+                        "segmentMapePctFull": segment_metrics_full["mapePct"],
+                        "segmentBiasSecFull": segment_metrics_full["biasSec"],
                         "raceR2": race_metrics["r2"],
                         "raceMaeSec": race_metrics["maeSec"],
                         "raceMapePct": race_metrics["mapePct"],
                         "raceBiasSec": race_metrics["biasSec"],
+                        "raceR2Full": race_metrics_full["r2"],
+                        "raceMaeSecFull": race_metrics_full["maeSec"],
+                        "raceMapePctFull": race_metrics_full["mapePct"],
+                        "raceBiasSecFull": race_metrics_full["biasSec"],
+                        "fitSegmentCount": int(fit_mask_values.sum()),
+                        "fullSegmentCount": int(len(fit_mask_values)),
                     }
                     rows.append(row)
                     if best is None:
@@ -2228,7 +2749,10 @@ def hrr_trimp_grid_search_model(
 
     prediction_df = segments_df.copy()
     prediction_df["predictedTimeSec"] = best_prediction_values.astype(float)
-    prediction_df["errorSec"] = prediction_df["predictedTimeSec"] - actual_segment
+    prediction_df["errorSec"] = prediction_df["predictedTimeSec"] - full_actual_segment
+    prediction_df["fitActualTimeSec"] = fit_actual_segment
+    prediction_df["fitErrorSec"] = prediction_df["predictedTimeSec"] - fit_actual_segment
+    prediction_df["isFitEligible"] = fit_mask_values
     assert best is not None
     return best, pd.DataFrame(rows), prediction_df
 
@@ -2243,15 +2767,31 @@ def leave_one_out_hrr_trimp_grid_search(
     activity_col: str = "activityId",
     observed_activity_times_sec: Optional[Mapping[str, float]] = None,
     objective: str = "race",
+    fit_mask_col: Optional[str] = None,
+    actual_time_col: str = "actualTimeSec",
     **prediction_kwargs: object,
 ) -> pd.DataFrame:
-    """Leave-one-activity-out validation for the constrained HRR+TRIMP model."""
+    """Leave-one-activity-out validation for the constrained HRR+TRIMP model.
+
+    Hyperparameters are fit on cleaned / moving-time segments of the training
+    activities. Each fold still scores the held-out activity on the full race
+    (all segments vs observed activity time).
+    """
     if segments_df.empty or activity_col not in segments_df.columns:
         return pd.DataFrame()
 
     folds: list[dict[str, object]] = []
     working = segments_df.copy()
     working[activity_col] = working[activity_col].astype(str)
+    fit_mask = _resolve_fit_mask(working, fit_mask_col, context="leave_one_out_hrr_trimp_grid_search")
+    working["_fitMask"] = fit_mask.to_numpy(dtype=bool)
+    if actual_time_col not in working.columns:
+        logger.warning(
+            "leave_one_out_hrr_trimp_grid_search: actual_time_col=%s missing; "
+            "falling back to actualTimeSec",
+            actual_time_col,
+        )
+        actual_time_col = "actualTimeSec"
     for held_out in working[activity_col].dropna().unique().tolist():
         train = working[working[activity_col].ne(held_out)]
         test = working[working[activity_col].eq(held_out)]
@@ -2267,6 +2807,8 @@ def leave_one_out_hrr_trimp_grid_search(
             activity_col=activity_col,
             objective=objective,
             observed_activity_times_sec=observed_activity_times_sec,
+            fit_mask_col="_fitMask",
+            actual_time_col=actual_time_col,
             **prediction_kwargs,
         )
         predicted_segments = predict_hrr_trimp_segment_times(
@@ -2284,7 +2826,13 @@ def leave_one_out_hrr_trimp_grid_search(
         )
         if not math.isfinite(actual):
             actual = pd.to_numeric(test["actualTimeSec"], errors="coerce").sum()
-        predicted = predicted_segments.sum()
+        predicted = float(predicted_segments.sum())
+        test_mask = test["_fitMask"].to_numpy(dtype=bool)
+        fit_actual_arr = pd.to_numeric(test[actual_time_col], errors="coerce").to_numpy(dtype=float)
+        if actual_time_col != "actualTimeSec":
+            test_mask = test_mask & np.isfinite(fit_actual_arr) & (fit_actual_arr > 1.0)
+        actual_fit = float(fit_actual_arr[test_mask].sum())
+        predicted_fit = float(np.asarray(predicted_segments, dtype=float)[test_mask].sum())
         folds.append(
             {
                 "activityId": held_out,
@@ -2295,14 +2843,24 @@ def leave_one_out_hrr_trimp_grid_search(
                 "secondaryFatigueModel": best.get("secondaryFatigueModel", ""),
                 "secondaryAcuteTrimpCol": best.get("secondaryAcuteTrimpCol", ""),
                 "actualTimeSec": float(actual),
-                "predictedTimeSec": float(predicted),
+                "predictedTimeSec": predicted,
                 "errorSec": float(predicted - actual),
                 "errorPct": float((predicted - actual) / actual * 100.0)
                 if actual > 0
                 else np.nan,
+                "actualFitEligibleSec": actual_fit,
+                "predictedFitEligibleSec": predicted_fit,
+                "fitEligibleErrorSec": float(predicted_fit - actual_fit),
+                "fitEligibleSegmentCount": int(test_mask.sum()),
+                "excludedSegmentCount": int((~test_mask).sum()),
+                "excludedTimeSec": float(
+                    pd.to_numeric(test["actualTimeSec"], errors="coerce").to_numpy()[~test_mask].sum()
+                ),
+                "actualTimeCol": actual_time_col,
             }
         )
     return pd.DataFrame(folds)
+
 
 
 def grouped_segment_metrics(

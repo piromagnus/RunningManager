@@ -1,0 +1,31 @@
+{
+  "fit": {
+    "alpha": 0.95,
+    "fatigueCoef": 0.4,
+    "fatigueModel": "exponential",
+    "segmentMaeSec": 56.834629289986786,
+    "raceMaeSec": 423.46271850060947,
+    "fitObjective": "race",
+    "actualTimeCol": "actualMovingTimeSec",
+    "nTrainSegments": 1485,
+    "nTrainActivities": 101
+  },
+  "physiology": {
+    "vma_flat_kmh": 18.0,
+    "hrr_reference": 0.88,
+    "hrr_min_factor": 0.3,
+    "hrr_max_factor": 1.0,
+    "decay_lambda": 0.2,
+    "min_fatigue_factor": 0.6,
+    "gap_steep_threshold": 0.15,
+    "gap_soft_start": 0.04,
+    "gap_climb_scale": 0.85,
+    "gap_descent_scale": 1.6
+  },
+  "hardHrr": 0.88,
+  "holdoutActivityIds": [
+    "17481444994",
+    "16325125849"
+  ],
+  "note": "Actual race times/HR are evaluation-only and were not used in fit or prediction."
+}

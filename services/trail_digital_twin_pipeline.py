@@ -7,8 +7,13 @@ Configurable trail digital-twin extension pipeline.
 from __future__ import annotations
 
 import html
+import hashlib
 import json
+import logging
 import math
+import platform
+import subprocess
+import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -22,6 +27,8 @@ from plotly.offline import get_plotlyjs
 from plotly.subplots import make_subplots
 
 from services import trail_performance_model as tpm
+
+logger = logging.getLogger(__name__)
 
 try:
     import yaml
@@ -84,6 +91,12 @@ DEFAULT_CONFIG: dict[str, Any] = {
     },
     "cohorts": {
         "include": ["hardTrailRun", "hardRunOrTrailRun", "top10HardTrailByHRR", "selectedDateRaces"],
+        # Empty = LOO on every included cohort. Non-empty restricts LOO to these names.
+        "loo_include": [],
+        # Optional cap for large cohorts (deterministic subsample); 0 = no cap.
+        "loo_activity_cap": 0,
+        "loo_activity_cap_seed": 20260721,
+        "run_trail_over_20min_sec": 1200.0,
         "top_hrr_count": 10,
         "selected_race_dates": [],
     },
@@ -97,6 +110,11 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "hrr_max_factor": 1.30,
         "decay_lambda": 0.30,
         "min_fatigue_factor": 0.50,
+        # Asymmetric trail GAP on steep grades (1.0 = pure Minetti running).
+        "gap_steep_threshold": 0.15,
+        "gap_soft_start": 0.04,
+        "gap_climb_scale": 0.85,
+        "gap_descent_scale": 1.60,
     },
     "readiness": {
         "ctl_weight": 0.05,
@@ -112,6 +130,11 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "hrr_trimp_alpha_grid": [0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85],
         "hrr_trimp_kappa_grid": [0.0, 0.10, 0.20, 0.30, 0.40],
         "hrr_trimp_secondary_kappa_grid": [0.0, 0.10, 0.20, 0.30, 0.40],
+        # reoptimize: re-fit (α, κ) after each component removal (preferred).
+        # frozen: fit full model once, then disable components at prediction time.
+        "ablation_protocol": "reoptimize",
+        # If set, restrict component ablation to these fit objectives (e.g. ["activity"]).
+        "ablation_fit_objectives": [],
         "fatigue_models": ["linear", "exponential"],
         "stage3_fatigue_states": [
             {"fatigue_state": "decayed", "acute_trimp_col": "decayedTrimpBefore", "label": "decayed TRIMP"},
@@ -158,6 +181,17 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "elapsed_time_sensitivity": True,
         "segment_length_sensitivity": False,
         "segment_length_km": 0.50,
+    },
+    "segment_exclusion": {
+        "enabled": False,
+        "min_mean_speed_eq_kmh": 3.0,
+        "max_stationary_time_share": 0.40,
+        "stationary_speed_kmh": 1.0,
+        "max_abs_altitude_rate_mph": 120.0,
+        # Strip stationary dwell from the Stage 3 fit target (keep full race eval).
+        "use_moving_time_for_fit": False,
+        "exclude_from_fit": True,
+        "report_full_race_eval": True,
     },
     "outputs": {
         "write_csv": True,
@@ -275,6 +309,20 @@ def normalise_config(raw_config: Mapping[str, Any], *, require_sections: bool = 
         raise ValueError(f"invalid validation modes: {', '.join(invalid_validation_modes)}")
     fitting["validation_modes"] = validation_modes
 
+    ablation_protocol = str(fitting.get("ablation_protocol", "reoptimize")).strip().lower()
+    if ablation_protocol not in {"reoptimize", "frozen"}:
+        raise ValueError("fitting.ablation_protocol must be 'reoptimize' or 'frozen'")
+    fitting["ablation_protocol"] = ablation_protocol
+    ablation_objectives = fitting.get("ablation_fit_objectives") or []
+    if ablation_objectives:
+        ablation_objectives = _as_str_list(ablation_objectives, "fitting.ablation_fit_objectives")
+        invalid_ablation_objectives = sorted(set(ablation_objectives) - VALID_OBJECTIVES)
+        if invalid_ablation_objectives:
+            raise ValueError(
+                f"invalid ablation fit objectives: {', '.join(invalid_ablation_objectives)}"
+            )
+    fitting["ablation_fit_objectives"] = list(ablation_objectives)
+
     fatigue_models = _as_str_list(fitting.get("fatigue_models"), "fitting.fatigue_models")
     invalid_models = sorted(set(fatigue_models) - VALID_FATIGUE_MODELS)
     if invalid_models:
@@ -344,6 +392,46 @@ def _add_fit_objective(row: dict[str, object], objective: str) -> dict[str, obje
 
 def _model_objective(objective: str) -> str:
     return "segment" if objective == "segment" else "race"
+
+
+def _segment_exclusion_kwargs(config: Mapping[str, Any]) -> dict[str, object]:
+    exclusion = config.get("segment_exclusion", {}) or {}
+    # Prefer grade-adjusted speed; accept deprecated raw-speed key for old YAMLs.
+    min_speed_eq = exclusion.get("min_mean_speed_eq_kmh")
+    if min_speed_eq is None and "min_mean_speed_kmh" in exclusion:
+        logger.warning(
+            "segment_exclusion.min_mean_speed_kmh is deprecated; "
+            "map it to min_mean_speed_eq_kmh"
+        )
+        min_speed_eq = exclusion.get("min_mean_speed_kmh")
+    if "max_abs_grade" in exclusion and "max_abs_altitude_rate_mph" not in exclusion:
+        logger.warning(
+            "segment_exclusion.max_abs_grade is deprecated; "
+            "use max_abs_altitude_rate_mph (altitude over time). "
+            "Falling back to default max_abs_altitude_rate_mph=120"
+        )
+    return {
+        "enabled": bool(exclusion.get("enabled", False)),
+        "min_mean_speed_eq_kmh": float(min_speed_eq if min_speed_eq is not None else 3.0),
+        "max_stationary_time_share": float(exclusion.get("max_stationary_time_share", 0.40)),
+        "stationary_speed_kmh": float(exclusion.get("stationary_speed_kmh", 1.0)),
+        "max_abs_altitude_rate_mph": float(exclusion.get("max_abs_altitude_rate_mph", 120.0)),
+    }
+
+
+def _fit_mask_col(config: Mapping[str, Any]) -> str | None:
+    exclusion = config.get("segment_exclusion", {}) or {}
+    if bool(exclusion.get("enabled", False)) and bool(exclusion.get("exclude_from_fit", True)):
+        return "isFitEligible"
+    return None
+
+
+def _fit_actual_time_col(config: Mapping[str, Any]) -> str:
+    """Segment clock used for Stage 3 fit metrics (full race eval unchanged)."""
+    exclusion = config.get("segment_exclusion", {}) or {}
+    if bool(exclusion.get("use_moving_time_for_fit", False)):
+        return "actualMovingTimeSec"
+    return "actualTimeSec"
 
 
 def _rename_load_features(df: pd.DataFrame, prefix: str) -> pd.DataFrame:
@@ -513,7 +601,31 @@ def _build_segments(
             hr_rest=hr_rest,
             hr_max=hr_max,
         )
+        if not segments.empty:
+            segments = tpm.apply_segment_exclusion(segments, **_segment_exclusion_kwargs(config))
         usable = not segments.empty and segments["distanceKm"].sum() > 0 and segments["actualTimeSec"].sum() > 0
+        fit_eligible_count = (
+            int(segments["isFitEligible"].fillna(False).astype(bool).sum())
+            if usable and "isFitEligible" in segments.columns
+            else (len(segments) if usable else 0)
+        )
+        excluded_count = int(len(segments) - fit_eligible_count) if usable else 0
+        excluded_time = 0.0
+        if usable and "isFitEligible" in segments.columns:
+            excluded_time = float(
+                segments.loc[~segments["isFitEligible"].fillna(False).astype(bool), "actualTimeSec"].sum()
+            )
+        hr_sample_count = (
+            int(pd.to_numeric(segments.get("hrSampleCount"), errors="coerce").fillna(0).sum()) if usable else 0
+        )
+        hr_valid_sample_count = (
+            int(pd.to_numeric(segments.get("hrValidSampleCount"), errors="coerce").fillna(0).sum())
+            if usable
+            else 0
+        )
+        hr_valid_share = (
+            float(hr_valid_sample_count) / float(hr_sample_count) if hr_sample_count > 0 else float("nan")
+        )
         qc_rows.append(
             {
                 "activityId": activity_id,
@@ -521,8 +633,14 @@ def _build_segments(
                 "category": row.get("category"),
                 "usableSegments": usable,
                 "segmentCount": len(segments),
+                "fitEligibleSegmentCount": fit_eligible_count,
+                "excludedSegmentCount": excluded_count,
+                "excludedTimeSec": excluded_time,
                 "segmentDistanceKm": float(segments["distanceKm"].sum()) if usable else 0.0,
                 "segmentTimeSec": float(segments["actualTimeSec"].sum()) if usable else 0.0,
+                "hrSampleCount": hr_sample_count,
+                "hrValidSampleCount": hr_valid_sample_count,
+                "hrValidShare": hr_valid_share,
             }
         )
         if usable:
@@ -595,9 +713,14 @@ def _build_cohorts(
     activity_df["hardRunOrTrailRun"] = (
         category.isin(["RUN", "TRAIL_RUN"]) & activity_df["usableSegmentActivity"] & (moving >= 1800.0) & hard_activity
     )
+    over20_sec = float(config["cohorts"].get("run_trail_over_20min_sec", 1200.0))
+    activity_df["runTrailOver20Min"] = (
+        category.isin(["RUN", "TRAIL_RUN"]) & activity_df["usableSegmentActivity"] & (moving >= over20_sec)
+    )
 
     hard_activity_df = activity_df[activity_df["hardTrailRun"]].copy()
     hard_run_or_trail_df = activity_df[activity_df["hardRunOrTrailRun"]].copy()
+    run_trail_over20_df = activity_df[activity_df["runTrailOver20Min"]].copy()
     top_ids = tpm.top_hrr_hard_trailrun_ids(activity_df, n=int(config["cohorts"]["top_hrr_count"]))
     top_activity_df = activity_df[activity_df["activityId"].astype(str).isin(top_ids)].copy()
     selected_activity_df = tpm.select_best_activity_by_dates(activity_df, config["cohorts"]["selected_race_dates"])
@@ -607,6 +730,7 @@ def _build_cohorts(
     all_cohorts = {
         "hardTrailRun": hard_activity_df,
         "hardRunOrTrailRun": hard_run_or_trail_df,
+        "runTrailOver20Min": run_trail_over20_df,
         "top10HardTrailByHRR": top_activity_df,
         "selectedDateRaces": selected_activity_df,
     }
@@ -1052,6 +1176,16 @@ def _run_paper_stage_models_for_objective(task: tuple[object, ...]) -> dict[str,
     fitting = config["fitting"]
     physiology = config["physiology"]
     run_loo = "loo" in set(fitting.get("validation_modes", ["in_sample", "loo"]))
+    loo_include = [str(name) for name in config.get("cohorts", {}).get("loo_include", []) or []]
+    if loo_include and cohort_name not in set(loo_include):
+        logger.info(
+            "Skipping LOO for cohort=%s (not in cohorts.loo_include=%s)",
+            cohort_name,
+            loo_include,
+        )
+        run_loo = False
+    fit_mask_col = _fit_mask_col(config)
+    fit_actual_time_col = _fit_actual_time_col(config)
     rows: list[dict[str, object]] = []
     params: list[dict[str, object]] = []
     predictions: list[pd.DataFrame] = []
@@ -1062,10 +1196,31 @@ def _run_paper_stage_models_for_objective(task: tuple[object, ...]) -> dict[str,
     ids, segments, actual, ctl_factors = _cohort_inputs(cohort_df, segments_by_activity)
     if not ids:
         return _empty_stage_worker_result(order, cohort_name, objective)
+    loo_ids = list(ids)
+    loo_cap = int(config.get("cohorts", {}).get("loo_activity_cap", 0) or 0)
+    if run_loo and loo_cap > 0 and len(loo_ids) > loo_cap:
+        seed = int(config.get("cohorts", {}).get("loo_activity_cap_seed", 20260721))
+        # Stable per-cohort seed so caps are reproducible across runs/processes.
+        cohort_seed = seed + _stable_cohort_seed_offset(cohort_name)
+        rng = np.random.default_rng(cohort_seed)
+        loo_ids = sorted(rng.choice(np.array(loo_ids, dtype=object), size=loo_cap, replace=False).tolist())
+        logger.warning(
+            "LOO activity cap applied for cohort=%s: using %d/%d activities (seed=%d)",
+            cohort_name,
+            len(loo_ids),
+            len(ids),
+            cohort_seed,
+        )
     observed = actual.to_dict()
     cohort_segments = segment_features[segment_features["activityId"].isin(ids)].copy()
     if cohort_segments.empty:
         return _empty_stage_worker_result(order, cohort_name, objective)
+    loo_segments = {
+        activity_id: segments[activity_id] for activity_id in loo_ids if activity_id in segments
+    }
+    loo_observed = {activity_id: observed[activity_id] for activity_id in loo_ids if activity_id in observed}
+    loo_ctl = {activity_id: ctl_factors[activity_id] for activity_id in loo_ids if activity_id in ctl_factors}
+    loo_cohort_segments = cohort_segments[cohort_segments["activityId"].astype(str).isin(loo_ids)].copy()
 
     best_stage0, _grid_stage0 = tpm.grid_search_model(
         segments,
@@ -1086,13 +1241,13 @@ def _run_paper_stage_models_for_objective(task: tuple[object, ...]) -> dict[str,
     ).reindex(ids)
     loo_stage0 = (
         tpm.leave_one_out_grid_search(
-            segments,
-            observed,
+            loo_segments,
+            loo_observed,
             v_vt2_kmh=float(v_vt2_kmh),
             alpha_grid=fitting["stage0_alpha_grid"],
             mu_grid=fitting["stage0_mu_grid"],
             fatigue_model="linear",
-            ctl_factors=ctl_factors,
+            ctl_factors=loo_ctl,
         )
         if run_loo
         else pd.DataFrame()
@@ -1126,11 +1281,17 @@ def _run_paper_stage_models_for_objective(task: tuple[object, ...]) -> dict[str,
             hrr_min_factor=float(physiology["hrr_min_factor"]),
             hrr_max_factor=float(physiology["hrr_max_factor"]),
             min_fatigue_factor=float(physiology["min_fatigue_factor"]),
+            gap_steep_threshold=float(physiology.get("gap_steep_threshold", 0.15)),
+            gap_soft_start=float(physiology.get("gap_soft_start", 0.04)),
+            gap_climb_scale=float(physiology.get("gap_climb_scale", 1.0)),
+            gap_descent_scale=float(physiology.get("gap_descent_scale", 1.0)),
             load_factor_col=spec["loadFactorCol"],
             use_hrr_effort=bool(spec["useHrrEffort"]),
             acute_trimp_col=spec["acuteTrimpCol"],
             objective=_model_objective(objective),
             observed_activity_times_sec=observed,
+            fit_mask_col=fit_mask_col,
+            actual_time_col=fit_actual_time_col,
         )
         grid_search_frames.append(
             _hrr_trimp_grid_frame(
@@ -1154,7 +1315,7 @@ def _run_paper_stage_models_for_objective(task: tuple[object, ...]) -> dict[str,
 
         loo = (
             tpm.leave_one_out_hrr_trimp_grid_search(
-                cohort_segments,
+                loo_cohort_segments,
                 v_anchor_kmh=float(physiology["vma_flat_kmh"]),
                 alpha_grid=fitting["hrr_trimp_alpha_grid"],
                 fatigue_coef_grid=fitting["hrr_trimp_kappa_grid"],
@@ -1163,11 +1324,17 @@ def _run_paper_stage_models_for_objective(task: tuple[object, ...]) -> dict[str,
                 hrr_min_factor=float(physiology["hrr_min_factor"]),
                 hrr_max_factor=float(physiology["hrr_max_factor"]),
                 min_fatigue_factor=float(physiology["min_fatigue_factor"]),
+            gap_steep_threshold=float(physiology.get("gap_steep_threshold", 0.15)),
+            gap_soft_start=float(physiology.get("gap_soft_start", 0.04)),
+            gap_climb_scale=float(physiology.get("gap_climb_scale", 1.0)),
+            gap_descent_scale=float(physiology.get("gap_descent_scale", 1.0)),
                 load_factor_col=spec["loadFactorCol"],
                 use_hrr_effort=bool(spec["useHrrEffort"]),
                 acute_trimp_col=spec["acuteTrimpCol"],
-                observed_activity_times_sec=observed,
+                observed_activity_times_sec=loo_observed,
                 objective=_model_objective(objective),
+                fit_mask_col=fit_mask_col,
+            actual_time_col=fit_actual_time_col,
             )
             if run_loo
             else pd.DataFrame()
@@ -1207,6 +1374,10 @@ def _run_paper_stage_models_for_objective(task: tuple[object, ...]) -> dict[str,
                 hrr_min_factor=float(physiology["hrr_min_factor"]),
                 hrr_max_factor=float(physiology["hrr_max_factor"]),
                 min_fatigue_factor=float(physiology["min_fatigue_factor"]),
+            gap_steep_threshold=float(physiology.get("gap_steep_threshold", 0.15)),
+            gap_soft_start=float(physiology.get("gap_soft_start", 0.04)),
+            gap_climb_scale=float(physiology.get("gap_climb_scale", 1.0)),
+            gap_descent_scale=float(physiology.get("gap_descent_scale", 1.0)),
                 load_factor_col="rediReadinessFactor",
                 use_hrr_effort=True,
                 acute_trimp_col=state_spec["acute_trimp_col"],
@@ -1214,6 +1385,8 @@ def _run_paper_stage_models_for_objective(task: tuple[object, ...]) -> dict[str,
                 secondary_fatigue_model=secondary_model or None,
                 objective=_model_objective(objective),
                 observed_activity_times_sec=observed,
+                fit_mask_col=fit_mask_col,
+            actual_time_col=fit_actual_time_col,
             )
             grid_frame = _hrr_trimp_grid_frame(
                 grid,
@@ -1249,7 +1422,7 @@ def _run_paper_stage_models_for_objective(task: tuple[object, ...]) -> dict[str,
 
             loo = (
                 tpm.leave_one_out_hrr_trimp_grid_search(
-                    cohort_segments,
+                    loo_cohort_segments,
                     v_anchor_kmh=float(physiology["vma_flat_kmh"]),
                     alpha_grid=fitting["hrr_trimp_alpha_grid"],
                     fatigue_coef_grid=fitting["hrr_trimp_kappa_grid"],
@@ -1259,13 +1432,19 @@ def _run_paper_stage_models_for_objective(task: tuple[object, ...]) -> dict[str,
                     hrr_min_factor=float(physiology["hrr_min_factor"]),
                     hrr_max_factor=float(physiology["hrr_max_factor"]),
                     min_fatigue_factor=float(physiology["min_fatigue_factor"]),
+            gap_steep_threshold=float(physiology.get("gap_steep_threshold", 0.15)),
+            gap_soft_start=float(physiology.get("gap_soft_start", 0.04)),
+            gap_climb_scale=float(physiology.get("gap_climb_scale", 1.0)),
+            gap_descent_scale=float(physiology.get("gap_descent_scale", 1.0)),
                     load_factor_col="rediReadinessFactor",
                     use_hrr_effort=True,
                     acute_trimp_col=state_spec["acute_trimp_col"],
                     secondary_acute_trimp_col=secondary_col or None,
                     secondary_fatigue_model=secondary_model or None,
-                    observed_activity_times_sec=observed,
+                    observed_activity_times_sec=loo_observed,
                     objective=_model_objective(objective),
+                    fit_mask_col=fit_mask_col,
+            actual_time_col=fit_actual_time_col,
                 )
                 if run_loo
                 else pd.DataFrame()
@@ -1460,13 +1639,74 @@ def run_paper_stage_models(
     return tables, stage3_best, stage3_segments
 
 
-def run_stage3_ablation(
+def _stable_cohort_seed_offset(cohort_name: str) -> int:
+    """Stable per-cohort offset (avoid Python's randomized ``hash()``)."""
+    digest = hashlib.sha256(str(cohort_name).encode("utf-8")).hexdigest()
+    return int(digest[:8], 16) % 10_000
+
+
+def _select_loo_activity_ids(activity_ids: Sequence[str], cohort_name: str, config: Mapping[str, Any]) -> list[str]:
+    """Apply the same LOO activity cap used by Stage 0–3 paper models."""
+    loo_ids = [str(activity_id) for activity_id in activity_ids]
+    loo_cap = int(config.get("cohorts", {}).get("loo_activity_cap", 0) or 0)
+    if loo_cap > 0 and len(loo_ids) > loo_cap:
+        seed = int(config.get("cohorts", {}).get("loo_activity_cap_seed", 20260721))
+        cohort_seed = seed + _stable_cohort_seed_offset(cohort_name)
+        rng = np.random.default_rng(cohort_seed)
+        loo_ids = sorted(rng.choice(np.array(loo_ids, dtype=object), size=loo_cap, replace=False).tolist())
+        logger.warning(
+            "LOO activity cap applied for cohort=%s: using %d/%d activities (seed=%d)",
+            cohort_name,
+            len(loo_ids),
+            len(activity_ids),
+            cohort_seed,
+        )
+    return loo_ids
+
+
+def _ablation_variant_definitions(
+    cohort_segments: pd.DataFrame,
+) -> list[dict[str, object]]:
+    """Build leave-one-component Stage-3 ablation variants."""
+    no_gap = cohort_segments.copy()
+    no_gap["avgGrade"] = 0.0
+    if "gapFactorIntegrated" in no_gap.columns:
+        no_gap["gapFactorIntegrated"] = 1.0
+    if "gapFactor" in no_gap.columns:
+        no_gap["gapFactor"] = 1.0
+    return [
+        {"label": "full", "segments": cohort_segments},
+        {"label": "no GAP", "segments": no_gap},
+        {"label": "no altitude", "segments": cohort_segments.assign(meanAltitudeM=0.0)},
+        {"label": "no REDI readiness", "segments": cohort_segments.assign(rediReadinessFactor=1.0)},
+        {"label": "no HRR speed ratio", "segments": cohort_segments, "use_hrr_effort": False},
+        {"label": "no acute fatigue", "segments": cohort_segments, "zero_fatigue": True},
+        {
+            # Keep HRR; replace TRIMP load U with route progress s∈[0,1] and force
+            # F = max(F_min, 1 − κ·s). Tests whether Banister acute TRIMP beats
+            # linear time/progress modeling of within-activity fatigue.
+            "label": "linear progress fatigue",
+            "segments": cohort_segments,
+            "acute_trimp_col": "progress",
+            "fatigue_model": "linear",
+            "clear_secondary_fatigue": True,
+        },
+        {
+            "label": "no trail GAP scales",
+            "segments": cohort_segments,
+            "gap_climb_scale": 1.0,
+            "gap_descent_scale": 1.0,
+        },
+    ]
+
+
+def _run_stage3_ablation_frozen(
     stage3_best: Mapping[tuple[str, str], Mapping[str, object]],
     stage3_segments: Mapping[tuple[str, str], pd.DataFrame],
     cohorts: Mapping[str, pd.DataFrame],
     config: Mapping[str, Any],
 ) -> pd.DataFrame:
-    """Ablate selected Stage 3 components for each cohort/objective pair."""
+    """Legacy ablation: freeze Stage-3 (α, κ) and disable components at prediction time."""
     physiology = config["physiology"]
     rows: list[dict[str, object]] = []
     for (cohort_name, objective), best in stage3_best.items():
@@ -1485,27 +1725,52 @@ def run_stage3_ablation(
             fatigue_coef: float | None = None,
             load_factor_col: str | None = "rediReadinessFactor",
             use_hrr_effort: bool = True,
+            gap_climb_scale: float | None = None,
+            gap_descent_scale: float | None = None,
+            acute_trimp_col_override: str | None = None,
+            fatigue_model_override: str | None = None,
+            clear_secondary_fatigue: bool = False,
         ) -> dict[str, object]:
+            use_acute_col = acute_col if acute_trimp_col_override is None else str(acute_trimp_col_override)
+            use_fatigue_model = (
+                str(best["fatigueModel"]) if fatigue_model_override is None else str(fatigue_model_override)
+            )
+            use_secondary_col = "" if clear_secondary_fatigue else secondary_col
+            use_secondary_model = "" if clear_secondary_fatigue else secondary_model
+            use_secondary_coef = (
+                0.0 if clear_secondary_fatigue else float(best.get("secondaryFatigueCoef", 0.0))
+            )
             predicted_segments = tpm.predict_hrr_trimp_segment_times(
                 variant_segments,
                 v_anchor_kmh=float(physiology["vma_flat_kmh"]),
                 alpha=float(best["alpha"]),
                 fatigue_coef=float(best["fatigueCoef"] if fatigue_coef is None else fatigue_coef),
-                fatigue_model=str(best["fatigueModel"]),
+                fatigue_model=use_fatigue_model,
                 hrr_reference=float(physiology["hrr_reference"]),
                 hrr_min_factor=float(physiology["hrr_min_factor"]),
                 hrr_max_factor=float(physiology["hrr_max_factor"]),
                 min_fatigue_factor=float(physiology["min_fatigue_factor"]),
+                gap_steep_threshold=float(physiology.get("gap_steep_threshold", 0.15)),
+                gap_soft_start=float(physiology.get("gap_soft_start", 0.04)),
+                gap_climb_scale=float(
+                    physiology.get("gap_climb_scale", 1.0) if gap_climb_scale is None else gap_climb_scale
+                ),
+                gap_descent_scale=float(
+                    physiology.get("gap_descent_scale", 1.0) if gap_descent_scale is None else gap_descent_scale
+                ),
                 load_factor_col=load_factor_col,
                 use_hrr_effort=use_hrr_effort,
-                acute_trimp_col=acute_col,
-                secondary_fatigue_coef=float(best.get("secondaryFatigueCoef", 0.0)),
-                secondary_acute_trimp_col=secondary_col or None,
-                secondary_fatigue_model=secondary_model or None,
+                acute_trimp_col=use_acute_col,
+                secondary_fatigue_coef=use_secondary_coef,
+                secondary_acute_trimp_col=use_secondary_col or None,
+                secondary_fatigue_model=use_secondary_model or None,
             )
             predicted = (
                 pd.DataFrame(
-                    {"activityId": variant_segments["activityId"].astype(str), "predictedTimeSec": predicted_segments}
+                    {
+                        "activityId": variant_segments["activityId"].astype(str),
+                        "predictedTimeSec": predicted_segments,
+                    }
                 )
                 .groupby("activityId")["predictedTimeSec"]
                 .sum()
@@ -1513,34 +1778,332 @@ def run_stage3_ablation(
             row = _metrics_row(cohort_name, label, observed, predicted.reindex(observed.index))
             row["fitObjective"] = objective
             row["fatigueState"] = best.get("fatigueState", "")
-            row["acuteTrimpCol"] = acute_col
-            row["fatigueModel"] = best.get("fatigueModel", "")
-            row["secondaryAcuteTrimpCol"] = secondary_col
-            row["secondaryFatigueModel"] = secondary_model
-            row["secondaryFatigueCoef"] = best.get("secondaryFatigueCoef", 0.0)
+            row["acuteTrimpCol"] = use_acute_col
+            row["fatigueModel"] = use_fatigue_model
+            row["secondaryAcuteTrimpCol"] = use_secondary_col
+            row["secondaryFatigueModel"] = use_secondary_model
+            row["secondaryFatigueCoef"] = (
+                0.0 if fatigue_coef == 0.0 else use_secondary_coef
+            )
+            row["alpha"] = float(best["alpha"])
+            row["fatigueCoef"] = float(best["fatigueCoef"] if fatigue_coef is None else fatigue_coef)
+            row["ablationProtocol"] = "frozen"
+            row["validation"] = "in_sample"
             return row
 
         full = predict_variant("full", cohort_segments)
         full_mae = float(full["maeMin"])
         rows.append({**full, "deltaMaeMinVsFull": 0.0})
-
-        no_gap = cohort_segments.copy()
-        no_gap["avgGrade"] = 0.0
-        if "gapFactorIntegrated" in no_gap.columns:
-            no_gap["gapFactorIntegrated"] = 1.0
-        if "gapFactor" in no_gap.columns:
-            no_gap["gapFactor"] = 1.0
-        variants = [
-            predict_variant("no GAP", no_gap),
-            predict_variant("no altitude", cohort_segments.assign(meanAltitudeM=0.0)),
-            predict_variant("no REDI readiness", cohort_segments.assign(rediReadinessFactor=1.0)),
-            predict_variant("no HRR speed ratio", cohort_segments, use_hrr_effort=False),
-            predict_variant("no acute fatigue", cohort_segments, fatigue_coef=0.0),
-        ]
-        for row in variants:
+        for variant in _ablation_variant_definitions(cohort_segments):
+            label = str(variant["label"])
+            if label == "full":
+                continue
+            row = predict_variant(
+                label,
+                variant["segments"],  # type: ignore[arg-type]
+                use_hrr_effort=bool(variant.get("use_hrr_effort", True)),
+                fatigue_coef=0.0 if bool(variant.get("zero_fatigue", False)) else None,
+                gap_climb_scale=variant.get("gap_climb_scale"),  # type: ignore[arg-type]
+                gap_descent_scale=variant.get("gap_descent_scale"),  # type: ignore[arg-type]
+                acute_trimp_col_override=(
+                    str(variant["acute_trimp_col"]) if variant.get("acute_trimp_col") else None
+                ),
+                fatigue_model_override=(
+                    str(variant["fatigue_model"]) if variant.get("fatigue_model") else None
+                ),
+                clear_secondary_fatigue=bool(variant.get("clear_secondary_fatigue", False)),
+            )
             row["deltaMaeMinVsFull"] = float(row["maeMin"]) - full_mae
             rows.append(row)
     return pd.DataFrame(rows)
+
+
+def _run_stage3_ablation_reoptimize(
+    stage3_best: Mapping[tuple[str, str], Mapping[str, object]],
+    stage3_segments: Mapping[tuple[str, str], pd.DataFrame],
+    cohorts: Mapping[str, pd.DataFrame],
+    config: Mapping[str, Any],
+    stage3_loo_baseline: Mapping[tuple[str, str], Mapping[str, object]] | None = None,
+) -> pd.DataFrame:
+    """Preferred ablation: re-optimize (α, κ) for each leave-one-component variant."""
+    physiology = config["physiology"]
+    fitting = config["fitting"]
+    fit_mask_col = _fit_mask_col(config)
+    fit_actual_time_col = _fit_actual_time_col(config)
+    loo_include = set(config.get("cohorts", {}).get("loo_include") or [])
+    loo_enabled = "loo" in set(fitting.get("validation_modes", ["in_sample", "loo"]))
+    baseline = stage3_loo_baseline or {}
+    rows: list[dict[str, object]] = []
+
+    for (cohort_name, objective), best in stage3_best.items():
+        cohort_segments = stage3_segments[(cohort_name, objective)].copy()
+        cohort_df = cohorts[cohort_name]
+        ids = cohort_df["activityId"].astype(str).tolist()
+        observed = cohort_df.set_index("activityId")["actualTimeSec"].astype(float)
+        observed = observed.reindex(ids).astype(float)
+        observed_map = observed.to_dict()
+        acute_col = str(best.get("acuteTrimpCol", "decayedTrimpBefore"))
+        secondary_col = str(best.get("secondaryAcuteTrimpCol", ""))
+        secondary_model = str(best.get("secondaryFatigueModel", ""))
+        fatigue_model = str(best.get("fatigueModel", "linear"))
+        run_loo = loo_enabled and (not loo_include or cohort_name in loo_include)
+        loo_ids = _select_loo_activity_ids(ids, cohort_name, config) if run_loo else ids
+        loo_observed = {
+            activity_id: observed_map[activity_id] for activity_id in loo_ids if activity_id in observed_map
+        }
+
+        full_mae: float | None = None
+        for variant in _ablation_variant_definitions(cohort_segments):
+            label = str(variant["label"])
+            # R1: reuse Stage-3 ladder LOO metrics for the full baseline when available.
+            if label == "full" and (cohort_name, objective) in baseline:
+                base = baseline[(cohort_name, objective)]
+                row = {
+                    "cohort": cohort_name,
+                    "stage": "full",
+                    "r2": float(base.get("r2", np.nan)),
+                    "maeMin": float(base["maeMin"]),
+                    "mapePct": float(base.get("mapePct", np.nan)),
+                    "biasMin": float(base.get("biasMin", np.nan)),
+                    "fitObjective": objective,
+                    "fatigueState": best.get("fatigueState", ""),
+                    "acuteTrimpCol": acute_col,
+                    "fatigueModel": fatigue_model,
+                    "secondaryAcuteTrimpCol": secondary_col,
+                    "secondaryFatigueModel": secondary_model,
+                    "secondaryFatigueCoef": float(best.get("secondaryFatigueCoef", 0.0) or 0.0),
+                    "alpha": float(base.get("alpha", best.get("alpha", np.nan))),
+                    "fatigueCoef": float(base.get("fatigueCoef", best.get("fatigueCoef", np.nan))),
+                    "ablationProtocol": "ladder_loo_baseline",
+                    "validation": "loo",
+                    "deltaMaeMinVsFull": 0.0,
+                }
+                full_mae = float(row["maeMin"])
+                rows.append(row)
+                logger.info(
+                    "Ablation cohort=%s objective=%s variant=full protocol=ladder_loo_baseline maeMin=%.2f",
+                    cohort_name,
+                    objective,
+                    full_mae,
+                )
+                continue
+
+            variant_segments = variant["segments"]  # type: ignore[assignment]
+            assert isinstance(variant_segments, pd.DataFrame)
+            use_hrr_effort = bool(variant.get("use_hrr_effort", True))
+            zero_fatigue = bool(variant.get("zero_fatigue", False))
+            clear_secondary = bool(variant.get("clear_secondary_fatigue", False))
+            variant_acute_col = (
+                str(variant["acute_trimp_col"]) if variant.get("acute_trimp_col") else acute_col
+            )
+            variant_fatigue_model = (
+                str(variant["fatigue_model"]) if variant.get("fatigue_model") else fatigue_model
+            )
+            variant_secondary_col = "" if clear_secondary else secondary_col
+            variant_secondary_model = "" if clear_secondary else secondary_model
+            gap_climb_scale = float(
+                physiology.get("gap_climb_scale", 1.0)
+                if variant.get("gap_climb_scale") is None
+                else variant["gap_climb_scale"]
+            )
+            gap_descent_scale = float(
+                physiology.get("gap_descent_scale", 1.0)
+                if variant.get("gap_descent_scale") is None
+                else variant["gap_descent_scale"]
+            )
+            alpha_grid = fitting["hrr_trimp_alpha_grid"]
+            fatigue_coef_grid = [0.0] if zero_fatigue else fitting["hrr_trimp_kappa_grid"]
+            secondary_grid = (
+                [0.0]
+                if zero_fatigue or clear_secondary or not variant_secondary_col
+                else fitting["hrr_trimp_secondary_kappa_grid"]
+            )
+            prediction_kwargs: dict[str, object] = {
+                "hrr_reference": float(physiology["hrr_reference"]),
+                "hrr_min_factor": float(physiology["hrr_min_factor"]),
+                "hrr_max_factor": float(physiology["hrr_max_factor"]),
+                "min_fatigue_factor": float(physiology["min_fatigue_factor"]),
+                "gap_steep_threshold": float(physiology.get("gap_steep_threshold", 0.15)),
+                "gap_soft_start": float(physiology.get("gap_soft_start", 0.04)),
+                "gap_climb_scale": gap_climb_scale,
+                "gap_descent_scale": gap_descent_scale,
+                "load_factor_col": "rediReadinessFactor",
+                "use_hrr_effort": use_hrr_effort,
+                "acute_trimp_col": variant_acute_col,
+                "secondary_acute_trimp_col": variant_secondary_col or None,
+                "secondary_fatigue_model": variant_secondary_model or None,
+            }
+
+            if run_loo:
+                eval_segments = variant_segments[
+                    variant_segments["activityId"].astype(str).isin(loo_ids)
+                ].copy()
+                loo = tpm.leave_one_out_hrr_trimp_grid_search(
+                    eval_segments,
+                    v_anchor_kmh=float(physiology["vma_flat_kmh"]),
+                    alpha_grid=alpha_grid,
+                    fatigue_coef_grid=fatigue_coef_grid,
+                    secondary_fatigue_coef_grid=secondary_grid,
+                    fatigue_models=(variant_fatigue_model,),
+                    observed_activity_times_sec=loo_observed,
+                    objective=_model_objective(objective),
+                    fit_mask_col=fit_mask_col,
+                    actual_time_col=fit_actual_time_col,
+                    **prediction_kwargs,
+                )
+                if loo.empty:
+                    logger.warning(
+                        "Reoptimized ablation LOO empty for cohort=%s variant=%s; falling back to in-sample",
+                        cohort_name,
+                        label,
+                    )
+                    run_loo_variant = False
+                else:
+                    row = _metrics_row(
+                        cohort_name,
+                        label,
+                        loo["actualTimeSec"],
+                        loo["predictedTimeSec"],
+                    )
+                    row["alpha"] = float(loo["alpha"].median())
+                    row["fatigueCoef"] = float(loo["fatigueCoef"].median())
+                    row["secondaryFatigueCoef"] = (
+                        float(loo["secondaryFatigueCoef"].median())
+                        if "secondaryFatigueCoef" in loo
+                        else 0.0
+                    )
+                    row["ablationProtocol"] = "reoptimize_loo"
+                    row["validation"] = "loo"
+                    run_loo_variant = True
+            else:
+                run_loo_variant = False
+
+            if not run_loo_variant:
+                fit_best, _grid, prediction = tpm.hrr_trimp_grid_search_model(
+                    variant_segments,
+                    v_anchor_kmh=float(physiology["vma_flat_kmh"]),
+                    alpha_grid=alpha_grid,
+                    fatigue_coef_grid=fatigue_coef_grid,
+                    secondary_fatigue_coef_grid=secondary_grid,
+                    fatigue_models=(variant_fatigue_model,),
+                    observed_activity_times_sec=observed_map,
+                    objective=_model_objective(objective),
+                    fit_mask_col=fit_mask_col,
+                    actual_time_col=fit_actual_time_col,
+                    **prediction_kwargs,
+                )
+                predicted_activity = _race_prediction_from_segments(prediction, ids)
+                row = _metrics_row(cohort_name, label, observed, predicted_activity)
+                row["alpha"] = float(fit_best.get("alpha", np.nan))
+                row["fatigueCoef"] = float(fit_best.get("fatigueCoef", np.nan))
+                row["secondaryFatigueCoef"] = float(fit_best.get("secondaryFatigueCoef", 0.0))
+                row["ablationProtocol"] = "reoptimize_in_sample"
+                row["validation"] = "in_sample"
+
+            row["fitObjective"] = objective
+            row["fatigueState"] = (
+                "progress" if variant_acute_col == "progress" else best.get("fatigueState", "")
+            )
+            row["acuteTrimpCol"] = variant_acute_col
+            row["fatigueModel"] = variant_fatigue_model
+            row["secondaryAcuteTrimpCol"] = variant_secondary_col
+            row["secondaryFatigueModel"] = variant_secondary_model
+            if full_mae is None:
+                full_mae = float(row["maeMin"])
+                row["deltaMaeMinVsFull"] = 0.0
+            else:
+                row["deltaMaeMinVsFull"] = float(row["maeMin"]) - float(full_mae)
+            rows.append(row)
+            logger.info(
+                "Ablation cohort=%s objective=%s variant=%s protocol=%s maeMin=%.2f delta=%.2f",
+                cohort_name,
+                objective,
+                label,
+                row["ablationProtocol"],
+                float(row["maeMin"]),
+                float(row["deltaMaeMinVsFull"]),
+            )
+    return pd.DataFrame(rows)
+
+
+def stage3_loo_baseline_from_metrics(
+    stage_metrics: pd.DataFrame,
+    *,
+    stage_name: str = "Stage 3 HRR speed ratio LOO",
+) -> dict[tuple[str, str], dict[str, object]]:
+    """Extract Stage-3 ladder LOO metrics for ablation full-baseline alignment (R1)."""
+    if stage_metrics.empty:
+        return {}
+    subset = stage_metrics[stage_metrics["stage"].astype(str).eq(stage_name)].copy()
+    baseline: dict[tuple[str, str], dict[str, object]] = {}
+    for _, row in subset.iterrows():
+        key = (str(row["cohort"]), str(row.get("fitObjective", "activity")))
+        baseline[key] = {
+            "maeMin": float(row["maeMin"]),
+            "mapePct": float(row.get("mapePct", np.nan)),
+            "biasMin": float(row.get("biasMin", np.nan)),
+            "r2": float(row.get("r2", np.nan)),
+            "alpha": float(row["alpha"]) if "alpha" in row and pd.notna(row["alpha"]) else np.nan,
+            "fatigueCoef": float(row["fatigueCoef"])
+            if "fatigueCoef" in row and pd.notna(row["fatigueCoef"])
+            else np.nan,
+        }
+    return baseline
+
+
+
+def run_stage3_ablation(
+    stage3_best: Mapping[tuple[str, str], Mapping[str, object]],
+    stage3_segments: Mapping[tuple[str, str], pd.DataFrame],
+    cohorts: Mapping[str, pd.DataFrame],
+    config: Mapping[str, Any],
+    stage3_loo_baseline: Mapping[tuple[str, str], Mapping[str, object]] | None = None,
+) -> pd.DataFrame:
+    """Ablate selected Stage 3 components for each cohort/objective pair.
+
+    Default protocol ``reoptimize`` re-fits (α, κ) after each component removal and
+    evaluates with LOO when enabled (gold-standard contribution estimate). Legacy
+    ``frozen`` keeps Stage-3 parameters fixed and only disables components at
+    prediction time (inference-time dependency).
+
+    When ``stage3_loo_baseline`` is provided (cohort, objective) → metrics for the
+    Stage-3 ladder LOO row, the reoptimize protocol uses that row as the ``full``
+    baseline so Table 2 and Table 3 share the same absolute MAE (R1).
+    """
+    fitting = config.get("fitting", {})
+    protocol = str(fitting.get("ablation_protocol", "reoptimize")).strip().lower()
+    ablation_objectives = [str(value) for value in (fitting.get("ablation_fit_objectives") or [])]
+    filtered_best = dict(stage3_best)
+    if ablation_objectives:
+        allowed = set(ablation_objectives)
+        filtered_best = {
+            key: value for key, value in stage3_best.items() if str(key[1]) in allowed
+        }
+        logger.info(
+            "Restricting Stage-3 ablation to fit objectives=%s (%d/%d cohort-objective pairs)",
+            sorted(allowed),
+            len(filtered_best),
+            len(stage3_best),
+        )
+    if not filtered_best:
+        logger.warning("Stage-3 ablation skipped: no cohort/objective pairs after filtering")
+        return pd.DataFrame()
+
+    if protocol == "frozen":
+        logger.warning(
+            "Using frozen Stage-3 ablation protocol (fit once, then remove). "
+            "Prefer fitting.ablation_protocol=reoptimize for recoverable contribution estimates."
+        )
+        return _run_stage3_ablation_frozen(filtered_best, stage3_segments, cohorts, config)
+    if protocol != "reoptimize":
+        raise ValueError(f"unsupported fitting.ablation_protocol: {protocol}")
+    return _run_stage3_ablation_reoptimize(
+        filtered_best,
+        stage3_segments,
+        cohorts,
+        config,
+        stage3_loo_baseline=stage3_loo_baseline,
+    )
 
 
 def run_segment_grid(
@@ -1588,6 +2151,8 @@ def run_robustness_checks(
     rows: list[dict[str, object]] = []
     fitting = config["fitting"]
     physiology = config["physiology"]
+    fit_mask_col = _fit_mask_col(config)
+    fit_actual_time_col = _fit_actual_time_col(config)
     objective = "activity"
     for decay_lambda in config["robustness"]["decay_lambdas"]:
         decayed_segments = tpm.add_in_activity_trimp_features(all_segments_df, decay_lambda=decay_lambda)
@@ -1611,6 +2176,8 @@ def run_robustness_checks(
                     acute_trimp_col="decayedTrimpBefore",
                     objective=_model_objective(objective),
                     observed_activity_times_sec=observed,
+                    fit_mask_col=fit_mask_col,
+            actual_time_col=fit_actual_time_col,
                 )
                 rows.append(
                     {
@@ -1656,6 +2223,8 @@ def run_robustness_checks(
                 acute_trimp_col="decayedTrimpBefore",
                 objective=_model_objective(objective),
                 observed_activity_times_sec=observed_elapsed,
+                fit_mask_col=fit_mask_col,
+            actual_time_col=fit_actual_time_col,
             )
             rows.append(
                 {
@@ -1700,6 +2269,10 @@ def _stage3_segment_predictions(
             hrr_min_factor=float(physiology["hrr_min_factor"]),
             hrr_max_factor=float(physiology["hrr_max_factor"]),
             min_fatigue_factor=float(physiology["min_fatigue_factor"]),
+            gap_steep_threshold=float(physiology.get("gap_steep_threshold", 0.15)),
+            gap_soft_start=float(physiology.get("gap_soft_start", 0.04)),
+            gap_climb_scale=float(physiology.get("gap_climb_scale", 1.0)),
+            gap_descent_scale=float(physiology.get("gap_descent_scale", 1.0)),
             load_factor_col="rediReadinessFactor",
             use_hrr_effort=True,
             acute_trimp_col=str(best.get("acuteTrimpCol", "decayedTrimpBefore")),
@@ -1710,9 +2283,13 @@ def _stage3_segment_predictions(
         cohort_segments["cohort"] = cohort_name
         cohort_segments["fitObjective"] = objective
         cohort_segments["stage3PredictedTimeSec"] = predicted
-        cohort_segments["stage3ResidualSec"] = predicted - pd.to_numeric(
-            cohort_segments["actualTimeSec"], errors="coerce"
-        )
+        actual_full = pd.to_numeric(cohort_segments["actualTimeSec"], errors="coerce")
+        cohort_segments["stage3ResidualSec"] = predicted - actual_full
+        if "actualMovingTimeSec" in cohort_segments.columns:
+            actual_moving = pd.to_numeric(cohort_segments["actualMovingTimeSec"], errors="coerce")
+            cohort_segments["stage3ResidualMovingSec"] = predicted - actual_moving
+        else:
+            cohort_segments["stage3ResidualMovingSec"] = cohort_segments["stage3ResidualSec"]
         cohort_segments["stage3FatigueState"] = best.get("fatigueState", "")
         cohort_segments["stage3AcuteTrimpCol"] = best.get("acuteTrimpCol", "")
         cohort_segments["stage3FatigueModel"] = best.get("fatigueModel", "")
@@ -1866,7 +2443,16 @@ def run_pipeline(
         config,
         v_vt2_kmh,
     )
-    stage3_ablation = run_stage3_ablation(stage3_best, stage3_segments, cohorts, config)
+    stage3_loo_baseline = stage3_loo_baseline_from_metrics(
+        stage_tables.get("table_stage_metrics", pd.DataFrame())
+    )
+    stage3_ablation = run_stage3_ablation(
+        stage3_best,
+        stage3_segments,
+        cohorts,
+        config,
+        stage3_loo_baseline=stage3_loo_baseline,
+    )
     segment_grid_metrics, segment_grid_predictions = run_segment_grid(cohorts, segment_features, config)
     robustness_checks = run_robustness_checks(cohorts, all_segments_df, activity_df, config)
     stage3_segment_predictions = _stage3_segment_predictions(stage3_best, stage3_segments, config)
@@ -1943,6 +2529,10 @@ def _segment_type_metrics(segments: pd.DataFrame) -> pd.DataFrame:
 
     data["terrainFamily"] = data["terrainFamily"].fillna("unknown").astype(str)
     data["residualSec"] = data["predictedTimeSec"] - data["actualTimeSec"]
+    has_moving = "actualMovingTimeSec" in data.columns
+    if has_moving:
+        data["actualMovingTimeSec"] = pd.to_numeric(data["actualMovingTimeSec"], errors="coerce")
+        data["residualMovingSec"] = data["predictedTimeSec"] - data["actualMovingTimeSec"]
     if "distanceKm" in data.columns:
         data["distanceKm"] = pd.to_numeric(data["distanceKm"], errors="coerce").fillna(0.0)
     else:
@@ -1955,25 +2545,49 @@ def _segment_type_metrics(segments: pd.DataFrame) -> pd.DataFrame:
     ):
         metrics = tpm.regression_metrics(group["actualTimeSec"], group["predictedTimeSec"])
         residual = group["residualSec"].to_numpy(dtype=float)
-        rows.append(
-            {
-                "cohort": cohort,
-                "fitObjective": objective,
-                "terrainFamily": terrain,
-                "terrainLabel": _terrain_label(terrain),
-                "segmentCount": int(len(group)),
-                "activityCount": int(group["activityId"].astype(str).nunique()),
-                "distanceKm": float(group["distanceKm"].sum()),
-                "actualMin": float(group["actualTimeSec"].sum() / 60.0),
-                "predictedMin": float(group["predictedTimeSec"].sum() / 60.0),
-                "r2": metrics["r2"],
-                "maeMin": metrics["maeSec"] / 60.0,
-                "rmseMin": float(np.sqrt(np.mean(residual**2)) / 60.0),
-                "mapePct": metrics["mapePct"],
-                "biasMin": metrics["biasSec"] / 60.0,
-                "residualStdMin": float(np.std(residual, ddof=0) / 60.0),
-            }
-        )
+        row = {
+            "cohort": cohort,
+            "fitObjective": objective,
+            "terrainFamily": terrain,
+            "terrainLabel": _terrain_label(terrain),
+            "segmentCount": int(len(group)),
+            "activityCount": int(group["activityId"].astype(str).nunique()),
+            "distanceKm": float(group["distanceKm"].sum()),
+            "actualMin": float(group["actualTimeSec"].sum() / 60.0),
+            "predictedMin": float(group["predictedTimeSec"].sum() / 60.0),
+            "r2": metrics["r2"],
+            "maeMin": metrics["maeSec"] / 60.0,
+            "rmseMin": float(np.sqrt(np.mean(residual**2)) / 60.0),
+            "mapePct": metrics["mapePct"],
+            "biasMin": metrics["biasSec"] / 60.0,
+            "residualStdMin": float(np.std(residual, ddof=0) / 60.0),
+        }
+        if has_moving:
+            moving_group = group[group["actualMovingTimeSec"].gt(1.0)]
+            if not moving_group.empty:
+                moving_metrics = tpm.regression_metrics(
+                    moving_group["actualMovingTimeSec"],
+                    moving_group["predictedTimeSec"],
+                )
+                moving_residual = moving_group["residualMovingSec"].to_numpy(dtype=float)
+                row.update(
+                    {
+                        "maeMinMoving": moving_metrics["maeSec"] / 60.0,
+                        "mapePctMoving": moving_metrics["mapePct"],
+                        "biasMinMoving": moving_metrics["biasSec"] / 60.0,
+                        "rmseMinMoving": float(np.sqrt(np.mean(moving_residual**2)) / 60.0),
+                    }
+                )
+            else:
+                row.update(
+                    {
+                        "maeMinMoving": np.nan,
+                        "mapePctMoving": np.nan,
+                        "biasMinMoving": np.nan,
+                        "rmseMinMoving": np.nan,
+                    }
+                )
+        rows.append(row)
 
     result = pd.DataFrame(rows)
     result["terrainOrder"] = result["terrainFamily"].map(TERRAIN_FAMILY_ORDER).fillna(99).astype(int)
@@ -2999,6 +3613,30 @@ def write_outputs(result: PipelineResult, output_dir: Path) -> dict[str, Path]:
     manifest_path = output_dir / "run_manifest.csv"
     manifest.to_csv(manifest_path, index=False)
     written["run_manifest"] = manifest_path
+
+    try:
+        git_sha = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],
+            cwd=Path.cwd(),
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+    except Exception:
+        logger.warning("Could not resolve git SHA for software_versions.json; leaving blank")
+        git_sha = ""
+    versions = {
+        "pythonVersion": sys.version,
+        "platform": platform.platform(),
+        "numpyVersion": getattr(np, "__version__", ""),
+        "pandasVersion": getattr(pd, "__version__", ""),
+        "gitSha": git_sha,
+        "bootstrapSeedDefault": 20260623,
+        "looActivityCapSeed": int(config.get("cohorts", {}).get("loo_activity_cap_seed", 20260721) or 20260721),
+        "configPath": str(result.metadata.get("configPath", "")),
+    }
+    versions_path = output_dir / "software_versions.json"
+    versions_path.write_text(json.dumps(versions, indent=2) + "\n")
+    written["software_versions"] = versions_path
 
     if bool(config.get("outputs", {}).get("write_html", True)):
         html_path = output_dir / str(config.get("outputs", {}).get("html_filename", "trail_digital_twin_report.html"))

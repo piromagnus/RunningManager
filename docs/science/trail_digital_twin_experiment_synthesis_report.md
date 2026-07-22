@@ -9,8 +9,11 @@ lower is better. Aggregate scores average configured cohorts
 
 ## Definitions
 
-- **HRR_ref (`hrr_reference`)**: fraction of heart-rate reserve at which the
-  runner is expected to sustain the reference speed (VMA / flat threshold proxy).
+- **HRR_ref (`hrr_reference`)**: HRR corresponding to **flat VMA effort**
+  (\(E=\mathrm{clip}(\mathrm{HRR}/\mathrm{HRR}_{\mathrm{ref}},\,h_{\min},\,h_{\max})\);
+  \(E=1\) at \(\mathrm{HRR}=\mathrm{HRR}_{\mathrm{ref}}\)). VMA (`vma_flat_kmh`) is
+  the flat speed anchor; at \(E=1\), speed is \(v_{\mathrm{VMA}}\cdot\alpha\).
+  With `hrr_max_factor>1`, HRR above ref can raise \(E\) above 1 (supra-VMA).
 - **Decay λ (`decay_lambda`)**: exponential decay rate for in-race TRIMP used
   by Stage 3 fatigue states.
 - **Min fatigue factor**: floor on the fatigue multiplier so long races cannot
@@ -131,6 +134,11 @@ hypothesis campaigns.
 4. Investigate residual MAE on high-duration / high-TRIMP hard trails
    (stress-duration and terrain mechanics).
 5. Optionally re-evaluate Minetti clamp with a dedicated terrain sweep.
+6. Run `configs/trail_digital_twin_benchmark_segment_exclusion.yaml` to fit on
+   cleaned (non-stationary) segments then score full-race LOO; review with
+   `scripts/synthesize_trail_digital_twin_sessions.py`.
+7. Session-level residual triage:
+   `docs/science/trail_digital_twin_session_benchmark_review.md`.
 
 ## Source Artifacts
 

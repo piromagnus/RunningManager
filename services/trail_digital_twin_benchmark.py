@@ -587,6 +587,80 @@ def bootstrap_uncertainty_table(
     return pd.DataFrame(rows)
 
 
+def bootstrap_parameter_uncertainty_table(
+    loo_predictions: pd.DataFrame,
+    *,
+    stage_contains: str = "Stage 3 HRR speed ratio LOO",
+    iterations: int = 500,
+    seed: int = 20260623,
+) -> pd.DataFrame:
+    """Bootstrap CIs for LOO-fold alpha and fatigueCoef (nested-CV style uncertainty)."""
+    if loo_predictions.empty:
+        return pd.DataFrame()
+    data = loo_predictions.copy()
+    if "stage" in data.columns:
+        data = data[data["stage"].astype(str).str.contains(stage_contains, regex=False)]
+    required = {"cohort", "fitObjective", "alpha", "fatigueCoef"}
+    if data.empty or not required.issubset(data.columns):
+        return pd.DataFrame()
+    rows: list[dict[str, object]] = []
+    for group_index, ((cohort, objective), group) in enumerate(
+        data.groupby(["cohort", "fitObjective"], sort=True)
+    ):
+        alpha = pd.to_numeric(group["alpha"], errors="coerce").dropna().to_numpy(dtype=float)
+        kappa = pd.to_numeric(group["fatigueCoef"], errors="coerce").dropna().to_numpy(dtype=float)
+        if alpha.size == 0 or kappa.size == 0:
+            continue
+        n = min(alpha.size, kappa.size)
+        alpha = alpha[:n]
+        kappa = kappa[:n]
+        rng = np.random.default_rng(seed + 17 + group_index)
+        alpha_samples = np.empty(iterations, dtype=float)
+        kappa_samples = np.empty(iterations, dtype=float)
+        for index in range(iterations):
+            idx = rng.integers(0, n, size=n)
+            alpha_samples[index] = float(np.mean(alpha[idx]))
+            kappa_samples[index] = float(np.mean(kappa[idx]))
+        rows.append(
+            {
+                "cohort": cohort,
+                "fitObjective": objective,
+                "foldCount": int(n),
+                "bootstrapIterations": int(iterations),
+                "alphaMean": float(np.mean(alpha)),
+                "alphaP05": float(np.quantile(alpha_samples, 0.05)),
+                "alphaP50": float(np.quantile(alpha_samples, 0.50)),
+                "alphaP95": float(np.quantile(alpha_samples, 0.95)),
+                "fatigueCoefMean": float(np.mean(kappa)),
+                "fatigueCoefP05": float(np.quantile(kappa_samples, 0.05)),
+                "fatigueCoefP50": float(np.quantile(kappa_samples, 0.50)),
+                "fatigueCoefP95": float(np.quantile(kappa_samples, 0.95)),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def frozen_physics_vs_hrr_table(stage_metrics: pd.DataFrame) -> pd.DataFrame:
+    """Matched Stage 0 (physics) vs Stage 3 (HRR+TRIMP) LOO rows on the same cohorts."""
+    if stage_metrics.empty or "stage" not in stage_metrics.columns:
+        return pd.DataFrame()
+    keep = stage_metrics[
+        stage_metrics["stage"]
+        .astype(str)
+        .isin(
+            [
+                "Stage 0 reproduction Stage 3 LOO",
+                "Stage 3 HRR speed ratio LOO",
+                "Stage 1 acute TRIMP LOO",
+                "Stage 2 REDI readiness LOO",
+            ]
+        )
+    ].copy()
+    if keep.empty:
+        return keep
+    return keep.sort_values(["cohort", "fitObjective", "stage"]).reset_index(drop=True)
+
+
 def select_primary_stage_metrics(stage_metrics: pd.DataFrame, selection: Mapping[str, Any]) -> pd.DataFrame:
     """Select the stage rows used for benchmark ranking."""
     if stage_metrics.empty or "stage" not in stage_metrics.columns:

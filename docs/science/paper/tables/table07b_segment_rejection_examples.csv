@@ -1,0 +1,9 @@
+Activity,km,SpeedEq (km·h⁻¹),|Δelev|/h (m·h⁻¹),Stationary share,Duration (min),Reason
+Echappee Belle 2025 : Parcours des crêtes,49.0,1.49,42.5,0.74,40.9,low_mean_speed_eq + high_stationary_share
+Séance de piste avec du record,4.0,2.19,32.9,0.61,27.7,low_mean_speed_eq + high_stationary_share
+Séance de piste avec du record,3.0,3.85,47.5,0.23,15.6,low_mean_speed_eq
+Intervalles entre les gens et les verres de pinard,9.0,4.12,103.5,0.36,14.4,high_stationary_share
+Petit test VMA,4.0,5.76,38.0,0.42,10.7,high_stationary_share
+Afternoon Run,0.0,6.3,47.7,0.35,8.9,high_stationary_share
+EF de bon matin,11.0,6.35,108.2,0.35,5.7,high_stationary_share
+GTV J1 : Saint-Nizier - Abri de Carette,36.0,2.75,103.2,0.35,4.8,low_mean_speed_eq + high_stationary_share

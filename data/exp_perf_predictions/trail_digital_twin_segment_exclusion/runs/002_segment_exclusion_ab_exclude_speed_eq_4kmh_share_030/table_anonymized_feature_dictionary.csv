@@ -1,0 +1,5 @@
+feature,description
+fitObjective,Fitting objective used to select model hyperparameters.
+stage3FatigueState,Selected Stage 3 acute fatigue state for this cohort.
+stage3AcuteTrimpCol,Selected Stage 3 acute fatigue input column.
+stage3FatigueModel,Selected Stage 3 fatigue shape.

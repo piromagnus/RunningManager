@@ -1,0 +1,46 @@
+{
+  "fit": {
+    "alpha": 0.95,
+    "fatigueCoef": 0.4,
+    "fatigueModel": "exponential",
+    "segmentMaeSec": 56.50592425685322,
+    "raceMaeSec": 400.9491463320374,
+    "fitObjective": "race",
+    "actualTimeCol": "actualMovingTimeSec",
+    "nTrainSegments": 1353,
+    "nTrainActivities": 98
+  },
+  "physiology": {
+    "vma_flat_kmh": 18.0,
+    "hrr_reference": 0.88,
+    "hrr_min_factor": 0.3,
+    "hrr_max_factor": 1.2,
+    "decay_lambda": 0.2,
+    "min_fatigue_factor": 0.6,
+    "gap_steep_threshold": 0.15,
+    "gap_soft_start": 0.04,
+    "gap_climb_scale": 0.85,
+    "gap_descent_scale": 1.6
+  },
+  "powerLaw": {
+    "coefficient": 0.8252577425196024,
+    "exponent": -0.03895490267022923,
+    "maeHrr": 0.046051603693589925,
+    "fitWindowCount": 13
+  },
+  "holdouts": [
+    "15087396899",
+    "15563904138",
+    "16325125849",
+    "17481444994",
+    "17815897198"
+  ],
+  "hypotheses": [
+    "H1_mean_mod",
+    "H2_p75_mod",
+    "H3_family_caps",
+    "H4_hardtrail_mod",
+    "H5_supra_vma_flat_only",
+    "H4b_all_usable_mod"
+  ]
+}

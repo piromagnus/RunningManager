@@ -45,6 +45,11 @@ physiology:
   hrr_max_factor: 1.2
   decay_lambda: 0.2
   min_fatigue_factor: 0.50
+  # Trail asymmetric GAP (soft-ramp from soft_start to steep_threshold).
+  gap_steep_threshold: 0.15
+  gap_soft_start: 0.04
+  gap_climb_scale: 0.85
+  gap_descent_scale: 1.60
 
 readiness:
   ctl_weight: 0.05
@@ -199,6 +204,20 @@ robustness:
   elapsed_time_sensitivity: true
   segment_length_sensitivity: true
   segment_length_km: 0.50
+
+segment_exclusion:
+  enabled: false
+  # Grade-adjusted speed (Minetti/GAP); used only with altitude–time flatness.
+  min_mean_speed_eq_kmh: 3.0
+  max_stationary_time_share: 0.40
+  stationary_speed_kmh: 1.0
+  # Flat on altitude-over-time (gross |Δelev| m/h), not altitude-over-km grade.
+  max_abs_altitude_rate_mph: 120.0
+  # When true, Stage 3 fits on actualMovingTimeSec (stationary stripped);
+  # full-race LOO still scores observed activity moving time.
+  use_moving_time_for_fit: false
+  exclude_from_fit: true
+  report_full_race_eval: true
 
 outputs:
   write_csv: true

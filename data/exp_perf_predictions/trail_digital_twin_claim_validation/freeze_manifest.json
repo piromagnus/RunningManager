@@ -1,0 +1,62 @@
+{
+  "analysisDate": "2026-07-22T20:52:42.705377+00:00",
+  "claim_validation": {
+    "bootstrap_iterations": 10000,
+    "bootstrap_seed": 20260722,
+    "event_labels_csv": "configs/claim_validation_event_labels.csv",
+    "hr_max_sensitivity_bpm": 5,
+    "hr_rest_sensitivity_bpm": 5,
+    "mape_relative_gain_gate": 0.1,
+    "out_of_domain_activity_ids": [
+      "14072838481"
+    ],
+    "primary_cohort": "hardTrailRun",
+    "pseudo_prospective_activity_ids": [
+      "15563904138",
+      "15087396899"
+    ],
+    "secondary_cohorts": [
+      "hardRunOrTrailRun"
+    ],
+    "strict_pre_race_activity_ids": [
+      "16325125849",
+      "17481444994"
+    ],
+    "support_duration_extrapolate_hours": 6.0,
+    "support_duration_weak_hours": 4.0,
+    "support_hrr_weak": 0.8
+  },
+  "cohortCounts": {
+    "hardRunOrTrailRun": 103,
+    "hardTrailRun": 45,
+    "runTrailOver20Min": 208,
+    "selectedDateRaces": 18
+  },
+  "hrMax": 205.0,
+  "hrRest": 55.0,
+  "inputHashes": {
+    "configs/claim_validation_event_labels.csv": "5f13fd174c366bdf16ff0154498c02601df8eb795a926ab0de20f0132e2f2bf5",
+    "configs/trail_digital_twin_claim_validation.yaml": "a1568c89bb686a869b000e39861ff5a19225cc444b40519cbdb72ca5214b46f6",
+    "data/activities.csv": "eb04c80cecf5dc53189d9b5f0b8e4ed79a2e0caf263ba48dfc48161f4ca18da4",
+    "data/activities_metrics.csv": "dd059c57a7615348d3ab3c05f901c9687127966262ce377ec688e3f3ea06d266",
+    "data/athlete.csv": "4ab8b28014b31d9ac6ffb34074478cb18172538c2bf4b72ce25b9b01c7269a22",
+    "data/daily_metrics.csv": "49fcb02cceccfafde3dcfcc854859d27c73eb419a60cac8f88bf8ba7f4e468fc",
+    "data/thresholds.csv": "7db041890a59edaa61562936b332a86828e37039ec250d08aa0fc4fd69e11e6b"
+  },
+  "nActivitiesWithSegments": 248,
+  "physiology": {
+    "decay_lambda": 0.2,
+    "gap_climb_scale": 0.85,
+    "gap_descent_scale": 1.6,
+    "gap_soft_start": 0.04,
+    "gap_steep_threshold": 0.15,
+    "hrr_max_factor": 1.2,
+    "hrr_min_factor": 0.3,
+    "hrr_reference": 0.88,
+    "min_fatigue_factor": 0.6,
+    "segment_km": 1.0,
+    "vma_flat_kmh": 18.0,
+    "vt2_fallback_kmh": 15.0,
+    "vt2_threshold_name": "Threshold 30"
+  }
+}
