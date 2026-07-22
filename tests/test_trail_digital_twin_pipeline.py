@@ -524,6 +524,7 @@ def _tiny_ablation_fixture() -> tuple[
             "meanHrReserve": [0.72, 0.80, 0.70, 0.78, 0.74, 0.82],
             "decayedTrimpBefore": [0.0, 0.25, 0.0, 0.30, 0.0, 0.20],
             "cumTrimpBefore": [0.0, 0.30, 0.0, 0.35, 0.0, 0.25],
+            "progress": [0.25, 0.75, 0.25, 0.75, 0.25, 0.75],
             "rediReadinessFactor": [1.0] * 6,
             "gapFactor": [1.0, 1.2, 1.0, 1.2, 1.0, 1.2],
             "isFitEligible": [True] * 6,
@@ -595,11 +596,15 @@ def test_stage3_ablation_reoptimizes_parameters_per_variant() -> None:
     assert set(table["validation"]) == {"loo"}
     assert "full" in set(table["stage"])
     assert "no HRR speed ratio" in set(table["stage"])
+    assert "linear progress fatigue" in set(table["stage"])
     # Re-optimized variants may select different (α, κ) than the restored Stage-3 seed.
     alphas = table.set_index("stage")["alpha"]
     assert alphas.nunique() >= 1
     no_fatigue = table[table["stage"].eq("no acute fatigue")].iloc[0]
     assert float(no_fatigue["fatigueCoef"]) == pytest.approx(0.0)
+    progress = table[table["stage"].eq("linear progress fatigue")].iloc[0]
+    assert str(progress["acuteTrimpCol"]) == "progress"
+    assert str(progress["fatigueModel"]) == "linear"
 
 
 def test_stage3_ablation_frozen_keeps_seed_parameters() -> None:

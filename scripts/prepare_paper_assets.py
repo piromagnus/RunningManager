@@ -64,6 +64,7 @@ ABLATION_LABELS = {
     "full": "Full model (M3 + trail GAP scales)",
     "no HRR speed ratio": "Without HRR effort term",
     "no acute fatigue": "Without acute TRIMP fatigue",
+    "linear progress fatigue": "Acute TRIMP → linear progress fatigue",
     "no GAP": "Without grade-adjusted pace",
     "no altitude": "Without altitude correction",
     "no REDI readiness": "Without REDI readiness",
@@ -687,6 +688,7 @@ def fig_ablation_delta(ablation: pd.DataFrame) -> go.Figure:
     order = [
         "Without HRR effort term",
         "Without acute TRIMP fatigue",
+        "Acute TRIMP → linear progress fatigue",
         "Without grade-adjusted pace",
         "Without asymmetric trail GAP scales",
         "Without altitude correction",

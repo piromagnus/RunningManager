@@ -1682,6 +1682,16 @@ def _ablation_variant_definitions(
         {"label": "no HRR speed ratio", "segments": cohort_segments, "use_hrr_effort": False},
         {"label": "no acute fatigue", "segments": cohort_segments, "zero_fatigue": True},
         {
+            # Keep HRR; replace TRIMP load U with route progress s∈[0,1] and force
+            # F = max(F_min, 1 − κ·s). Tests whether Banister acute TRIMP beats
+            # linear time/progress modeling of within-activity fatigue.
+            "label": "linear progress fatigue",
+            "segments": cohort_segments,
+            "acute_trimp_col": "progress",
+            "fatigue_model": "linear",
+            "clear_secondary_fatigue": True,
+        },
+        {
             "label": "no trail GAP scales",
             "segments": cohort_segments,
             "gap_climb_scale": 1.0,
@@ -1717,13 +1727,25 @@ def _run_stage3_ablation_frozen(
             use_hrr_effort: bool = True,
             gap_climb_scale: float | None = None,
             gap_descent_scale: float | None = None,
+            acute_trimp_col_override: str | None = None,
+            fatigue_model_override: str | None = None,
+            clear_secondary_fatigue: bool = False,
         ) -> dict[str, object]:
+            use_acute_col = acute_col if acute_trimp_col_override is None else str(acute_trimp_col_override)
+            use_fatigue_model = (
+                str(best["fatigueModel"]) if fatigue_model_override is None else str(fatigue_model_override)
+            )
+            use_secondary_col = "" if clear_secondary_fatigue else secondary_col
+            use_secondary_model = "" if clear_secondary_fatigue else secondary_model
+            use_secondary_coef = (
+                0.0 if clear_secondary_fatigue else float(best.get("secondaryFatigueCoef", 0.0))
+            )
             predicted_segments = tpm.predict_hrr_trimp_segment_times(
                 variant_segments,
                 v_anchor_kmh=float(physiology["vma_flat_kmh"]),
                 alpha=float(best["alpha"]),
                 fatigue_coef=float(best["fatigueCoef"] if fatigue_coef is None else fatigue_coef),
-                fatigue_model=str(best["fatigueModel"]),
+                fatigue_model=use_fatigue_model,
                 hrr_reference=float(physiology["hrr_reference"]),
                 hrr_min_factor=float(physiology["hrr_min_factor"]),
                 hrr_max_factor=float(physiology["hrr_max_factor"]),
@@ -1738,10 +1760,10 @@ def _run_stage3_ablation_frozen(
                 ),
                 load_factor_col=load_factor_col,
                 use_hrr_effort=use_hrr_effort,
-                acute_trimp_col=acute_col,
-                secondary_fatigue_coef=float(best.get("secondaryFatigueCoef", 0.0)),
-                secondary_acute_trimp_col=secondary_col or None,
-                secondary_fatigue_model=secondary_model or None,
+                acute_trimp_col=use_acute_col,
+                secondary_fatigue_coef=use_secondary_coef,
+                secondary_acute_trimp_col=use_secondary_col or None,
+                secondary_fatigue_model=use_secondary_model or None,
             )
             predicted = (
                 pd.DataFrame(
@@ -1756,12 +1778,12 @@ def _run_stage3_ablation_frozen(
             row = _metrics_row(cohort_name, label, observed, predicted.reindex(observed.index))
             row["fitObjective"] = objective
             row["fatigueState"] = best.get("fatigueState", "")
-            row["acuteTrimpCol"] = acute_col
-            row["fatigueModel"] = best.get("fatigueModel", "")
-            row["secondaryAcuteTrimpCol"] = secondary_col
-            row["secondaryFatigueModel"] = secondary_model
+            row["acuteTrimpCol"] = use_acute_col
+            row["fatigueModel"] = use_fatigue_model
+            row["secondaryAcuteTrimpCol"] = use_secondary_col
+            row["secondaryFatigueModel"] = use_secondary_model
             row["secondaryFatigueCoef"] = (
-                0.0 if fatigue_coef == 0.0 else best.get("secondaryFatigueCoef", 0.0)
+                0.0 if fatigue_coef == 0.0 else use_secondary_coef
             )
             row["alpha"] = float(best["alpha"])
             row["fatigueCoef"] = float(best["fatigueCoef"] if fatigue_coef is None else fatigue_coef)
@@ -1783,6 +1805,13 @@ def _run_stage3_ablation_frozen(
                 fatigue_coef=0.0 if bool(variant.get("zero_fatigue", False)) else None,
                 gap_climb_scale=variant.get("gap_climb_scale"),  # type: ignore[arg-type]
                 gap_descent_scale=variant.get("gap_descent_scale"),  # type: ignore[arg-type]
+                acute_trimp_col_override=(
+                    str(variant["acute_trimp_col"]) if variant.get("acute_trimp_col") else None
+                ),
+                fatigue_model_override=(
+                    str(variant["fatigue_model"]) if variant.get("fatigue_model") else None
+                ),
+                clear_secondary_fatigue=bool(variant.get("clear_secondary_fatigue", False)),
             )
             row["deltaMaeMinVsFull"] = float(row["maeMin"]) - full_mae
             rows.append(row)
@@ -1863,6 +1892,15 @@ def _run_stage3_ablation_reoptimize(
             assert isinstance(variant_segments, pd.DataFrame)
             use_hrr_effort = bool(variant.get("use_hrr_effort", True))
             zero_fatigue = bool(variant.get("zero_fatigue", False))
+            clear_secondary = bool(variant.get("clear_secondary_fatigue", False))
+            variant_acute_col = (
+                str(variant["acute_trimp_col"]) if variant.get("acute_trimp_col") else acute_col
+            )
+            variant_fatigue_model = (
+                str(variant["fatigue_model"]) if variant.get("fatigue_model") else fatigue_model
+            )
+            variant_secondary_col = "" if clear_secondary else secondary_col
+            variant_secondary_model = "" if clear_secondary else secondary_model
             gap_climb_scale = float(
                 physiology.get("gap_climb_scale", 1.0)
                 if variant.get("gap_climb_scale") is None
@@ -1877,7 +1915,7 @@ def _run_stage3_ablation_reoptimize(
             fatigue_coef_grid = [0.0] if zero_fatigue else fitting["hrr_trimp_kappa_grid"]
             secondary_grid = (
                 [0.0]
-                if zero_fatigue or not secondary_col
+                if zero_fatigue or clear_secondary or not variant_secondary_col
                 else fitting["hrr_trimp_secondary_kappa_grid"]
             )
             prediction_kwargs: dict[str, object] = {
@@ -1891,9 +1929,9 @@ def _run_stage3_ablation_reoptimize(
                 "gap_descent_scale": gap_descent_scale,
                 "load_factor_col": "rediReadinessFactor",
                 "use_hrr_effort": use_hrr_effort,
-                "acute_trimp_col": acute_col,
-                "secondary_acute_trimp_col": secondary_col or None,
-                "secondary_fatigue_model": secondary_model or None,
+                "acute_trimp_col": variant_acute_col,
+                "secondary_acute_trimp_col": variant_secondary_col or None,
+                "secondary_fatigue_model": variant_secondary_model or None,
             }
 
             if run_loo:
@@ -1906,7 +1944,7 @@ def _run_stage3_ablation_reoptimize(
                     alpha_grid=alpha_grid,
                     fatigue_coef_grid=fatigue_coef_grid,
                     secondary_fatigue_coef_grid=secondary_grid,
-                    fatigue_models=(fatigue_model,),
+                    fatigue_models=(variant_fatigue_model,),
                     observed_activity_times_sec=loo_observed,
                     objective=_model_objective(objective),
                     fit_mask_col=fit_mask_col,
@@ -1947,7 +1985,7 @@ def _run_stage3_ablation_reoptimize(
                     alpha_grid=alpha_grid,
                     fatigue_coef_grid=fatigue_coef_grid,
                     secondary_fatigue_coef_grid=secondary_grid,
-                    fatigue_models=(fatigue_model,),
+                    fatigue_models=(variant_fatigue_model,),
                     observed_activity_times_sec=observed_map,
                     objective=_model_objective(objective),
                     fit_mask_col=fit_mask_col,
@@ -1963,11 +2001,13 @@ def _run_stage3_ablation_reoptimize(
                 row["validation"] = "in_sample"
 
             row["fitObjective"] = objective
-            row["fatigueState"] = best.get("fatigueState", "")
-            row["acuteTrimpCol"] = acute_col
-            row["fatigueModel"] = fatigue_model
-            row["secondaryAcuteTrimpCol"] = secondary_col
-            row["secondaryFatigueModel"] = secondary_model
+            row["fatigueState"] = (
+                "progress" if variant_acute_col == "progress" else best.get("fatigueState", "")
+            )
+            row["acuteTrimpCol"] = variant_acute_col
+            row["fatigueModel"] = variant_fatigue_model
+            row["secondaryAcuteTrimpCol"] = variant_secondary_col
+            row["secondaryFatigueModel"] = variant_secondary_model
             if full_mae is None:
                 full_mae = float(row["maeMin"])
                 row["deltaMaeMinVsFull"] = 0.0

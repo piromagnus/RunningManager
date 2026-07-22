@@ -1,7 +1,8 @@
 # Heart-Rate Digital Twin for Trail-Running Performance: Modeling, Cross-Activity Evaluation, and Measured Prediction Errors
 
-**Working draft (v0.6)** — findings recap + robustness / remaining-experiments checklist  
+**Working draft (v0.7)** — findings recap + robustness / remaining-experiments checklist  
 **Status:** single-athlete proof-of-concept; multi-athlete replication planned  
+**Primary target venue:** *Sports Engineering* (ISEA / Springer)  
 **Companion code:** Running Manager (`services/trail_performance_model.py`, `scripts/predict_race_constant_hrr.py`)  
 **Publication assets:** `docs/science/paper/` (figures PNG + tables)  
 **Related docs:** `trail_digital_twin_model_summary.md`, `journal_steep.md`, `journal_prediction.md`, `section7_implementation_status.md`, `remaining_experiments.md`  
@@ -12,7 +13,7 @@
 
 ## Abstract (draft)
 
-Accurate prediction of trail-running finish times remains difficult because grade, altitude, and fatigue interact nonlinearly with athlete physiology. Building on the physics-informed digital-twin framework of Jaén-Carrillo and Pattis (2026), we evaluate a **single athlete-specific** model that uses continuous heart-rate reserve (HRR) as instantaneous effort and Banister-style TRIMP as intra-activity fatigue, with soft-ramped trail-grade cost corrections. Using leave-one-out (LOO) validation across hard-run, hard-trail, and run/trail (>20 min) cohorts—with moving-time fitting and slight near-flat immobile segment rejection—a physics baseline (M0) yielded substantially larger errors than the full HRR+TRIMP specification (M3): for mixed hard run/trail activities, MAE decreased from **25.7 to 8.3 min** (MAPE 24.3% → 7.3%). Re-optimized component ablations attribute most of this gain to HRR and acute TRIMP. Soft-ramped trail GAP scales reduced steep-terrain segment MAE by ≈46%. Prospective simulations select the fastest constant HRR historically sustainable for the predicted duration (power-law HRR–duration envelope; hold-outs excluded)—e.g. LUT/Passerelles/Grésivaudan at HRR≈0.78, Échappée Belle at 0.75—yielding finish times near observed when race effort matched the envelope (Grésivaudan +6.7 min; Échappée −73 min vs −164 at HRR_ref), while a road marathon (Rome) still failed to transfer. Publication assets: `docs/science/paper/`.
+Accurate prediction of trail-running finish times remains difficult because grade, altitude, and fatigue interact nonlinearly with athlete physiology. Building on the physics-informed digital-twin framework of Jaén-Carrillo and Pattis (2026), we evaluate a **single athlete-specific** model that uses continuous heart-rate reserve (HRR) as instantaneous effort and Banister-style TRIMP as intra-activity fatigue, with soft-ramped trail-grade cost corrections. Using leave-one-out (LOO) validation across hard-run, hard-trail, and run/trail (>20 min) cohorts—with moving-time fitting and slight near-flat immobile segment rejection—a physics baseline (M0) yielded substantially larger errors than the full HRR+TRIMP specification (M3): for mixed hard run/trail activities, MAE decreased from **25.7 to 8.3 min** (MAPE 24.3% → 7.3%). Re-optimized component ablations attribute most of this gain to HRR and acute TRIMP; replacing Banister TRIMP with linear route-progress fatigue raised MAE by **+8.4 min**, confirming TRIMP as the better acute-fatigue channel. Soft-ramped trail GAP scales reduced steep-terrain segment MAE by ≈46%. Prospective simulations select the fastest constant HRR historically sustainable for the predicted duration (power-law HRR–duration envelope; hold-outs excluded)—e.g. LUT/Passerelles/Grésivaudan at HRR≈0.78, Échappée Belle at 0.75—yielding finish times near observed when race effort matched the envelope (Grésivaudan +6.7 min; Échappée −73 min vs −164 at HRR_ref), while a road marathon (Rome) still failed to transfer. Publication assets: `docs/science/paper/`.
 
 **Keywords:** trail running; digital twin; heart-rate reserve; TRIMP; performance prediction; leave-one-out; grade-adjusted pace
 
@@ -160,7 +161,7 @@ F = \max\bigl(F_{\min},\, 1-\kappa\cdot\mathrm{TRIMP}_{\mathrm{cum}}/\mathrm{TRI
 | **E1** | LOO on activity cohorts | MAE, MAPE, bias, R² (minutes) |
 | **E2** | Segment residuals by terrain class | MAE, bias (min) |
 | **E3** | Prospective constant-HRR (LUT, Grésivaudan, Échappée Belle, Passerelles, Rome) | Pred vs actual moving time; Δ min |
-| **E4** | Component ablations with **re-optimized** (α, κ) per removal; LOO eval | ΔMAE vs full |
+| **E4** | Component ablations with **re-optimized** (α, κ) per removal; includes TRIMP→linear progress fatigue substitution; LOO eval | ΔMAE vs full |
 | **E5** | Slight segment rejection A/B | Rejected share; LOO MAE |
 | **E6** | Segment optimisation: trail GAP scales; segment vs race objective | Terrain MAE/bias; LOO Δ |
 
@@ -206,6 +207,8 @@ Bootstrap percentile intervals on M3 LOO folds (Table 4) place hard run/trail MA
 For leave-one-component ablations (Table 3 / `table03_component_ablation`; Fig. `fig_component_ablation_delta_mae.png`), we **re-optimize** (α, κ) after each removal under the same grid and LOO protocol as Stage 3, rather than freezing parameters from the full model. This estimates *recoverable* contribution once remaining parameters adapt—the recommended ablation design when fitting is cheap relative to model complexity—whereas a frozen-parameter removal would measure only inference-time dependence of one fitted solution.
 
 On hard run/trail activities, removing the HRR effort term and re-fitting increased LOO MAE by +14.4 min; removing acute TRIMP increased MAE by +16.4 min. Both channels therefore remain necessary after compensation. Removing GAP entirely remained highly detrimental (+10.5 min). Asymmetric trail GAP soft-ramp scales and REDI/altitude contributed little once (α, κ) were re-optimized (ΔMAE ≈ +0.6 to +1.0 min).
+
+**Acute TRIMP versus linear progress fatigue.** To test whether Banister-style acute TRIMP is better than linear time/progress modeling of within-activity fatigue (as in the physics twin’s progress decay), we keep HRR and replace the TRIMP load \(U\) with route progress \(s\in[0,1]\), forcing \(F=\max(F_{\min},\,1-\kappa s)\) while clearing any secondary TRIMP term. On hard run/trail, this substitution raised LOO MAE from 8.25 to **16.61 min** (ΔMAE **+8.36 min**)—worse than full TRIMP, but better than removing fatigue entirely (+16.4 min). Parallel costs appear on hard trail (+6.4 min), selected race dates (+9.1 min), and the >20 min cohort (+7.6 min). Thus a re-optimizable linear progress term captures *some* late-race slowdown, but **acute TRIMP remains the superior engineering fatigue channel** for finish-time accuracy under matched LOO.
 
 **Note on baselines.** Table 3’s ``full`` row now reuses the Stage-3 ladder LOO MAE (Table 2), so absolute levels match (hard run/trail **8.25 min**). Variant rows remain re-optimized LOO; ΔMAE is versus that shared full baseline (robustness experiment R1).
 
@@ -254,7 +257,8 @@ Two segment-level optimisations refine the twin beyond activity-level (α, κ) s
 | Finding | Evidence |
 |---------|----------|
 | **Physics → HRR+TRIMP is the main gain** | Hard run/trail LOO MAE **25.7 → 8.25 min** (MAPE 24.3% → 7.3%; *R*² 0.986). Hard trail **44.5 → 17.4**; races **36.4 → 11.8**; >20 min **17.6 → 5.9**. |
-| **HRR and acute TRIMP are both necessary** | Re-optimized ablations (Table 3, R1-aligned): −HRR **+13.5 min**, −TRIMP **+15.6 min** on hard run/trail; −GAP **+9.6 min**. |
+| **HRR and acute TRIMP are both necessary** | Re-optimized ablations (Table 3, R1-aligned): −HRR **+14.4 min**, −TRIMP **+16.4 min** on hard run/trail; −GAP **+10.5 min**. |
+| **TRIMP beats linear progress fatigue** | Same HRR + re-fit: TRIMP→progress \(F=1-\kappa s\) costs **+8.4 min** MAE (16.6 vs 8.25); still better than no fatigue (+16.4). |
 | **REDI / altitude are secondary here** | Ablation ΔMAE ≈ 0–1 min on mixed hard efforts; REDI can even improve some race-date LOO after re-fit. |
 | **M1/M2 without HRR can hurt trail-only** | Hard trail M1/M2 MAE rises above M0 until M3 restores accuracy. |
 | **Moving time + slight rejection cleans dwell** | §7 pipeline: **4** unfit segments (0.17%); slight alone on clock time can worsen LOO. |
@@ -263,7 +267,7 @@ Two segment-level optimisations refine the twin beyond activity-level (α, κ) s
 | **Prospective HRR modes (trail)** | Obs. mean HRR reconstruction |Δ| MAE ≈ **16.6 min** (eval-only); duration-feasible primary; HRR_ref=0.88 = flat-VMA effort companion (`hrr_max_factor=1.20`). |
 | **Prospective uncertainty bands** | R9 bands use α/κ jitter + LOO residual noise (P05 < P50 < P95). |
 
-**Interpretation.** On this athlete, continuous HRR is the principal incremental predictor beyond a matched physics twin; acute TRIMP is the complementary fatigue channel; asymmetric trail GAP scales restore local climb/descent behaviour. Prospective forecasts should use a **duration-feasible** constant HRR, with \(\mathrm{HRR}_{\mathrm{ref}}\) as flat-VMA effort (\(E=1\)) and `hrr_max_factor>1` allowing short supra-VMA bursts when HRR exceeds ref.
+**Interpretation.** On this athlete, continuous HRR is the principal incremental predictor beyond a matched physics twin; acute TRIMP is the complementary fatigue channel and outperforms linear route-progress fatigue under matched re-optimization; asymmetric trail GAP scales restore local climb/descent behaviour. Prospective forecasts should use a **duration-feasible** constant HRR, with \(\mathrm{HRR}_{\mathrm{ref}}\) as flat-VMA effort (\(E=1\)) and `hrr_max_factor>1` allowing short supra-VMA bursts when HRR exceeds ref.
 
 ---
 
@@ -271,7 +275,7 @@ Two segment-level optimisations refine the twin beyond activity-level (α, κ) s
 
 ### 5.1 Contribution relative to the 2026 digital twin
 
-We retain the digital-twin structure (route physics + athlete state → time) while making **heart-rate reserve the primary instantaneous effort channel** and **acute TRIMP the intra-activity fatigue channel**. The experimental design emphasizes one modeling family, matched LOO reporting against a physics baseline (M0), and prospective hold-outs with uncertainty bands.
+We retain the digital-twin structure (route physics + athlete state → time) while making **heart-rate reserve the primary instantaneous effort channel** and **acute TRIMP the intra-activity fatigue channel**. Ablations show TRIMP outperforms a matched linear progress-fatigue substitute under the same HRR and re-optimized (α, κ). The experimental design emphasizes one modeling family, matched LOO reporting against a physics baseline (M0), and prospective hold-outs with uncertainty bands.
 
 ### 5.2 Limitations
 
@@ -285,7 +289,7 @@ Within coaching software, the twin supports (i) retrospective effort-normalized 
 
 ## 6. Conclusion
 
-For one recreational/competitive trail runner, a HRR+TRIMP digital twin reduced leave-one-out finish-time error from a physics baseline of ~26 min MAE to ~8.3 min MAE on mixed hard run/trail activities (MAPE ≈ 7.3%), with parallel gains on broader >20 min and race-date cohorts. Component ablation attributes most of that gain to continuous HRR and acute TRIMP. Soft-ramped trail GAP scales improve steep-terrain residuals, and prospective simulations use a **duration-feasible** constant HRR (with \(\mathrm{HRR}_{\mathrm{ref}}\) as flat-VMA effort and `hrr_max_factor=1.20` for supra-VMA bursts). Publication assets are collected in `docs/science/paper/`. Multi-athlete validation remains the primary next step for journal submission.
+For one recreational/competitive trail runner, a HRR+TRIMP digital twin reduced leave-one-out finish-time error from a physics baseline of ~26 min MAE to ~8.3 min MAE on mixed hard run/trail activities (MAPE ≈ 7.3%), with parallel gains on broader >20 min and race-date cohorts. Component ablation attributes most of that gain to continuous HRR and acute TRIMP; substituting linear progress fatigue for TRIMP costs ~8.4 min MAE, supporting Banister load as the preferred engineering fatigue model. Soft-ramped trail GAP scales improve steep-terrain residuals, and prospective simulations use a **duration-feasible** constant HRR (with \(\mathrm{HRR}_{\mathrm{ref}}\) as flat-VMA effort and `hrr_max_factor=1.20` for supra-VMA bursts). Publication assets are collected in `docs/science/paper/`. Multi-athlete validation remains the primary next step for *Sports Engineering* submission.
 
 ---
 
@@ -341,41 +345,39 @@ Shipped artifacts: `docs/science/section7_implementation_status.md`.
 Ethics/consent for multi-athlete GPS; data-availability statement; code + configs as supplement; STROBE-like reporting; cite software versions/seeds; complete bibliography.
 ---
 
-## 8. Target conferences and journals (**avoid Sensors**)
+## 8. Target venue: *Sports Engineering* (**avoid Sensors**)
 
-Focus: **exercise physiology, sports performance, sports analytics**—not wearable hardware.
+**Primary target:** [*Sports Engineering*](https://link.springer.com/journal/12283) (ISEA / Springer)—sports technology, performance modeling, and engineered measurement systems. This manuscript fits as an **athlete-specific digital-twin engineering case study**: continuous HRR effort + Banister TRIMP fatigue, soft-ramped trail GAP corrections, LOO error reporting, and component ablations that isolate engineering design choices (TRIMP vs linear progress fatigue; HRR vs physics-only effort).
 
-### 8.1 Journals
+### 8.1 Why *Sports Engineering*
 
-| Venue | Fit | Notes |
-|-------|-----|------|
-| **International Journal of Sports Physiology and Performance (IJSPP)** | Strong | Field performance models, practical metrics |
-| **Journal of Sports Sciences** | Strong | Applied modeling; multi-athlete preferred |
-| **European Journal of Sport Science (EJSS)** | Strong | ECSS-linked |
-| **Journal of Sports Analytics** | Good | Prediction-error / analytics framing |
-| **Frontiers in Sports and Active Living** | Good | Performance computing / digital athletes |
-| **Scientific Reports** | Possible | If multi-athlete + clear novelty (cf. Boillet 2024) |
-| **International Journal of Computer Science in Sport** | Niche | Computational methods |
-| **Current Issues in Sport Science (CISS)** | Open | Trail/HR field studies already appear |
+| Fit criterion | How this draft maps |
+|---------------|---------------------|
+| Engineered performance model | Segment-level GAP/altitude physics + wearable HR effort + TRIMP state |
+| Measurable prediction error | LOO MAE/MAPE/bias/R²; bootstrap CIs; terrain residuals |
+| Ablation / design justification | Table 3: HRR, TRIMP, GAP; TRIMP→linear progress substitution (+8.4 min) |
+| Reproducible software stack | YAML configs + open pipeline under `docs/science/paper/` |
+| Single-athlete OK as POC | Frame as proof-of-concept; multi-athlete (B1) as required extension |
+
+Secondary / backup venues (if SE scope or multi-athlete bar shifts): IJSPP, *Journal of Sports Sciences*, EJSS, *Journal of Sports Analytics*.
 
 **Do not target for this manuscript:** *Sensors* (MDPI), *Biosensors*, IEEE sensor-hardware tracks—wrong audience if the contribution is modeling/prediction, not a new device.
 
-### 8.2 Conferences
+### 8.2 Conferences (abstract path toward SE)
 
 | Venue | Fit |
 |-------|-----|
-| **ECSS** | Strong (abstract → later EJSS) |
+| **ISEA / Sports Engineering conference** | Strong (direct journal path) |
+| **ECSS** | Strong (physiology audience; later SE or EJSS) |
 | **ACSM Annual Meeting** | Strong |
 | **ISBS** | Medium (locomotion/grade emphasis) |
-| **MathSport / OR in Sport** | Medium (if pacing formalized) |
 | **icSPORTS** | Medium |
-| **MLSA @ ECML** | Only if adding strong ML baselines |
 
 ### 8.3 Suggested path
 
-1. **Abstract** → ECSS or ACSM (methods + LOO table + one prospective figure).  
-2. **Full paper** → IJSPP or *Journal of Sports Sciences* once **≥1 additional athlete** (or explicit single-athlete case study with matched physics baseline).  
-3. Optional methods note → *Journal of Sports Analytics* for reproducible error benchmarking.
+1. **Full paper → *Sports Engineering*** as primary: methods + LOO tables + ablation (incl. TRIMP vs linear progress) + one prospective figure; single-athlete POC with explicit multi-athlete roadmap.  
+2. **Abstract** → ISEA meeting, ECSS, or ACSM while the SE manuscript is in review.  
+3. Backup full paper → IJSPP / JSS once **≥1 additional athlete** if SE requests broader validation first.
 
 ---
 
@@ -436,9 +438,9 @@ See `bibliography_hr_digital_twin.md` for extended notes and venue links.
 
 - **Model:** HRR + acute TRIMP + soft-ramped trail GAP (0.85 / 1.60); moving-time fit + slight rejection.
 - **Primary LOO:** hard run/trail **MAE 8.25 min**, MAPE **7.3%**, *R*² **0.986** (physics M0 **25.7 min**).
-- **Ablations (reoptimize, R1-aligned):** −HRR **+13.5**; −TRIMP **+15.6**; −GAP **+9.6** min.
+- **Ablations (reoptimize, R1-aligned):** −HRR **+14.4**; −TRIMP **+16.4**; −GAP **+10.5**; TRIMP→linear progress **+8.4** min.
 - **Steep terrain:** combined MAE **3.05 → 1.64 min (−46%)**.
 - **Prospective:** duration-feasible primary; obs.-mean-HRR reconstruction (eval-only) |Δ|≈16.6 min on trail; HRR_ref ceiling companions −4.1/−8/−17/−164. Rome out of scope.
 - **Robustness R1–R11:** `robustness_experiments_report.md` (11 pass).
 - **Next:** multi-athlete (B1); DEM/aid logs (B3/B5).
-- **Submit toward:** IJSPP / JSS / EJSS / ECSS — **not Sensors**.
+- **Submit toward:** ***Sports Engineering*** (ISEA) — **not Sensors**.
