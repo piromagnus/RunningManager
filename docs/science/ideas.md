@@ -1,0 +1,3 @@
+- add a long-term progression term for multi year optimisation (or a windowed optimisation of alpha/kappa that are similar to the power law to see the evolution of those parameters over time)
+- frame this as a data only (without lab) and without access to athletes directly.
+- test also a intra race prediction based on the previous segments
