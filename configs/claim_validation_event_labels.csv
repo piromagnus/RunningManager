@@ -1,0 +1,22 @@
+activityId,startDate,eventLabel,labelSource,labelDate,notes
+12000338229,2024-07-28,race,activity_name_keyword,2026-07-22,TRAIL Locunolois 2024
+12177245147,2024-08-18,race,activity_name_keyword,2026-07-22,La Montée du Menez Hom 2024
+14300194854,2025-04-27,race,activity_name_keyword,2026-07-22,Trail des 3 pucelles 2025
+14893241615,2025-06-23,benchmark_workout,activity_name_keyword,2026-07-22,Sortie seuil
+14953411411,2025-06-29,race,activity_name_keyword,2026-07-22,Moyen duc 2025
+15087396899,2025-07-12,race,predict_race_constant_hrr.RACES,2026-07-22,Trail des Passerelles; pseudo-prospective geometry
+15224440864,2025-07-24,benchmark_workout,activity_name_heuristic,2026-07-22,Hard training session named as PR hunt
+15250276952,2025-07-27,race,activity_name_keyword,2026-07-22,Trail locunolois 2025
+15310799882,2025-08-01,benchmark_workout,activity_name_heuristic,2026-07-22,Hard descent/ascent session
+15329205386,2025-08-03,race,activity_name_keyword,2026-07-22,Trail des deux moulins
+15367390310,2025-08-06,benchmark_workout,activity_name_keyword,2026-07-22,Seuil
+15563904138,2025-08-23,race,predict_race_constant_hrr.RACES,2026-07-22,Échappée Belle; pseudo-prospective geometry
+15960516710,2025-09-28,training,activity_name_keyword,2026-07-22,Échauffement before Verticale
+15961811819,2025-09-28,race,activity_name_keyword,2026-07-22,Verticale du Grand Serre
+15963034740,2025-09-28,training,activity_name_heuristic,2026-07-22,Descent after Verticale
+16183294756,2025-10-18,training,activity_name_keyword,2026-07-22,Short afternoon trail before Bastille
+16183294852,2025-10-18,race,activity_name_keyword,2026-07-22,10k de la Bastille 2025
+16325125849,2025-11-01,race,predict_race_constant_hrr.RACES,2026-07-22,LUT By Night; strict pre-race profile available
+17481444994,2026-02-22,race,predict_race_constant_hrr.RACES,2026-07-22,Grésivaudan; strict pre-race profile available
+18075217710,2026-04-12,benchmark_workout,activity_name_keyword,2026-07-22,Triathlon CAP leg
+18160385145,2026-04-18,race,activity_name_keyword,2026-07-22,Ultra du Pays Voironnais relay

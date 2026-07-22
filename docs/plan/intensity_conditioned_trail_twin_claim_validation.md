@@ -1,6 +1,6 @@
 # Validation plan for the intensity-conditioned trail-running digital twin
 
-**Status:** analysis plan, not completed evidence  
+**Status:** P0 implementation shipped (`scripts/validate_intensity_conditioned_claim.py`); evidence in `data/exp_perf_predictions/trail_digital_twin_claim_validation/`  
 **Date:** 2026-07-22  
 **Scope:** longitudinal N-of-1 study using the currently available athlete archive  
 **Narrative source:** `docs/science/ideas.md` as updated in commit `ff7d61f`; current remote
@@ -406,6 +406,7 @@ scientific accuracy for another athlete.
 Suggested implementation targets:
 
 - `configs/trail_digital_twin_claim_validation.yaml`
+- `configs/claim_validation_event_labels.csv` (frozen race/benchmark/training labels)
 - `scripts/validate_intensity_conditioned_claim.py`
 - `data/exp_perf_predictions/trail_digital_twin_claim_validation/`
 - `table_data_support.csv`
@@ -413,9 +414,18 @@ Suggested implementation targets:
 - `table_route_pair_validation.csv`
 - `table_rolling_origin_hrr_selection.csv`
 - `table_causal_fatigue_ablation.csv`
-- `table_parameter_recovery.csv`
-- `table_longitudinal_state_validation.csv`
-- `table_inrace_update.csv`
+- `table_parameter_recovery.csv` (E6; P1)
+- `table_longitudinal_state_validation.csv` (E6; P1)
+- `table_inrace_update.csv` (E7; P2)
+- `claim_gates.csv`
+
+Run P0:
+
+```bash
+uv run python scripts/validate_intensity_conditioned_claim.py
+# smoke:
+uv run python scripts/validate_intensity_conditioned_claim.py --max-activities 3 --skip-e4 --bootstrap-iterations 200
+```
 
 The run should end with one machine-readable claim-gate table containing `pass`, `fail`, or
 `not testable` for every claim. That prevents a strong retrospective result from being used
