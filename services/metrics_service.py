@@ -443,12 +443,12 @@ class MetricsComputationService:
         candidates: list[dt.date] = []
 
         if not new_metrics_df.empty and "startDate" in new_metrics_df.columns:
-            parsed = pd.to_datetime(new_metrics_df["startDate"], errors="coerce").dropna().dt.date
+            parsed = new_metrics_df["startDate"].map(to_date).dropna()
             if not parsed.empty:
                 candidates.append(parsed.min())
 
         if not athlete_subset.empty and "startTime" in athlete_subset.columns:
-            parsed = pd.to_datetime(athlete_subset["startTime"], errors="coerce").dropna().dt.date
+            parsed = athlete_subset["startTime"].map(to_date).dropna()
             if not parsed.empty:
                 candidates.append(parsed.min())
 

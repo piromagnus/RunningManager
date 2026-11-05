@@ -68,6 +68,36 @@ def parse_timestamp(value: object) -> Optional[pd.Timestamp]:
         return None
 
 
+def sort_by_timestamp(
+    df: pd.DataFrame,
+    column: str,
+    *,
+    ascending: bool = False,
+    na_position: str = "last",
+) -> pd.DataFrame:
+    """Sort timestamps by local wall time, tolerating naive and aware values."""
+    sort_column = "__timestamp_sort_key"
+    while sort_column in df.columns:
+        sort_column = f"_{sort_column}"
+
+    def _wall_time(value: object) -> object:
+        timestamp = parse_timestamp(value)
+        if timestamp is None:
+            return pd.NaT
+        if timestamp.tzinfo is not None:
+            return timestamp.tz_localize(None)
+        return timestamp
+
+    sortable = df.copy()
+    sortable[sort_column] = sortable[column].map(_wall_time)
+    return sortable.sort_values(
+        sort_column,
+        ascending=ascending,
+        na_position=na_position,
+        kind="stable",
+    ).drop(columns=[sort_column])
+
+
 def ensure_datetime(value: object) -> Optional[dt.datetime]:
     """Ensure a value is a datetime, converting if necessary.
 

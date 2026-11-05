@@ -34,6 +34,10 @@ class Config:
     metrics_ts_dir: Path
     speed_profile_dir: Path
     n_cluster: int
+    garmin_email: Optional[str] = None
+    garmin_password: Optional[str] = None
+    garmin_domain: str = "garmin.com"
+    garmin_token_store: Optional[Path] = None
 
 
 def _ensure_dir(path: Path) -> None:
@@ -54,12 +58,21 @@ def load_config() -> Config:
     strava_redirect_uri = os.getenv("STRAVA_REDIRECT_URI")
     encryption_key = os.getenv("ENCRYPTION_KEY")
     mapbox_token = os.getenv("MAPBOX_API_KEY")
+    garmin_email = os.getenv("GARMIN_EMAIL")
+    garmin_password = os.getenv("GARMIN_PASSWORD")
+    garmin_domain = os.getenv("GARMIN_DOMAIN", "garmin.com").strip().lower()
+    garmin_token_store_str = os.getenv("GARMIN_TOKEN_STORE")
 
     timeseries_dir = data_dir / "timeseries"
     raw_strava_dir = data_dir / "raw" / "strava"
     laps_dir = data_dir / "laps"
     metrics_ts_dir = data_dir / "metrics_ts"
     speed_profile_dir = data_dir / "speed_profil"
+    garmin_token_store = (
+        Path(garmin_token_store_str).expanduser() if garmin_token_store_str else data_dir / "garmin_tokens"
+    )
+    if not garmin_token_store.is_absolute():
+        garmin_token_store = (Path.cwd() / garmin_token_store).resolve()
 
     # Load n_cluster with default of 5
     n_cluster_str = os.getenv("N_CLUSTER", "5")
@@ -88,6 +101,10 @@ def load_config() -> Config:
         metrics_ts_dir=metrics_ts_dir,
         speed_profile_dir=speed_profile_dir,
         n_cluster=n_cluster,
+        garmin_email=garmin_email,
+        garmin_password=garmin_password,
+        garmin_domain=garmin_domain,
+        garmin_token_store=garmin_token_store,
     )
 
 
