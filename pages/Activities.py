@@ -24,7 +24,6 @@ from utils.constants import SESSION_TYPE_LABELS_FR
 from utils.formatting import fmt_decimal, fmt_km, fmt_m, format_duration, set_locale
 from utils.styling import apply_theme
 
-st.set_page_config(page_title="Running Manager - Activités", layout="wide")
 apply_theme()
 st.title("Flux d'activités")
 

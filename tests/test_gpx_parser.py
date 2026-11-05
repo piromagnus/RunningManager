@@ -71,6 +71,26 @@ def test_parse_gpx_with_many_points():
     assert result["lon"].notna().all()
 
 
+def test_parse_gpx_route_points_without_track():
+    """Parse route points from GPX files that contain no recorded track."""
+    points = [
+        f'<rtept lat="{45.0 + i * 0.001}" lon="{5.0 + i * 0.001}"><ele>{100 + i}</ele></rtept>'
+        for i in range(150)
+    ]
+    gpx_content = f"""<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1">
+  <rte><name>Test route</name>{"".join(points)}</rte>
+</gpx>"""
+
+    result = parse_gpx_to_timeseries(gpx_content.encode())
+
+    assert len(result) == 150
+    assert result["lat"].notna().all()
+    assert result["lon"].notna().all()
+    assert result["elevationM"].notna().all()
+    assert "timestamp" not in result.columns
+
+
 def test_parse_gpx_without_timestamps():
     """Test parsing route-only GPX without timestamps."""
     points = []
@@ -152,4 +172,3 @@ def test_parse_gpx_drops_duplicates():
     assert not result.empty
     # Should have at most 10 unique points (after duplicate removal)
     assert len(result) <= 10
-

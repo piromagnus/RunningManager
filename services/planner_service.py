@@ -19,6 +19,7 @@ from persistence.repositories import (
     ThresholdsRepo,
 )
 from services.interval_utils import normalize_steps
+from utils.time import sort_by_timestamp
 
 
 @dataclass
@@ -62,7 +63,7 @@ class PlannerService:
             return None
         # Sort by startTime descending if available
         if "startTime" in df.columns:
-            df = df.sort_values("startTime", ascending=False)
+            df = sort_by_timestamp(df, "startTime", ascending=False)
         paces = []
         for _, r in df.head(4).iterrows():
             dist = r.get("distanceKm") or 0

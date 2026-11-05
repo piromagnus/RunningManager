@@ -18,7 +18,7 @@ from persistence.repositories import (
     PlannedSessionsRepo,
 )
 from utils.coercion import safe_float_optional, safe_int_optional
-from utils.time import parse_timestamp
+from utils.time import parse_timestamp, sort_by_timestamp
 
 
 def _coerce_str(value: object) -> Optional[str]:
@@ -146,7 +146,7 @@ class ActivityFeedService:
             )
             merged = merged.merge(planned_lookup, on="plannedSessionId", how="left")
 
-        merged = merged.sort_values("startTime", ascending=False, na_position="last")
+        merged = sort_by_timestamp(merged, "startTime", ascending=False, na_position="last")
         if offset:
             merged = merged.iloc[offset:]
         if limit:

@@ -20,8 +20,8 @@ logger = get_logger(__name__)
 def parse_gpx_to_timeseries(gpx_bytes: bytes) -> pd.DataFrame:
     """Parse GPX file into timeseries DataFrame.
 
-    Extracts track points (trkpt) with lat/lon/elevation.
-    Timestamps are optional - parser works for route-only GPX files.
+    Extracts track points (trkpt), or route points (rtept) when no track exists.
+    Timestamps are optional.
 
     Args:
         gpx_bytes: Raw GPX file content as bytes
@@ -42,17 +42,19 @@ def parse_gpx_to_timeseries(gpx_bytes: bytes) -> pd.DataFrame:
     # GPX namespace
     ns = {"gpx": "http://www.topografix.com/GPX/1/1"}
 
-    # Find all track points
-    trkpts = root.xpath(".//gpx:trkpt", namespaces=ns)
-    if not trkpts:
-        logger.debug("No track points found in GPX")
+    # A GPX may describe a course as a route instead of a recorded track.
+    points = root.xpath(".//gpx:trkpt", namespaces=ns)
+    if not points:
+        points = root.xpath(".//gpx:rtept", namespaces=ns)
+    if not points:
+        logger.debug("No track or route points found in GPX")
         return pd.DataFrame()
 
     rows = []
-    for trkpt in trkpts:
+    for point in points:
         try:
-            lat = trkpt.get("lat")
-            lon = trkpt.get("lon")
+            lat = point.get("lat")
+            lon = point.get("lon")
             if lat is None or lon is None:
                 continue
 
@@ -60,7 +62,7 @@ def parse_gpx_to_timeseries(gpx_bytes: bytes) -> pd.DataFrame:
             lon_val = float(lon)
 
             # Extract elevation if present
-            ele_elem = trkpt.find(".//gpx:ele", namespaces=ns)
+            ele_elem = point.find("./gpx:ele", namespaces=ns)
             elevation_val: Optional[float] = None
             if ele_elem is not None and ele_elem.text:
                 try:
@@ -69,7 +71,7 @@ def parse_gpx_to_timeseries(gpx_bytes: bytes) -> pd.DataFrame:
                     pass
 
             # Extract timestamp if present (optional)
-            time_elem = trkpt.find(".//gpx:time", namespaces=ns)
+            time_elem = point.find("./gpx:time", namespaces=ns)
             timestamp_val: Optional[str] = None
             if time_elem is not None and time_elem.text:
                 timestamp_val = time_elem.text.strip()
@@ -83,11 +85,11 @@ def parse_gpx_to_timeseries(gpx_bytes: bytes) -> pd.DataFrame:
                 }
             )
         except (ValueError, TypeError) as e:
-            logger.debug(f"Skipping invalid track point: {e}")
+            logger.debug(f"Skipping invalid GPX point: {e}")
             continue
 
     if len(rows) < 100:
-        logger.warning(f"Insufficient track points: {len(rows)} < 100")
+        logger.warning(f"Insufficient GPX route/track points: {len(rows)} < 100")
         return pd.DataFrame()
 
     df = pd.DataFrame(rows)
@@ -120,4 +122,3 @@ def parse_gpx_to_timeseries(gpx_bytes: bytes) -> pd.DataFrame:
 
     logger.debug(f"Parsed GPX: {len(df)} points, columns: {list(df.columns)}")
     return df
-

@@ -22,7 +22,6 @@ from utils.styling import apply_theme
 
 logger = get_logger(__name__)
 
-st.set_page_config(page_title="Running Manager - Race Pacing", layout="wide")
 apply_theme()
 st.title("Race Pacing")
 
@@ -106,7 +105,10 @@ with col1:
             timeseries_df = parse_gpx_to_timeseries(gpx_bytes)
 
             if timeseries_df.empty:
-                st.error("Erreur: Le fichier GPX ne contient pas assez de points de trace (< 100 points).")
+                st.error(
+                    "Erreur: Le fichier GPX doit contenir au moins 100 points "
+                    "de trace ou d'itinéraire."
+                )
             else:
                 st.session_state["race_pacing_timeseries"] = timeseries_df
 
@@ -637,4 +639,3 @@ if st.session_state["race_pacing_segments"] is not None and not st.session_state
             except Exception as e:
                 logger.error(f"Failed to save race: {e}", exc_info=True)
                 st.error(f"Erreur lors de l'enregistrement: {str(e)}")
-

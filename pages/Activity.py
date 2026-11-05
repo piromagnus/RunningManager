@@ -48,7 +48,6 @@ from widgets.comparison_table import render_comparison_table
 
 logger = get_logger(__name__)
 
-st.set_page_config(page_title="Running Manager - Activité", layout="wide")
 apply_theme()
 
 CHART_WIDTH = CHART_WIDTH_DEFAULT

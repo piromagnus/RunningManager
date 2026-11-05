@@ -138,6 +138,24 @@ def test_activity_feed_sorted_and_enriched(feed_service, storage):
     assert pytest.approx(older.trimp, rel=1e-6) == 90.5
 
 
+def test_activity_feed_sorts_mixed_naive_and_aware_timestamps(feed_service, storage):
+    activities_repo = ActivitiesRepo(storage)
+    _create_activity(
+        activities_repo,
+        activityId="garmin-local",
+        startTime="2025-01-05 08:00:00",
+    )
+    _create_activity(
+        activities_repo,
+        activityId="strava-local",
+        startTime="2025-01-05T09:00:00+02:00",
+    )
+
+    feed = feed_service.get_feed("ath1")
+
+    assert [item.activity_id for item in feed] == ["strava-local", "garmin-local"]
+
+
 def test_available_sport_types(feed_service, storage):
     activities_repo = ActivitiesRepo(storage)
     _create_activity(activities_repo, activityId="act-1", sportType="run")

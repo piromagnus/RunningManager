@@ -13,7 +13,7 @@ data/metrics_ts
 data/timeseries
 data/laps
 data/hr_zones
-
+data
 .python-version
 .venv/
 uv.lock
