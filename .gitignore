@@ -6,14 +6,7 @@ __pycache__/
 .vscode/
 .DS_Store
 .idea/
-data/tokens*
-data/raw
-data/speed_profil
-data/metrics_ts
-data/timeseries
-data/laps
-data/hr_zones
-
+/data/
 .python-version
 .venv/
 uv.lock

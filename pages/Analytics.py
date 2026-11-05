@@ -33,7 +33,6 @@ from utils.formatting import fmt_decimal, set_locale
 from utils.styling import apply_theme
 from widgets.athlete_selector import select_athlete
 
-st.set_page_config(page_title="Running Manager - Analytics", layout="wide")
 apply_theme()
 st.title("Analytics")
 

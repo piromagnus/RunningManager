@@ -21,8 +21,8 @@ from utils.formatting import set_locale
 from utils.ids import new_id
 from utils.styling import apply_theme
 from utils.ui_helpers import trigger_rerun
+from widgets.garmin_sync import render_garmin_sync
 
-st.set_page_config(page_title="Running Manager - Settings")
 apply_theme()
 st.title("Settings")
 
@@ -654,4 +654,4 @@ else:
         )
 
 st.markdown("### Garmin")
-st.info("Connexion Garmin à venir.")
+render_garmin_sync(storage=storage, config=cfg, athlete_id=athlete_id)

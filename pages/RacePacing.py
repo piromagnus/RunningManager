@@ -22,7 +22,6 @@ from utils.styling import apply_theme
 
 logger = get_logger(__name__)
 
-st.set_page_config(page_title="Running Manager - Race Pacing", layout="wide")
 apply_theme()
 st.title("Race Pacing")
 
@@ -637,4 +636,3 @@ if st.session_state["race_pacing_segments"] is not None and not st.session_state
             except Exception as e:
                 logger.error(f"Failed to save race: {e}", exc_info=True)
                 st.error(f"Erreur lors de l'enregistrement: {str(e)}")
-

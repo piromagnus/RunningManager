@@ -20,7 +20,7 @@ from persistence.repositories import (
 )
 from utils.coercion import safe_float_optional, safe_int_optional
 from utils.ids import new_id
-from utils.time import ensure_datetime
+from utils.time import ensure_datetime, sort_by_timestamp
 
 
 @dataclass
@@ -62,7 +62,7 @@ class LinkingService:
         if not links.empty:
             linked_ids = set(links["activityId"])
             activities = activities[~activities["activityId"].astype(str).isin(linked_ids)]
-        activities = activities.sort_values("startTime", ascending=False)
+        activities = sort_by_timestamp(activities, "startTime", ascending=False)
         return activities.reset_index(drop=True)
 
     def linked_activities(self, athlete_id: str) -> pd.DataFrame:
@@ -102,7 +102,7 @@ class LinkingService:
             )
         merged = self._with_activity_metrics(merged)
         merged = self._with_planned_metrics(merged)
-        merged = merged.sort_values("startTime", ascending=False)
+        merged = sort_by_timestamp(merged, "startTime", ascending=False)
         return merged.reset_index(drop=True)
 
     def available_planned_sessions(self, athlete_id: str) -> pd.DataFrame:

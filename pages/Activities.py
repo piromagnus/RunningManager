@@ -7,6 +7,7 @@ from __future__ import annotations
 import datetime as dt
 from html import escape
 from typing import Callable, Optional
+from zoneinfo import ZoneInfo
 
 import streamlit as st
 
@@ -16,6 +17,7 @@ from services.activity_feed_service import (
     ActivityFeedItem,
     ActivityFeedService,
     PlannedSessionCard,
+    filter_activity_feed,
 )
 from services.linking_service import LinkingService
 from services.metrics_service import MetricsComputationService
@@ -24,7 +26,6 @@ from utils.constants import SESSION_TYPE_LABELS_FR
 from utils.formatting import fmt_decimal, fmt_km, fmt_m, format_duration, set_locale
 from utils.styling import apply_theme
 
-st.set_page_config(page_title="Running Manager - Activités", layout="wide")
 apply_theme()
 st.title("Flux d'activités")
 
@@ -94,6 +95,70 @@ def _dialog_factory() -> Optional[Callable]:
     return None
 
 
+def _activity_metric_bounds(
+    items: list[ActivityFeedItem], field: str, *, divisor: float, step: float
+) -> Optional[tuple[float, float]]:
+    values = [
+        value / divisor
+        for item in items
+        if (value := getattr(item, field)) is not None
+    ]
+    if not values:
+        return None
+    minimum, maximum = min(values), max(values)
+    if maximum <= minimum:
+        maximum = minimum + step
+    return minimum, maximum
+
+
+def _activity_month_groups(
+    items: list[ActivityFeedItem],
+) -> list[tuple[str, list[ActivityFeedItem]]]:
+    month_names = (
+        "janvier",
+        "février",
+        "mars",
+        "avril",
+        "mai",
+        "juin",
+        "juillet",
+        "août",
+        "septembre",
+        "octobre",
+        "novembre",
+        "décembre",
+    )
+    groups: dict[tuple[int, int] | None, list[ActivityFeedItem]] = {}
+    for item in items:
+        start_time = item.start_time
+        if start_time is None:
+            month_key = None
+        else:
+            try:
+                localized = start_time.astimezone(ZoneInfo("Europe/Paris"))
+            except (AttributeError, TypeError, ValueError):
+                localized = start_time
+            month_key = (localized.year, localized.month)
+        groups.setdefault(month_key, []).append(item)
+
+    return [
+        (
+            f"{month_names[month_key[1] - 1].capitalize()} {month_key[0]}"
+            if month_key is not None
+            else "Date inconnue",
+            month_items,
+        )
+        for month_key, month_items in groups.items()
+    ]
+
+
+def _reset_activity_filters() -> None:
+    st.session_state["activities_filter_version"] = (
+        st.session_state.get("activities_filter_version", 0) + 1
+    )
+    st.session_state["activities_feed_limit"] = 10
+
+
 def main() -> None:
     cfg = load_config()
     set_locale("fr_FR")
@@ -121,7 +186,8 @@ def main() -> None:
     active_types: Optional[set[str]]
     if sport_types:
         label_map = {code: _format_sport_type(code) for code in sport_types}
-        preferred_defaults = {"RUN", "TRAIL_RUN", "TRAILRUN", "HIKE", "RIDE", "BIKE","BACKCOUNTRY_SKI"}
+        #preferred_defaults = {"RUN", "TRAIL_RUN", "TRAILRUN", "HIKE", "RIDE", "BIKE","BACKCOUNTRY_SKI"}
+        preferred_defaults = {"RUN", "TRAIL_RUN",}
         default_codes = []
         for code in sport_types:
             normalized = code.replace("_", "").upper()
@@ -130,10 +196,12 @@ def main() -> None:
         if not default_codes:
             default_codes = sport_types
         default_labels = [label_map[code] for code in default_codes]
+        filter_version = st.session_state.get("activities_filter_version", 0)
         selected_labels = st.multiselect(
             "Types d'activités",
             options=[label_map[code] for code in sport_types],
             default=default_labels,
+            key=f"activities_sport_types_{athlete_id}_{filter_version}",
             help=(
                 "Filtre les cartes du flux par type d'activité. Vider la sélection pour "
                 "afficher toutes les activités."
@@ -146,11 +214,105 @@ def main() -> None:
     else:
         active_types = None
 
+    search_query = st.text_input(
+        "Rechercher dans l'historique",
+        placeholder="Nom, type d'activité, date ou identifiant",
+        key=(
+            f"activities_search_{athlete_id}_"
+            f"{st.session_state.get('activities_filter_version', 0)}"
+        ),
+    )
+
     DEFAULT_BATCH = 10
     state_key = "activities_feed_limit"
     if state_key not in st.session_state:
         st.session_state[state_key] = DEFAULT_BATCH
 
+    raw_feed = feed_service.get_feed(athlete_id, limit=0, offset=0)
+    metric_specs = [
+        ("Distance (km)", "distance_km", 1.0, 0.1, "%.1f"),
+        ("Durée (h)", "duration_sec", 3600.0, 0.1, "%.1f"),
+        ("D+ (m)", "ascent_m", 1.0, 10.0, "%.0f"),
+        ("FC moyenne (bpm)", "avg_hr", 1.0, 1.0, "%.0f"),
+        ("TRIMP", "trimp", 1.0, 1.0, "%.0f"),
+        ("DistEq (km)", "distance_eq_km", 1.0, 0.1, "%.1f"),
+    ]
+    filter_version = st.session_state.get("activities_filter_version", 0)
+    metric_ranges: dict[str, tuple[float, float]] = {}
+
+    def _stored_metric_range(excluded_field: Optional[str] = None) -> dict[str, tuple[float, float]]:
+        ranges: dict[str, tuple[float, float]] = {}
+        for _, field, divisor, _, _ in metric_specs:
+            if field == excluded_field:
+                continue
+            widget_key = f"activities_filter_{athlete_id}_{filter_version}_{field}"
+            bounds_key = f"{widget_key}_bounds"
+            selected = st.session_state.get(widget_key)
+            previous_bounds = st.session_state.get(bounds_key)
+            if selected is None or previous_bounds is None or tuple(selected) == tuple(previous_bounds):
+                continue
+            ranges[field] = (
+                float(selected[0]) * divisor,
+                float(selected[1]) * divisor,
+            )
+        return ranges
+
+    with st.expander("Filtres par métriques", expanded=True):
+        for row_start in range(0, len(metric_specs), 3):
+            columns = st.columns(3)
+            for column, (label, field, divisor, step, value_format) in zip(
+                columns, metric_specs[row_start : row_start + 3]
+            ):
+                matching_items = filter_activity_feed(
+                    raw_feed,
+                    query=search_query,
+                    sport_types=active_types,
+                    metric_ranges=_stored_metric_range(excluded_field=field),
+                )
+                bounds = _activity_metric_bounds(
+                    matching_items or raw_feed,
+                    field,
+                    divisor=divisor,
+                    step=step,
+                )
+                with column:
+                    if bounds is None:
+                        st.caption(f"{label} : aucune donnée")
+                        continue
+                    widget_key = (
+                        f"activities_filter_{athlete_id}_{filter_version}_{field}"
+                    )
+                    bounds_key = f"{widget_key}_bounds"
+                    previous_bounds = st.session_state.get(bounds_key)
+                    selected_range = st.session_state.get(widget_key)
+                    if (
+                        selected_range is None
+                        or previous_bounds is None
+                        or tuple(selected_range) == tuple(previous_bounds)
+                    ):
+                        selected_range = bounds
+                    else:
+                        selected_range = (
+                            min(max(float(selected_range[0]), bounds[0]), bounds[1]),
+                            min(max(float(selected_range[1]), bounds[0]), bounds[1]),
+                        )
+                        if selected_range[0] > selected_range[1]:
+                            selected_range = bounds
+                    st.session_state[widget_key] = selected_range
+                    st.session_state[bounds_key] = bounds
+                    selected_range = st.slider(
+                        label,
+                        min_value=bounds[0],
+                        max_value=bounds[1],
+                        step=step,
+                        format=value_format,
+                        key=widget_key,
+                    )
+                    if selected_range != bounds:
+                        metric_ranges[field] = (
+                            selected_range[0] * divisor,
+                            selected_range[1] * divisor,
+                        )
     planned_cards = feed_service.get_unlinked_planned_sessions(
         athlete_id,
         reference_date=dt.date.today(),
@@ -166,25 +328,41 @@ def main() -> None:
         st.caption("Toutes les séances planifiées récentes sont déjà liées à une activité.")
 
     batch_limit = st.session_state[state_key]
-    raw_feed = feed_service.get_feed(
-        athlete_id,
-        limit=batch_limit * 3,
-        offset=0,
+    filtered = filter_activity_feed(
+        raw_feed,
+        query=search_query,
+        sport_types=active_types,
+        metric_ranges=metric_ranges,
     )
-    if active_types:
-        filtered = [
-            item for item in raw_feed if (item.sport_type or "").strip().upper() in active_types
-        ]
-    else:
-        filtered = raw_feed
     feed_items = filtered[:batch_limit]
+    counter_columns = st.columns([1.5, 1, 1], vertical_alignment="center")
+    with counter_columns[0]:
+        st.button(
+            "Réinitialiser les filtres",
+            on_click=_reset_activity_filters,
+            key="activities_reset_filters",
+            use_container_width=True,
+        )
+    with counter_columns[1]:
+        st.metric("Activités trouvées", len(filtered))
+    with counter_columns[2]:
+        st.metric("Activités affichées", len(feed_items))
 
     if not feed_items:
-        st.info("Aucune activité enregistrée pour cet athlète.")
+        if not raw_feed:
+            st.info("Aucune activité enregistrée pour cet athlète.")
+        else:
+            st.info("Aucune activité ne correspond aux filtres sélectionnés.")
         st.stop()
 
-    for item in feed_items:
-        _render_activity_card(item, metrics_service)
+    for month_label, month_items in _activity_month_groups(feed_items):
+        st.markdown("---")
+        st.subheader(month_label)
+        for row_start in range(0, len(month_items), 3):
+            columns = st.columns(3)
+            for column, item in zip(columns, month_items[row_start : row_start + 3]):
+                with column:
+                    _render_activity_card(item, metrics_service)
 
     if len(filtered) > batch_limit:
         if st.button("Charger plus", type="secondary"):

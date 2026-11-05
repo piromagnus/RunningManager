@@ -43,7 +43,6 @@ from utils.redi import compute_ewma, compute_redi
 from utils.styling import apply_theme
 from widgets.athlete_selector import select_athlete
 
-st.set_page_config(page_title="Running Manager - Dashboard", layout="wide")
 apply_theme()
 st.title("Dashboard")
 
@@ -662,9 +661,8 @@ with tab_speed:
     # Compute SpeedEq = DistEq / duration (km/h)
     dist_eq = pd.to_numeric(acts_df.get("distanceEqKm"), errors="coerce").fillna(0.0)
     time_sec = pd.to_numeric(acts_df.get("timeSec"), errors="coerce").fillna(0.0)
-    with pd.option_context("mode.use_inf_as_na", True):
-        speed_eq_kmh = (dist_eq / time_sec.replace(0, pd.NA)) * 3600.0
-    acts_df["speedEqKmh"] = speed_eq_kmh.fillna(0.0)
+    speed_eq_kmh = (dist_eq / time_sec.where(time_sec.ne(0))) * 3600.0
+    acts_df["speedEqKmh"] = speed_eq_kmh.replace([np.inf, -np.inf], np.nan).fillna(0.0)
     acts_df["durationH"] = (time_sec / 3600.0).astype(float)
     # Join Strava name from activities.csv for tooltips
     acts_info_path = storage.base_dir / "activities.csv"
@@ -778,13 +776,13 @@ with tab_hr_shift:
                     shifts_df["avgHr"] = pd.to_numeric(shifts_df.get("avgHr"), errors="coerce")
                     shifts_df["trimp"] = pd.to_numeric(shifts_df.get("trimp"), errors="coerce")
                     shifts_df["ascentM"] = pd.to_numeric(shifts_df.get("ascentM"), errors="coerce")
-                    with pd.option_context("mode.use_inf_as_na", True):
-                        shifts_df["speedKmh"] = (
-                            shifts_df["distanceKm"] / shifts_df["timeSec"].replace(0, pd.NA) * 3600.0
-                        )
-                        shifts_df["speedEqKmh"] = (
-                            shifts_df["distanceEqKm"] / shifts_df["timeSec"].replace(0, pd.NA) * 3600.0
-                        )
+                    safe_duration = shifts_df["timeSec"].where(shifts_df["timeSec"].ne(0))
+                    shifts_df["speedKmh"] = (
+                        shifts_df["distanceKm"] / safe_duration * 3600.0
+                    ).replace([np.inf, -np.inf], np.nan)
+                    shifts_df["speedEqKmh"] = (
+                        shifts_df["distanceEqKm"] / safe_duration * 3600.0
+                    ).replace([np.inf, -np.inf], np.nan)
                     shifts_df["category"] = (
                         shifts_df.get("category", pd.Series("OTHER", index=shifts_df.index))
                         .astype(str)

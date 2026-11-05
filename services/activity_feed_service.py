@@ -18,7 +18,7 @@ from persistence.repositories import (
     PlannedSessionsRepo,
 )
 from utils.coercion import safe_float_optional, safe_int_optional
-from utils.time import parse_timestamp
+from utils.time import parse_timestamp, sort_by_timestamp
 
 
 def _coerce_str(value: object) -> Optional[str]:
@@ -56,6 +56,11 @@ class ActivityFeedItem:
     planned_session_race_name: Optional[str]
     planned_session_notes: Optional[str]
 
+    @property
+    def duration_sec(self) -> Optional[int]:
+        """Duration displayed on cards: moving time, falling back to elapsed time."""
+        return self.moving_sec if self.moving_sec is not None else self.elapsed_sec
+
 
 @dataclass(frozen=True)
 class PlannedSessionCard:
@@ -69,6 +74,46 @@ class PlannedSessionCard:
     planned_duration_sec: Optional[int]
     planned_ascent_m: Optional[float]
     target_label: str
+
+
+def filter_activity_feed(
+    items: List[ActivityFeedItem],
+    *,
+    query: str = "",
+    sport_types: Optional[set[str]] = None,
+    metric_ranges: Optional[dict[str, tuple[float, float]]] = None,
+) -> List[ActivityFeedItem]:
+    """Filter activity feed items by text, sport type, and inclusive metric ranges."""
+    normalized_query = query.strip().casefold()
+    metric_ranges = metric_ranges or {}
+    filtered: List[ActivityFeedItem] = []
+
+    for item in items:
+        if sport_types and (item.sport_type or "").strip().upper() not in sport_types:
+            continue
+
+        if normalized_query:
+            searchable_text = " ".join(
+                [
+                    item.name or "",
+                    item.sport_type or "",
+                    item.activity_id or "",
+                    item.start_time.isoformat() if item.start_time is not None else "",
+                ]
+            ).casefold()
+            if normalized_query not in searchable_text:
+                continue
+
+        matches_metrics = True
+        for field, (minimum, maximum) in metric_ranges.items():
+            value = getattr(item, field)
+            if value is None or not minimum <= value <= maximum:
+                matches_metrics = False
+                break
+        if matches_metrics:
+            filtered.append(item)
+
+    return filtered
 
 
 class ActivityFeedService:
@@ -146,7 +191,7 @@ class ActivityFeedService:
             )
             merged = merged.merge(planned_lookup, on="plannedSessionId", how="left")
 
-        merged = merged.sort_values("startTime", ascending=False, na_position="last")
+        merged = sort_by_timestamp(merged, "startTime", ascending=False, na_position="last")
         if offset:
             merged = merged.iloc[offset:]
         if limit:

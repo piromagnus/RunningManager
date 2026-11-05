@@ -14,7 +14,7 @@ from persistence.repositories import (
     LinksRepo,
     PlannedSessionsRepo,
 )
-from services.activity_feed_service import ActivityFeedService
+from services.activity_feed_service import ActivityFeedService, filter_activity_feed
 
 
 @pytest.fixture()
@@ -136,6 +136,94 @@ def test_activity_feed_sorted_and_enriched(feed_service, storage):
     assert older.match_score is None
     assert pytest.approx(older.distance_eq_km, rel=1e-6) == 8.8
     assert pytest.approx(older.trimp, rel=1e-6) == 90.5
+
+
+def test_activity_feed_sorts_mixed_naive_and_aware_timestamps(feed_service, storage):
+    activities_repo = ActivitiesRepo(storage)
+    _create_activity(
+        activities_repo,
+        activityId="garmin-local",
+        startTime="2025-01-05 08:00:00",
+    )
+    _create_activity(
+        activities_repo,
+        activityId="strava-local",
+        startTime="2025-01-05T09:00:00+02:00",
+    )
+
+    feed = feed_service.get_feed("ath1")
+
+    assert [item.activity_id for item in feed] == ["strava-local", "garmin-local"]
+
+
+def test_filter_activity_feed_by_search_sport_and_metric_ranges(feed_service, storage):
+    activities_repo = ActivitiesRepo(storage)
+    _create_activity(
+        activities_repo,
+        activityId="trail-1",
+        name="Forest Trail",
+        sportType="TRAIL_RUN",
+        distanceKm=18.0,
+        movingSec=7200,
+        ascentM=900,
+        avgHr=150,
+    )
+    _create_activity(
+        activities_repo,
+        activityId="road-1",
+        name="City Run",
+        sportType="RUN",
+        distanceKm=8.0,
+        movingSec=2400,
+        ascentM=40,
+        avgHr=130,
+    )
+    _create_metrics(
+        ActivitiesMetricsRepo(storage),
+        activityId="trail-1",
+        trimp=160.0,
+        distanceEqKm=19.2,
+    )
+
+    feed = feed_service.get_feed("ath1", limit=0)
+    filtered = filter_activity_feed(
+        feed,
+        query="forest",
+        sport_types={"TRAIL_RUN"},
+        metric_ranges={
+            "distance_km": (10.0, 20.0),
+            "duration_sec": (3600.0, 8000.0),
+            "ascent_m": (500.0, 1000.0),
+            "avg_hr": (140.0, 160.0),
+            "trimp": (100.0, 200.0),
+            "distance_eq_km": (18.0, 20.0),
+        },
+    )
+
+    assert [item.activity_id for item in filtered] == ["trail-1"]
+
+
+def test_filter_activity_feed_keeps_missing_metrics_when_not_filtered(feed_service, storage):
+    activities_repo = ActivitiesRepo(storage)
+    _create_activity(activities_repo, activityId="act-1")
+
+    feed = feed_service.get_feed("ath1", limit=0)
+
+    assert filter_activity_feed(feed) == feed
+
+
+def test_activity_duration_uses_elapsed_time_when_moving_time_is_missing(feed_service, storage):
+    activities_repo = ActivitiesRepo(storage)
+    _create_activity(
+        activities_repo,
+        activityId="elapsed-only",
+        movingSec=None,
+        elapsedSec=4200,
+    )
+
+    item = feed_service.get_feed("ath1", limit=0)[0]
+
+    assert item.duration_sec == 4200
 
 
 def test_available_sport_types(feed_service, storage):
