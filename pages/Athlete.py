@@ -13,7 +13,6 @@ from persistence.csv_storage import CsvStorage
 from persistence.repositories import AthletesRepo, ThresholdsRepo
 from utils.ids import new_id
 
-st.set_page_config(page_title="Running Manager - Athlete", layout="wide")
 apply_theme()
 st.title("Athlete")
 

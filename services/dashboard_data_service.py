@@ -17,6 +17,7 @@ from persistence.csv_storage import CsvStorage
 from services.speed_profile_service import SpeedProfileService
 from utils.config import Config
 from utils.constants import PROFILE_WINDOW_SIZES
+from utils.time import to_date
 
 
 def load_daily_metrics(storage: CsvStorage, athlete_id: str) -> pd.DataFrame:
@@ -266,10 +267,10 @@ def load_hr_speed_data(
 
         # Format date for display
         if "startTime" in centers_df.columns:
-            centers_df["activity_date"] = pd.to_datetime(
-                centers_df["startTime"], errors="coerce"
+            centers_df["activity_date"] = centers_df["startTime"].map(to_date)
+            centers_df["activity_date_str"] = centers_df["activity_date"].map(
+                lambda value: value.isoformat() if value else ""
             )
-            centers_df["activity_date_str"] = centers_df["activity_date"].dt.strftime("%Y-%m-%d")
         else:
             centers_df["activity_date_str"] = ""
 
@@ -585,4 +586,3 @@ def load_speed_profile_cloud(
     cloud_df["windowSec"] = pd.to_numeric(cloud_df.get("windowSec"), errors="coerce")
     cloud_df = cloud_df.dropna(subset=["windowSec"])
     return cloud_df
-

@@ -136,17 +136,12 @@ uv run streamlit run app.py
 
 ### Pages
 
-- **Planner**: Create and manage weekly training sessions
 - **Activities**: View activity feed, link unlinked sessions, browse activity details
 - **Dashboard**: Training load trends and performance analytics
 - **Analytics**: Planned vs actual metrics with flexible date ranges and category filters
+- **Race Pacing**: Import a course and build a pacing plan
 - **Settings**: Strava integration, metrics recomputation, thresholds and goals configuration
 - **Athlete**: Athlete profile management
-- **Goals**: Set and track race/performance goals
-
-#### Planner Page
-
-![Session Summary](docs/images/session_summary.png)
 
 #### Dashboard - Training Load
 

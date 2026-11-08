@@ -52,6 +52,22 @@ def _bootstrap(tmp_path):
     return storage
 
 
+def test_resolve_impacted_start_date_handles_mixed_timestamp_formats():
+    activities = pd.DataFrame(
+        {
+            "startTime": [
+                "2025-06-08T00:30:00+02:00",
+                "2025-06-07 23:30:00",
+            ]
+        }
+    )
+    metrics = pd.DataFrame({"startDate": ["2025-06-07"]})
+
+    impacted_date = MetricsComputationService._resolve_impacted_start_date(activities, metrics)
+
+    assert impacted_date == pd.Timestamp("2025-06-07").date()
+
+
 def test_recompute_metrics(tmp_path):
     storage = _bootstrap(tmp_path)
     planned_repo = PlannedSessionsRepo(storage)

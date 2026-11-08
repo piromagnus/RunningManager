@@ -22,7 +22,6 @@ from utils.styling import apply_theme
 
 logger = get_logger(__name__)
 
-st.set_page_config(page_title="Running Manager - Race Pacing", layout="wide")
 apply_theme()
 st.title("Race Pacing")
 
@@ -45,6 +44,58 @@ if "race_pacing_aid_km" not in st.session_state:
 if "race_pacing_segments" not in st.session_state:
     st.session_state["race_pacing_segments"] = None
 
+replan_request = st.session_state.pop("race_pacing_replan_request", None)
+if isinstance(replan_request, dict):
+    try:
+        activity_timeseries = replan_request.get("timeseries_df")
+        if not isinstance(activity_timeseries, pd.DataFrame) or activity_timeseries.empty:
+            st.error("Impossible de replanifier : aucune trace détaillée disponible.")
+        elif not {"lat", "lon"}.issubset(activity_timeseries.columns):
+            st.error("Impossible de replanifier : la trace ne contient pas de coordonnées GPS.")
+        else:
+            route_metrics = pacer_service.preprocess_timeseries_for_pacing(
+                activity_timeseries
+            )
+            if route_metrics.empty:
+                st.error("Impossible de prétraiter la trace GPS de l'activité.")
+            else:
+                initial_segments = pacer_service.segment_activity_with_actual_pace(
+                    route_metrics
+                )
+                if initial_segments.empty:
+                    st.error(
+                        "Impossible de segmenter l'activité : aucune allure historique "
+                        "valide n'est disponible."
+                    )
+                else:
+                    activity_id = str(replan_request.get("activity_id") or "")
+                    activity_name = str(
+                        replan_request.get("activity_name") or f"Activité {activity_id}"
+                    )
+                    st.session_state["race_pacing_race_id"] = None
+                    st.session_state["race_pacing_race_name"] = (
+                        f"Replan - {activity_name}"
+                    )
+                    st.session_state["race_pacing_timeseries"] = activity_timeseries
+                    st.session_state["race_pacing_metrics"] = route_metrics
+                    st.session_state["race_pacing_segments"] = initial_segments
+                    st.session_state["race_pacing_aid_km"] = []
+                    st.session_state["race_pacing_replan_source_id"] = activity_id
+                    st.session_state["race_pacing_existing_race"] = 0
+                    st.session_state.pop("race_pacing_aid_times", None)
+                    st.session_state["race_pacing_replan_flash"] = (
+                        f"Trace chargée et segmentée selon le relief, avec les allures "
+                        f"réelles de « {activity_name} »."
+                    )
+                    st.rerun()
+    except Exception as exc:
+        logger.error("Failed to replan activity: %s", exc, exc_info=True)
+        st.error(f"Erreur lors du chargement de l'activité dans Race Pacing : {exc}")
+
+replan_flash = st.session_state.pop("race_pacing_replan_flash", None)
+if replan_flash:
+    st.success(replan_flash)
+
 # Load existing races dropdown
 races_df = pacer_service.list_races()
 if not races_df.empty:
@@ -54,7 +105,8 @@ if not races_df.empty:
     selected_race_idx = st.selectbox(
         "Charger une course existante",
         range(len(race_options)),
-        format_func=lambda x: race_options[x]
+        format_func=lambda x: race_options[x],
+        key="race_pacing_existing_race",
     )
 
     if selected_race_idx > 0:
@@ -82,7 +134,12 @@ if not races_df.empty:
 
 # Race name input
 # Use race_id in key to force widget update when loading a different race
-race_name_key = f"race_name_input_{st.session_state.get('race_pacing_race_id', 'new')}"
+input_source = (
+    st.session_state.get("race_pacing_race_id")
+    or st.session_state.get("race_pacing_replan_source_id")
+    or "new"
+)
+race_name_key = f"race_name_input_{input_source}"
 race_name = st.text_input(
     "Nom de la course",
     value=st.session_state.get("race_pacing_race_name", ""),
@@ -95,7 +152,11 @@ if race_name != st.session_state.get("race_pacing_race_name", ""):
 col1, col2 = st.columns([2, 1])
 
 with col1:
-    uploaded_file = st.file_uploader("GPX de la course", type=["gpx"], key="gpx_uploader")
+    uploaded_file = st.file_uploader(
+        "GPX de la course",
+        type=["gpx"],
+        key=f"gpx_uploader_{input_source}",
+    )
 
     if uploaded_file is not None:
         try:
@@ -129,7 +190,7 @@ with col2:
     st.subheader("Ravitaillements (km)")
     # Use race_id in key to force widget update when loading a different race
     # Also ensures aid stations are preserved when GPX is loaded
-    aid_input_key = f"aid_stations_input_{st.session_state.get('race_pacing_race_id', 'new')}"
+    aid_input_key = f"aid_stations_input_{input_source}"
     aid_input = st.text_area(
         "Positions en km (une par ligne)",
         value="\n".join([str(x) for x in st.session_state.get("race_pacing_aid_km", [])]),
@@ -424,7 +485,12 @@ if st.session_state["race_pacing_segments"] is not None and not st.session_state
                     st.success("Vitesses appliquées et temps recalculés pour tous les segments!")
                     st.rerun()
 
-    edited_df = st.data_editor(display_df, column_config=column_config, hide_index=True, key="segments_editor")
+    edited_df = st.data_editor(
+        display_df,
+        column_config=column_config,
+        hide_index=True,
+        key=f"segments_editor_{input_source}",
+    )
 
     # Button to update speeds from editor and recompute all times
     # IMPORTANT: No automatic updates happen when editing - only when button is clicked
@@ -637,4 +703,3 @@ if st.session_state["race_pacing_segments"] is not None and not st.session_state
             except Exception as e:
                 logger.error(f"Failed to save race: {e}", exc_info=True)
                 st.error(f"Erreur lors de l'enregistrement: {str(e)}")
-

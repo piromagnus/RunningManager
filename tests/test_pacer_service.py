@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 import pytest
 
@@ -65,6 +64,50 @@ def test_compute_segment_time(pacer_service: PacerService):
     # Returns 0 if both speeds are 0
     time = pacer_service.compute_segment_time(distance_eq_km=5.0, distance_km=4.0, speed_eq_kmh=0.0, speed_kmh=0.0)
     assert time == 0
+
+
+def test_segment_activity_with_actual_pace_seeds_speed_and_time(
+    pacer_service: PacerService, monkeypatch
+):
+    metrics_df = pd.DataFrame(
+        {
+            "cumulated_distance": [0.0, 0.5, 1.0, 1.5],
+            "paceKmh": [10.0, 10.0, 12.0, 12.0],
+        }
+    )
+    segments_df = pd.DataFrame(
+        [
+            {
+                "segmentId": 0,
+                "startKm": 0.0,
+                "endKm": 1.0,
+                "distanceKm": 1.0,
+                "distanceEqKm": 1.2,
+                "type": "flat",
+                "speedKmh": 0.0,
+                "speedEqKmh": 0.0,
+                "timeSec": 0,
+            },
+            {
+                "segmentId": 1,
+                "startKm": 1.0,
+                "endKm": 2.0,
+                "distanceKm": 1.0,
+                "distanceEqKm": 1.0,
+                "type": "flat",
+                "speedKmh": 0.0,
+                "speedEqKmh": 0.0,
+                "timeSec": 0,
+            },
+        ]
+    )
+    monkeypatch.setattr(pacer_service, "segment_course", lambda *_args, **_kwargs: segments_df)
+
+    result = pacer_service.segment_activity_with_actual_pace(metrics_df)
+
+    assert result["speedKmh"].tolist() == [10.0, 12.0]
+    assert result["timeSec"].tolist() == [360, 300]
+    assert result["speedEqKmh"].tolist() == [12.0, 12.0]
 
 
 def test_aggregate_summary(pacer_service: PacerService):
@@ -201,4 +244,3 @@ def test_list_races(pacer_service: PacerService):
     assert "createdAt" in races.columns
     assert race_id1 in races["raceId"].values
     assert race_id2 in races["raceId"].values
-

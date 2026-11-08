@@ -41,6 +41,7 @@ from utils.formatting import (
     format_duration,
     set_locale,
 )
+from utils.gpx_export import build_gpx_export
 from utils.styling import apply_theme
 from utils.ui_helpers import get_dialog_factory
 from widgets.comparison_panel import render_comparison_panel
@@ -48,7 +49,6 @@ from widgets.comparison_table import render_comparison_table
 
 logger = get_logger(__name__)
 
-st.set_page_config(page_title="Running Manager - Activité", layout="wide")
 apply_theme()
 
 CHART_WIDTH = CHART_WIDTH_DEFAULT
@@ -112,7 +112,13 @@ def main() -> None:
         st.caption(detail.description)
 
     _render_summary(detail)
-    _render_activity_actions(detail, activities_repo, link_service, metrics_service)
+    _render_activity_actions(
+        detail,
+        activities_repo,
+        link_service,
+        metrics_service,
+        ts_service,
+    )
     render_comparison_panel(detail.comparison, detail.match_score)
 
     # Race pacing link section
@@ -171,8 +177,51 @@ def _render_activity_actions(
     activities_repo: ActivitiesRepo,
     link_service: LinkingService,
     metrics_service: MetricsComputationService,
+    ts_service: TimeseriesService,
 ) -> None:
-    col_recompute, col_link = st.columns(2)
+    timeseries_df = ts_service.load(detail.activity_id)
+    activity_route = pd.DataFrame()
+    if (
+        timeseries_df is not None
+        and not timeseries_df.empty
+        and {"lat", "lon"}.issubset(timeseries_df.columns)
+    ):
+        activity_route = timeseries_df.copy()
+        activity_route["lat"] = pd.to_numeric(activity_route["lat"], errors="coerce")
+        activity_route["lon"] = pd.to_numeric(activity_route["lon"], errors="coerce")
+        valid_coordinates = (
+            activity_route["lat"].between(-90, 90)
+            & activity_route["lon"].between(-180, 180)
+        )
+        activity_route = activity_route.loc[valid_coordinates].reset_index(drop=True)
+    has_route = len(activity_route) >= 2
+    export_route = activity_route
+    if export_route.empty and detail.map_path:
+        export_route = pd.DataFrame(
+            [{"lat": point.lat, "lon": point.lon} for point in detail.map_path]
+        )
+    gpx_data = build_gpx_export(export_route, name=detail.title or "Activity")
+    filename_stem = "".join(
+        character if character.isalnum() or character in "-_" else "-"
+        for character in (detail.title or "activity").strip()
+    ).strip("-_") or "activity"
+
+    pace_column = (
+        next(
+            (
+                column
+                for column in ("paceKmh", "speed_km_h")
+                if timeseries_df is not None and column in timeseries_df.columns
+            ),
+            None,
+        )
+    )
+    has_historic_pace = False
+    if has_route and pace_column is not None:
+        pace_values = pd.to_numeric(activity_route[pace_column], errors="coerce")
+        has_historic_pace = bool(pace_values.gt(0).any())
+
+    col_recompute, col_link, col_export, col_replan = st.columns(4)
     with col_recompute:
         if st.button("Recalculer métriques", key=f"activity-recompute-{detail.activity_id}"):
             try:
@@ -187,6 +236,42 @@ def _render_activity_actions(
             st.caption("Séance déjà associée à cette activité.")
         elif st.button("Associer une séance", key=f"activity-link-{detail.activity_id}"):
             _open_activity_link_dialog(detail, activities_repo, link_service)
+    with col_export:
+        if gpx_data is not None:
+            st.download_button(
+                "Exporter GPX",
+                data=gpx_data,
+                file_name=f"{filename_stem}-{detail.activity_id}.gpx",
+                mime="application/gpx+xml",
+                key=f"activity-export-gpx-{detail.activity_id}",
+                use_container_width=True,
+            )
+        else:
+            st.button(
+                "Exporter GPX",
+                disabled=True,
+                key=f"activity-export-gpx-disabled-{detail.activity_id}",
+                use_container_width=True,
+                help="Aucune trace GPS exploitable pour cette activité.",
+            )
+    with col_replan:
+        if st.button(
+            "Replanifier l'activité",
+            disabled=not (has_route and has_historic_pace),
+            key=f"activity-replan-{detail.activity_id}",
+            use_container_width=True,
+            help=(
+                "Charge la trace et les allures enregistrées dans Race Pacing."
+                if has_route and has_historic_pace
+                else "Cette action nécessite une trace GPS et des données d'allure."
+            ),
+        ):
+            st.session_state["race_pacing_replan_request"] = {
+                "activity_id": detail.activity_id,
+                "activity_name": detail.title or f"Activité {detail.activity_id}",
+                "timeseries_df": activity_route.copy(),
+            }
+            st.switch_page("pages/RacePacing.py")
 
 
 def _open_activity_link_dialog(

@@ -121,6 +121,51 @@ class PacerService:
             max_splits_per_long_up=max_splits_per_long_up,
         )
 
+    def segment_activity_with_actual_pace(self, metrics_df: pd.DataFrame) -> pd.DataFrame:
+        """Segment an activity route and seed each segment with its recorded pace."""
+        segments_df = self.segment_course(metrics_df, [])
+        if segments_df.empty:
+            return segments_df
+
+        speed_column = next(
+            (column for column in ("paceKmh", "speed_km_h") if column in metrics_df),
+            None,
+        )
+        if speed_column is None:
+            return pd.DataFrame()
+
+        speeds = pd.to_numeric(metrics_df[speed_column], errors="coerce")
+        valid_speeds = speeds[speeds.gt(0) & speeds.notna()]
+        if valid_speeds.empty:
+            return pd.DataFrame()
+        fallback_speed = float(valid_speeds.mean())
+
+        result = segments_df.copy()
+        last_index = result.index[-1]
+        for index, segment in result.iterrows():
+            start_km = float(segment["startKm"])
+            end_km = float(segment["endKm"])
+            distances = metrics_df["cumulated_distance"]
+            segment_mask = distances.ge(start_km) & (
+                distances.le(end_km) if index == last_index else distances.lt(end_km)
+            )
+            segment_speeds = pd.to_numeric(
+                metrics_df.loc[segment_mask, speed_column], errors="coerce"
+            )
+            segment_speeds = segment_speeds[segment_speeds.gt(0) & segment_speeds.notna()]
+            speed_kmh = float(segment_speeds.mean()) if not segment_speeds.empty else fallback_speed
+            distance_km = float(segment.get("distanceKm", end_km - start_km) or 0.0)
+            distance_eq_km = float(segment.get("distanceEqKm", distance_km) or 0.0)
+            time_sec = round(distance_km * 3600.0 / speed_kmh) if speed_kmh > 0 else 0
+
+            result.at[index, "speedKmh"] = speed_kmh
+            result.at[index, "speedEqKmh"] = (
+                distance_eq_km * 3600.0 / time_sec if time_sec > 0 else 0.0
+            )
+            result.at[index, "timeSec"] = time_sec
+
+        return result
+
     def _get_initial_segments_with_mean_elevation(
         self, df: pd.DataFrame, aid_stations_km_set: set[float]
     ) -> pd.DataFrame:
@@ -442,4 +487,3 @@ class PacerService:
             Race ID if linked, None otherwise
         """
         return self.activity_comparison.get_linked_race_id(activity_id)
-
