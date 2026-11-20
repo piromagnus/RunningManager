@@ -1,0 +1,10 @@
+claimId,experiment,status,metric,value,ciLow,ciHigh,threshold,reason
+prescribed_hrr_beats_fixed,E2,pass,relative_mape_gain_B3_vs_best_fixed,0.5658442481215646,8.677932572622558,17.452456484347852,0.1,B3 MAPE=9.99; best contrast B3_vs_B1 relative gain=0.566
+history_only_hrr,E4,fail,relative_mape_gain_vs_fixed_hrr_reference,0.16775217163698755,-0.4989599891277308,3.534414956844704,0.0,best rule=power_law_max_window
+causal_trimp,E5,pass,mape_progress_minus_predicted_trimp,3.9557125097948145,,,0.0,predicted_trimp MAPE=9.99; progress MAPE=13.95
+intensity_premise,E1,pass,residual_std_hrr_after_course_duration,0.0642524241949902,,,0.03,material_intensity_variation
+repeated_route_curve,E3,pass,n_coarse_route_pairs,29.0,,,5.0,coarse distance/ascent matching only; GPS overlap not available
+longitudinal_capacity,E6,not_testable,,,,,,P1 not run in this P0 execution
+within_race_update,E7,not_testable,,,,,,P2 exploratory; not run
+lab_free_archive_anchor,E8,not_testable,,,,,,P1 not run in this P0 execution
+paper_story,decision_table,info,selected_story,,,,,Useful prescribed-intensity simulator; athlete/coach must choose HRR
