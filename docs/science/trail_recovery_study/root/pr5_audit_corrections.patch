@@ -1,0 +1,96 @@
+diff --git a/scripts/validate_intensity_conditioned_claim.py b/scripts/validate_intensity_conditioned_claim.py
+index 001341d..17e5004 100644
+--- a/scripts/validate_intensity_conditioned_claim.py
++++ b/scripts/validate_intensity_conditioned_claim.py
+@@ -955,6 +955,13 @@ def run_e4_rolling_origin(bundle: ValidationBundle) -> pd.DataFrame:
+         if aid in meta.index and str(meta.loc[aid, "category"]).upper() in {"RUN", "TRAIL_RUN"}
+     ]
+     pool = meta.loc[pool_ids].copy().reset_index()
++    readiness_inputs = (
++        bundle.activity_df[["activityId", "trimpRediSlow", "trimpRediBalance"]]
++        .assign(activityId=lambda rows: rows["activityId"].astype(str))
++        .drop_duplicates("activityId")
++        .set_index("activityId")
++    )
++    readiness = bundle.config["readiness"]
+     pool["startDate"] = pd.to_datetime(pool["startDate"], errors="coerce")
+     focus = focus.drop(columns=[c for c in ["startDate", "actualTimeSec", "hrReserveRatio"] if c in focus.columns])
+     focus = focus.merge(
+@@ -993,9 +1000,27 @@ def run_e4_rolling_origin(bundle: ValidationBundle) -> pd.DataFrame:
+             for aid in history_ids
+             if aid in meta.index and np.isfinite(meta.loc[aid, "actualTimeSec"])
+         }
++        reference = float(pd.to_numeric(
++            readiness_inputs.loc[history_ids, "trimpRediSlow"], errors="coerce"
++        ).median())
++        if not np.isfinite(reference) or reference <= 0:
++            reference = 1.0
++        factors = readiness_inputs.loc[[*history_ids, held_out]].apply(
++            lambda row: tpm.ctl_readiness_factor(
++                row["trimpRediSlow"],
++                row["trimpRediBalance"],
++                ctl_reference=reference,
++                ctl_weight=float(readiness["ctl_weight"]),
++                tsb_weight=float(readiness["tsb_weight"]),
++                min_factor=float(readiness["ctl_factor_min"]),
++                max_factor=float(readiness["ctl_factor_max"]),
++            ),
++            axis=1,
++        )
++        train_segments["rediReadinessFactor"] = train_segments["activityId"].astype(str).map(factors)
+         stage3 = _fit_stage3_on_train(train_segments, train_obs, bundle.config)
+         route = _route_for_prescribed_prediction(bundle.segments_by_activity[held_out])
+-        load = float(meta.loc[held_out, "rediReadinessFactor"]) if held_out in meta.index else 1.0
++        load = float(factors.loc[held_out])
+         actual = float(meta.loc[held_out, "actualTimeSec"])
+         # Use prior duration proxy: nearest historical duration median for selection target.
+         target_dur_h = float(history["actualTimeSec"].median()) / 3600.0
+@@ -1065,7 +1090,7 @@ def run_e4_rolling_origin(bundle: ValidationBundle) -> pd.DataFrame:
+                     base_wide.loc[aligned.index, "predictedTimeSec"].to_numpy(),
+                     aligned["predictedTimeSec"].to_numpy(),
+                     n_boot=n_boot,
+-                    seed=seed + abs(hash(str(rule))) % 1000,
++                    seed=seed + int.from_bytes(hashlib.sha256(str(rule).encode()).digest()[:4], "big"),
+                 )
+                 row.update(
+                     {
+@@ -1167,12 +1192,14 @@ def run_e3_route_pairs(bundle: ValidationBundle, support: pd.DataFrame) -> pd.Da
+     table = pd.DataFrame(pairs)
+     out = bundle.output_dir / "table_route_pair_validation.csv"
+     table.to_csv(out, index=False)
++    material = table[table["observedHrrDiff"].abs() > 0.02] if len(table) else table
+     summary = pd.DataFrame(
+         [
+             {
+                 "nPairs": int(len(table)),
+-                "concordanceAmongMaterialHrrDiff": float(table["sameOrderingHrrAndTime"].mean())
+-                if len(table)
++                "nMaterialHrrDiff": int(len(material)),
++                "concordanceAmongMaterialHrrDiff": float(material["sameOrderingHrrAndTime"].mean())
++                if len(material)
+                 else float("nan"),
+                 "status": "coarse_match_only" if len(table) else "not_testable",
+             }
+@@ -1202,7 +1229,12 @@ def evaluate_claim_gates(
+     contrasts = e2[e2["modelId"].isin(["B3_vs_B0", "B3_vs_B1"])]
+     best_contrast = None
+     if not contrasts.empty and "relativeGainVsBaseline" in contrasts.columns:
+-        best_contrast = contrasts.sort_values("relativeGainVsBaseline", ascending=False).iloc[0]
++        fixed = e2[e2["modelId"].isin(["B0", "B1"])].dropna(subset=["mapePct"])
++        if not fixed.empty:
++            baseline = fixed.sort_values(["mapePct", "modelId"]).iloc[0]["modelId"]
++            matching = contrasts[contrasts["modelId"].eq(f"B3_vs_{baseline}")]
++            if not matching.empty:
++                best_contrast = matching.iloc[0]
+     if best_contrast is not None and not b3.empty:
+         rel = float(best_contrast.get("relativeGainVsBaseline", np.nan))
+         lo = float(best_contrast.get("bootstrapCiLow", np.nan))
+@@ -1386,7 +1418,7 @@ def evaluate_claim_gates(
+     # Decision-table row.
+     gate_map = {r["claimId"]: r["status"] for r in rows}
+     if gate_map.get("prescribed_hrr_beats_fixed") == "pass" and gate_map.get("history_only_hrr") == "pass":
+-        story = "Strava-history intensity-conditioned prospective model within supported domain"
++        story = "History-based intensity estimate supported in retrospective route replay"
+     elif gate_map.get("prescribed_hrr_beats_fixed") == "pass":
+         story = "Useful prescribed-intensity simulator; athlete/coach must choose HRR"
+     else:

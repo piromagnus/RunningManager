@@ -1,0 +1,254 @@
+{
+  "baseline": "cumulative predicted TRIMP",
+  "minimum_history": "5 earlier forward-predicted activities and 20 earlier adjacent pairs",
+  "pooled": [
+    {
+      "scenario": "fixed",
+      "model": "ar1",
+      "n": 462,
+      "mae_sec": 67.67116202007563,
+      "mae_log": 0.12545012684237503
+    },
+    {
+      "scenario": "fixed",
+      "model": "ou",
+      "n": 462,
+      "mae_sec": 68.96679075891063,
+      "mae_log": 0.126912329460608
+    },
+    {
+      "scenario": "fixed",
+      "model": "persistent",
+      "n": 462,
+      "mae_sec": 69.48633650681705,
+      "mae_log": 0.12518254200330173
+    },
+    {
+      "scenario": "fixed",
+      "model": "running_intercept",
+      "n": 462,
+      "mae_sec": 89.64009731751095,
+      "mae_log": 0.16082148170446092
+    },
+    {
+      "scenario": "fixed",
+      "model": "static",
+      "n": 462,
+      "mae_sec": 129.35434389709135,
+      "mae_log": 0.24180685528019513
+    },
+    {
+      "scenario": "oracle",
+      "model": "ar1",
+      "n": 462,
+      "mae_sec": 64.78017461662053,
+      "mae_log": 0.11870676324755787
+    },
+    {
+      "scenario": "oracle",
+      "model": "ou",
+      "n": 462,
+      "mae_sec": 66.94716638675106,
+      "mae_log": 0.12112067104430803
+    },
+    {
+      "scenario": "oracle",
+      "model": "persistent",
+      "n": 462,
+      "mae_sec": 68.94982314781123,
+      "mae_log": 0.12484505946202666
+    },
+    {
+      "scenario": "oracle",
+      "model": "running_intercept",
+      "n": 462,
+      "mae_sec": 74.67635997649266,
+      "mae_log": 0.13412047205329514
+    },
+    {
+      "scenario": "oracle",
+      "model": "static",
+      "n": 462,
+      "mae_sec": 94.53149168089764,
+      "mae_log": 0.1676794653302545
+    }
+  ],
+  "per_activity": [
+    {
+      "scenario": "fixed",
+      "model": "ar1",
+      "n_runs": 25,
+      "mae_sec": 75.94980641005722,
+      "mae_log": 0.13604997082848552
+    },
+    {
+      "scenario": "fixed",
+      "model": "ou",
+      "n_runs": 25,
+      "mae_sec": 78.55803210165281,
+      "mae_log": 0.1397645205448725
+    },
+    {
+      "scenario": "fixed",
+      "model": "persistent",
+      "n_runs": 25,
+      "mae_sec": 77.27552152410247,
+      "mae_log": 0.13494000575152115
+    },
+    {
+      "scenario": "fixed",
+      "model": "running_intercept",
+      "n_runs": 25,
+      "mae_sec": 90.71721106023095,
+      "mae_log": 0.1616264706996082
+    },
+    {
+      "scenario": "fixed",
+      "model": "static",
+      "n_runs": 25,
+      "mae_sec": 133.71405794328456,
+      "mae_log": 0.24636474123170918
+    },
+    {
+      "scenario": "oracle",
+      "model": "ar1",
+      "n_runs": 25,
+      "mae_sec": 70.0424660956898,
+      "mae_log": 0.12698635877823455
+    },
+    {
+      "scenario": "oracle",
+      "model": "ou",
+      "n_runs": 25,
+      "mae_sec": 71.25127805451253,
+      "mae_log": 0.1281695573462243
+    },
+    {
+      "scenario": "oracle",
+      "model": "persistent",
+      "n_runs": 25,
+      "mae_sec": 76.24131093065155,
+      "mae_log": 0.13407607069509
+    },
+    {
+      "scenario": "oracle",
+      "model": "running_intercept",
+      "n_runs": 25,
+      "mae_sec": 80.28439131460918,
+      "mae_log": 0.14290431179145036
+    },
+    {
+      "scenario": "oracle",
+      "model": "static",
+      "n_runs": 25,
+      "mae_sec": 94.03186031826927,
+      "mae_log": 0.1676594780463534
+    }
+  ],
+  "paired": [
+    {
+      "scenario": "fixed",
+      "model": "persistent",
+      "n_runs": 25,
+      "mean_paired_difference_sec": -56.438536419182086,
+      "ci95_bootstrap_runs": [
+        -86.10591332794979,
+        -30.054508048722294
+      ],
+      "n_improved": 20,
+      "n_worse": 5
+    },
+    {
+      "scenario": "fixed",
+      "model": "running_intercept",
+      "n_runs": 25,
+      "mean_paired_difference_sec": -42.99684688305359,
+      "ci95_bootstrap_runs": [
+        -74.32142069173017,
+        -17.007529578469615
+      ],
+      "n_improved": 16,
+      "n_worse": 9
+    },
+    {
+      "scenario": "fixed",
+      "model": "ar1",
+      "n_runs": 25,
+      "mean_paired_difference_sec": -57.76425153322732,
+      "ci95_bootstrap_runs": [
+        -84.98127993433687,
+        -33.884109643495066
+      ],
+      "n_improved": 21,
+      "n_worse": 4
+    },
+    {
+      "scenario": "fixed",
+      "model": "ou",
+      "n_runs": 25,
+      "mean_paired_difference_sec": -55.15602584163174,
+      "ci95_bootstrap_runs": [
+        -80.70952051855653,
+        -32.10603768525306
+      ],
+      "n_improved": 19,
+      "n_worse": 6
+    },
+    {
+      "scenario": "oracle",
+      "model": "persistent",
+      "n_runs": 25,
+      "mean_paired_difference_sec": -17.790549387617716,
+      "ci95_bootstrap_runs": [
+        -34.39984253125305,
+        -2.5631509269899264
+      ],
+      "n_improved": 15,
+      "n_worse": 10
+    },
+    {
+      "scenario": "oracle",
+      "model": "running_intercept",
+      "n_runs": 25,
+      "mean_paired_difference_sec": -13.747469003660092,
+      "ci95_bootstrap_runs": [
+        -25.492326370742756,
+        -2.1634023484999334
+      ],
+      "n_improved": 15,
+      "n_worse": 10
+    },
+    {
+      "scenario": "oracle",
+      "model": "ar1",
+      "n_runs": 25,
+      "mean_paired_difference_sec": -23.989394222579463,
+      "ci95_bootstrap_runs": [
+        -38.981727695612896,
+        -11.016042103564008
+      ],
+      "n_improved": 19,
+      "n_worse": 6
+    },
+    {
+      "scenario": "oracle",
+      "model": "ou",
+      "n_runs": 25,
+      "mean_paired_difference_sec": -22.780582263756738,
+      "ci95_bootstrap_runs": [
+        -37.61713071477528,
+        -9.573807234894664
+      ],
+      "n_improved": 18,
+      "n_worse": 7
+    }
+  ],
+  "notes": [
+    "All training pairs have strictly earlier dateGroup than target, including no same-day events.",
+    "Residuals from prior segments of target activity are available to update the correction.",
+    "The oracle scenario uses the full activity observed mean HRR, fixed uses assumed HRR 0.70.",
+    "Predicted previous segment duration is the OU time scale.",
+    "Unit of actual_sec is moving time, not elapsed time.",
+    "Scenario predictions were generated by upstream rolling origin models with >=15 prior activities."
+  ]
+}

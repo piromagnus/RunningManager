@@ -1,0 +1,19 @@
+PR #5
+FAILED tests/test_csv_storage.py::test_upsert - TypeError: Invalid value '1' ...
+FAILED tests/test_planner_service.py::test_estimate_km_falls_back_to_recent_easy_pace
+FAILED tests/test_series_filters.py::test_filter_series_outliers_time_reference
+FAILED tests/test_series_filters.py::test_filter_series_outliers_distance_reference
+FAILED tests/test_session_templates_service.py::test_session_templates_crud_and_apply
+FAILED tests/test_strava_archive_service.py::test_archive_import_merges_missing_timeseries
+FAILED tests/test_strava_archive_service.py::test_sync_merges_incomplete_archive_raw
+7 failed, 203 passed, 13 warnings in 28.37s
+perf_dev
+FAILED tests/test_csv_storage.py::test_upsert - TypeError: Invalid value '1' ...
+FAILED tests/test_planner_service.py::test_estimate_km_falls_back_to_recent_easy_pace
+FAILED tests/test_series_filters.py::test_filter_series_outliers_time_reference
+FAILED tests/test_series_filters.py::test_filter_series_outliers_distance_reference
+FAILED tests/test_session_templates_service.py::test_session_templates_crud_and_apply
+FAILED tests/test_strava_archive_service.py::test_archive_import_merges_missing_timeseries
+FAILED tests/test_strava_archive_service.py::test_sync_merges_incomplete_archive_raw
+7 failed, 175 passed, 13 warnings in 10.09s
+54 tests ciblés réussis sur la PR et le patch local.

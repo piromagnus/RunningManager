@@ -1,0 +1,7 @@
+,0
+half_life,True
+composition,True
+walking_decreases,True
+walking_can_increase,True
+stopping_decreases,True
+nonnegative,True

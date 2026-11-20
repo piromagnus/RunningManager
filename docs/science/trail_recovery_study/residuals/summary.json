@@ -1,0 +1,173 @@
+{
+  "source_n_rows": 837,
+  "n_activities": 45,
+  "n_pairs": 792,
+  "n_pair_activities": 45,
+  "pair_segment_lengths": {
+    "count": 45.0,
+    "mean": 17.6,
+    "std": 11.970418083379924,
+    "min": 2.0,
+    "25%": 8.0,
+    "50%": 14.0,
+    "75%": 25.0,
+    "max": 60.0
+  },
+  "pooled": [
+    {
+      "model": "ar1",
+      "n": 792,
+      "mae_sec": 93.7955462794235,
+      "mae_log": 0.15842730190590737,
+      "coverage": 0.8939393939393939,
+      "width_sec": 399.2197028045942
+    },
+    {
+      "model": "ou",
+      "n": 792,
+      "mae_sec": 97.07759780229715,
+      "mae_log": 0.15952808610808786,
+      "coverage": 0.8939393939393939,
+      "width_sec": 413.1282230336033
+    },
+    {
+      "model": "persistent",
+      "n": 792,
+      "mae_sec": 103.07418224956426,
+      "mae_log": 0.17251223518419864,
+      "coverage": 0.8977272727272727,
+      "width_sec": 436.1574300769316
+    },
+    {
+      "model": "running_intercept",
+      "n": 792,
+      "mae_sec": 107.41083387688671,
+      "mae_log": 0.20414411403862193,
+      "coverage": 0.8926767676767676,
+      "width_sec": 479.92826919781663
+    },
+    {
+      "model": "static",
+      "n": 792,
+      "mae_sec": 137.22787217397175,
+      "mae_log": 0.22923021637790575,
+      "coverage": 0.8901515151515151,
+      "width_sec": 604.3047284821482
+    }
+  ],
+  "activity_weighted": [
+    {
+      "model": "ar1",
+      "n_runs": 45,
+      "avg_run_mae_sec": 85.82238863047169,
+      "avg_run_mae_log": 0.15671461951473972,
+      "avg_run_coverage": 0.8968340639689997
+    },
+    {
+      "model": "ou",
+      "n_runs": 45,
+      "avg_run_mae_sec": 89.22684827439107,
+      "avg_run_mae_log": 0.15923240628980778,
+      "avg_run_coverage": 0.8940399130702736
+    },
+    {
+      "model": "persistent",
+      "n_runs": 45,
+      "avg_run_mae_sec": 96.54383966726029,
+      "avg_run_mae_log": 0.17609224854897387,
+      "avg_run_coverage": 0.8961185215562193
+    },
+    {
+      "model": "running_intercept",
+      "n_runs": 45,
+      "avg_run_mae_sec": 103.75815197518257,
+      "avg_run_mae_log": 0.20941843130585752,
+      "avg_run_coverage": 0.9066126677181916
+    },
+    {
+      "model": "static",
+      "n_runs": 45,
+      "avg_run_mae_sec": 130.36432539776914,
+      "avg_run_mae_log": 0.2246240450188316,
+      "avg_run_coverage": 0.8993699770996841
+    }
+  ],
+  "comparisons": {
+    "persistent": {
+      "n_runs": 45,
+      "mean_paired_sec": -33.82048573050885,
+      "median_paired_sec": -31.74036881625169,
+      "runs_improved": 36,
+      "runs_worse": 9,
+      "bootstrap_95_ci_mean_delta_sec": [
+        -46.31577508722349,
+        -21.757222538096507
+      ],
+      "mean_paired_log": -0.048531796469857724
+    },
+    "running_intercept": {
+      "n_runs": 45,
+      "mean_paired_sec": -26.606173422586572,
+      "median_paired_sec": -25.57188536412123,
+      "runs_improved": 33,
+      "runs_worse": 12,
+      "bootstrap_95_ci_mean_delta_sec": [
+        -39.46310124042163,
+        -13.798104111460507
+      ],
+      "mean_paired_log": -0.015205613712974094
+    },
+    "ar1": {
+      "n_runs": 45,
+      "mean_paired_sec": -44.54193676729745,
+      "median_paired_sec": -47.71599982130621,
+      "runs_improved": 42,
+      "runs_worse": 3,
+      "bootstrap_95_ci_mean_delta_sec": [
+        -56.3313406472695,
+        -33.79334093568581
+      ],
+      "mean_paired_log": -0.06790942550409186
+    },
+    "ou": {
+      "n_runs": 45,
+      "mean_paired_sec": -41.137477123378076,
+      "median_paired_sec": -46.516466303809196,
+      "runs_improved": 43,
+      "runs_worse": 2,
+      "bootstrap_95_ci_mean_delta_sec": [
+        -50.65233843488308,
+        -31.775014912400092
+      ],
+      "mean_paired_log": -0.06539163872902382
+    }
+  },
+  "parameters_describe": {
+    "ar_slope": {
+      "count": 45.0,
+      "mean": 0.6402104345152506,
+      "std": 0.004161901818579295,
+      "min": 0.6249052479001651,
+      "25%": 0.638644197271389,
+      "50%": 0.6410642015599256,
+      "75%": 0.642620592105669,
+      "max": 0.6483552637668597
+    },
+    "ou_tau_min": {
+      "count": 45.0,
+      "mean": 24.296021164167396,
+      "std": 0.5949204885658779,
+      "min": 21.67589194059334,
+      "25%": 24.25449108256189,
+      "50%": 24.396416532547953,
+      "75%": 24.598371491372486,
+      "max": 25.318426362047802
+    }
+  },
+  "notes": [
+    "held-out activity base predictions fitted beforehand and observed HRR used",
+    "using predicted previous segment duration as OU time lag",
+    "intervals use training fold empirical residual quantiles and are evaluated on held-out segments",
+    "bootstrap resamples activities and evaluates paired mean differences only"
+  ]
+}
